@@ -1,5 +1,7 @@
 # ThreadsBasics
 
+#### This package is in very early development and is not yet registered
+
 This is meant to be a simple, unambitious package that provides basic, user-friendly ways of doing 
 multithreaded calculations via higher-order functions, with a focus on [data parallelism](https://en.wikipedia.org/wiki/Data_parallelism).
 
