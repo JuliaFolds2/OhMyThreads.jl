@@ -182,7 +182,7 @@ of `out[i] = f(A[i])` for each index `i` of `A` and `out`.
 """
 @propagate_inbounds function tmap!(f, out, A::AbstractArray; 
                                    chunks_per_thread::Int = 2,
-                                   chunk_size = max(1, amount(itr) ÷ (chunks_per_thread * nthreads()))) where {T}
+                                   chunk_size = max(1, amount(itr) ÷ (chunks_per_thread * nthreads())))
     @boundscheck eachindex(out) == eachindex(A) ||
         error("The indices of the input array must match the indices of the output array.")
     tforeach(eachindex(A)) do i
