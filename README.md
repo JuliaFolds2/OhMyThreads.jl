@@ -8,7 +8,7 @@ multithreaded calculations via higher-order functions, with a focus on [data par
 It re-exports the very useful function `chunks` from [ChunkSplitters.jl](https://github.com/m3g/ChunkSplitters.jl), and
 provides the following functions
 
-<details><summary>`tmapreduce`</summary>
+<details><summary> `tmapreduce` </summary>
 <p>
 
     tmapreduce(f, op, A::AbstractArray;
