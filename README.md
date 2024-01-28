@@ -20,7 +20,7 @@ the function `f` over the array `A` assuming that the output type of `f` is `Out
     - `op` must be [associative](https://en.wikipedia.org/wiki/Associative_property) in the sense that `op(a, op(b, c)) ≈ op(op(a, b), c)`.
 	- The reduction is performed in a tree-like manner.
 	- The iterable `itr` can be any type which supports `halve` and `amount` from [SplittablesBase.jl](https://github.com/JuliaFolds2/SplittablesBase.jl).
-- `tmapreduce(op, f, itr; [init]) = tmapreduce(f, op, itr; [init])` because sometimes this is more convenient for `do`-block notation, depending on the calculation. 
+- `treducemap(op, f, itr; [init]) = tmapreduce(f, op, itr; [init])` because sometimes this is more convenient for `do`-block notation, depending on the calculation. 
 
 
 Users can provide *either* `chunk_size`, or `chunks_per_thread` (and if both are provided, `chunk_size` is used) to all of these functions 
