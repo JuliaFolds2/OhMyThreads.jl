@@ -8,7 +8,7 @@ multithreaded calculations via higher-order functions, with a focus on [data par
 It re-exports the very useful function `chunks` from [ChunkSplitters.jl](https://github.com/m3g/ChunkSplitters.jl), and
 provides the following functions
 
-<details><summary>tmapreduce</summary>
+<details><summary>`tmapreduce`</summary>
 <p>
 
     tmapreduce(f, op, A::AbstractArray;
@@ -46,7 +46,7 @@ needed if you are using a `:static` schedule, since the `:dynamic` schedule is u
 </details>
 </p>
 
-<details><summary>treducemap</summary>
+<details><summary>`treducemap`</summary>
 <p>
 
     treducemap(op, f, A::AbstractArray;
@@ -85,7 +85,7 @@ needed if you are using a `:static` schedule, since the `:dynamic` schedule is u
 </details>
 </p>
 
-<details><summary>treduce</summary>
+<details><summary>`treduce`</summary>
 <p>
 
 
@@ -124,7 +124,7 @@ needed if you are using a `:static` schedule, since the `:dynamic` schedule is u
 </details>
 </p>
 
-<details><summary>tforeach</summary>
+<details><summary>`tforeach`</summary>
 <p>
 
     tforeach(f, A::AbstractArray;
@@ -144,7 +144,7 @@ Apply `f` to each element of `A` on multiple parallel tasks, and return `nothing
 </details>
 </p>
 
-<details><summary>tmap</summary>
+<details><summary>`tmap`</summary>
 <p>
 
 
@@ -166,7 +166,7 @@ A multithreaded function like `Base.map`. Create a new container `similar` to `A
 </details>
 </p>
 
-<details><summary>tmap!</summary>
+<details><summary>`tmap!`</summary>
 <p>
 
     tmap!(f, out, A::AbstractArray; 
