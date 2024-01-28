@@ -1,61 +1,61 @@
 module ThreadsBasics
 
-using Base: @propagate_inbounds
-using Base.Threads: nthreads
+
 using StableTasks: @spawn
-using SplittablesBase: amount, halve
+using ChunkSplitters: chunks
 
-export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach
-
-struct NoInit end
+export chunks, treduce, tmapreduce, treducemap, tmap, tmap!, tforeach
 
 """
-    tmapreduce(f, op, itr; [init]
-               chunks_per_thread::Int = 2,
-               chunk_size = max(1, amount(itr) ÷ (chunks_per_thread * nthreads())))
+    tmapreduce(f, op, A::AbstractArray;
+               [init],
+               nchunks::Int = 2 * nthreads(),
+               split::Symbol = :batch,
+               schedule::Symbol =:dynamic,
+               outputtype::Type = Any)
 
-A multithreaded function like `Base.mapreduce`. Perform a reduction over `itr`, applying a single-argument
+A multithreaded function like `Base.mapreduce`. Perform a reduction over `A`, applying a single-argument
 function `f` to each element, and then combining them with the two-argument function `op`. `op` **must** be an
 [associative](https://en.wikipedia.org/wiki/Associative_property) function, in the sense that
 `op(a, op(b, c)) ≈ op(op(a, b), c)`. If `op` is not (approximately) associative, you will get undefined
-results.
+results. 
 
-For a very well known example of `mapreduce`, `sum(f, itr)` is equivalent to `mapreduce(f, +, itr)`. Doing
+For a very well known example of `mapreduce`, `sum(f, A)` is equivalent to `mapreduce(f, +, A)`. Doing
 
-     treducemap(+, √, [1, 2, 3, 4, 5])
+     tmapreduce(√, +, [1, 2, 3, 4, 5])
 
 is the parallelized version of
 
      (√1 + √2) + (√3 + √4) + √5
 
-This reduction is tree-based.
+This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/m3g/ChunkSplitters.jl).
 
 ## Keyword arguments:
 
-- Uses can provide *either* `chunk_size`, or `chunks_per_thread` (and if both are provided, `chunk_size` is used)
-    - `chunks_per_thread` (defaults `2`), will try to split up `itr` so that each thread will recieve *approximately* `chunks_per_thread` pieces of data to work on. More `chunks_per_thread`, typically means better [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)).
-    - `chunk_size` (computed based on `chunks_per_thread` by deault). Data from `itr` will be divided in half using `halve` from [SplittablesBase.jl](https://github.com/JuliaFolds2/SplittablesBase.jl) until those chunks have an `SplittablesBase.amount` less than or equal to `chunk_size`. The chunks are then operated on in sequential with `mapreduce(f, op, chunk; [init])`, and then the chunks are combined using `op`.
-- `init` optional keyword argument forwarded to `reduce` for the sequential parts of the calculation.
+- `init` optional keyword argument forwarded to `mapreduce` for the sequential parts of the calculation.
+- `nchunks::Int` (default 2 * nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
+- `split::Symbol` (default `:batch`) is passed to `ChunkSplitters.chunks` to inform it if the data chunks to be worked on should be contiguous (:batch) or shuffled (:scatter). If `scatter` is chosen, then your reducing operator `op` **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in addition to being associative, or you could get incorrect results!
+- `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling is generally preferred since it is more flexible and better at load balancing, but `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
+- `outputtype::Type` (default `Any`) will work as the asserted output type of parallel calculations. This is typically only
+needed if you are using a `:static` schedule, since the `:dynamic` schedule is uses [StableTasks.jl](https://github.com/MasonProtter/StableTasks.jl), but if you experience problems with type stability, you may be able to recover it with the `outputtype` keyword argument.
 """
-function tmapreduce(f, op, itr;
-                    init=NoInit(),
-                    chunks_per_thread::Int = 2,
-                    chunk_size = max(1, amount(itr) ÷ (chunks_per_thread * nthreads())))
-    _tmapreduce(f, op, itr; init, chunk_size)
-end
+function tmapreduce end
 
 """
-    treducemap(op, f, itr; [init]
-               chunks_per_thread::Int = 2,
-               chunk_size = max(1, amount(itr) ÷ (chunks_per_thread * nthreads())))
+    treducemap(op, f, A::AbstractArray;
+               [init],
+               nchunks::Int = 2 * nthreads(),
+               split::Symbol = :batch,
+               schedule::Symbol =:dynamic,
+               outputtype::Type = Any)
 
-Like `tmapreduce` except the order of the `f` and `op` arguments are switched. Perform a reduction over `itr`,
+Like `tmapreduce` except the order of the `f` and `op` arguments are switched. Perform a reduction over `A`,
 applying a single-argument function `f` to each element, and then combining them with the two-argument
 function `op`. `op` **must** be an [associative](https://en.wikipedia.org/wiki/Associative_property) function,
 in the sense that `op(a, op(b, c)) ≈ op(op(a, b), c)`. If `op` is not (approximately) associative, you will
 get undefined results.
 
-For a very well known example of `mapreduce`, `sum(f, itr)` is equivalent to `mapreduce(f, +, itr)`. Doing
+For a very well known example of `mapreduce`, `sum(f, A)` is equivalent to `mapreduce(f, +, A)`. Doing
 
      treducemap(+, √, [1, 2, 3, 4, 5])
 
@@ -63,43 +63,35 @@ is the parallelized version of
 
      (√1 + √2) + (√3 + √4) + √5
 
-This reduction is tree-based.
+
+This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/m3g/ChunkSplitters.jl).
 
 ## Keyword arguments:
 
-- Uses can provide *either* `chunk_size`, or `chunks_per_thread` (and if both are provided, `chunk_size` is used)
-    - `chunks_per_thread` (defaults `2`), will try to split up `itr` so that each thread will recieve *approximately* `chunks_per_thread` pieces of data to work on. More `chunks_per_thread`, typically means better [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)).
-    - `chunk_size` (computed based on `chunks_per_thread` by deault). Data from `itr` will be divided in half using `halve` from [SplittablesBase.jl](https://github.com/JuliaFolds2/SplittablesBase.jl) until those chunks have an `SplittablesBase.amount` less than or equal to `chunk_size`. The chunks are then operated on sequentially with `mapreduce(f, op, chunk; [init])`, and then the chunks are combined using `op`.
 - `init` optional keyword argument forwarded to `mapreduce` for the sequential parts of the calculation.
+- `nchunks::Int` (default 2 * nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
+- `split::Symbol` (default `:batch`) is passed to `ChunkSplitters.chunks` to inform it if the data chunks to be worked on should be contiguous (:batch) or shuffled (:scatter). If `scatter` is chosen, then your reducing operator `op` **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in addition to being associative, or you could get incorrect results!
+- `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling should be preferred since it is more flexible and better at load balancing, and more likely to be type stable. However, `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
+- `outputtype::Type` (default `Any`) will work as the asserted output type of parallel calculations. This is typically only
+needed if you are using a `:static` schedule, since the `:dynamic` schedule is uses [StableTasks.jl](https://github.com/MasonProtter/StableTasks.jl), but if you experience problems with type stability, you may be able to recover it with the `outputtype` keyword argument.
 """
-treducemap(op, f, itr; kwargs...) = tmapreduce(f, op, itr; kwargs...)
+function treducemap end
 
-function _tmapreduce(f, op, itr; chunk_size::Int, init)
-    if amount(itr) <= chunk_size
-        kwargs = init === NoInit() ? (;) : (; init)
-        mapreduce(f, op, itr; kwargs...)
-    else
-        l, r = halve(itr)
-        # @show l, r
-        # error()
-        task_r = @spawn _tmapreduce(f, op, r; chunk_size, init)
-        result_l = _tmapreduce(f, op, l; chunk_size, init)
-        op(result_l, fetch(task_r))
-    end
-end
 
 """
-    treduce(op, itr; [init]
-            chunks_per_thread::Int = 2,
-            chunk_size = max(1, amount(itr) ÷ (chunks_per_thread * nthreads())))
+    treduce(op, A::AbstractArray; [init],
+            nchunks::Int = 2 * nthreads(),
+            split::Symbol = :batch,
+            schedule::Symbol =:dynamic,
+            outputtype::Type = Any)
 
-A multithreaded parallel function like `Base.reduce`. Perform a reduction over `itr`, then combining each
-element with the two-argument function `op`. `op` **must** be an
-[associative](https://en.wikipedia.org/wiki/Associative_property) function, in the sense that
-`op(a, op(b, c)) ≈ op(op(a, b), c)`. If `op` is not (approximately) associative, you will get undefined
-results.
+Like `tmapreduce` except the order of the `f` and `op` arguments are switched. Perform a reduction over `A`,
+applying a single-argument function `f` to each element, and then combining them with the two-argument
+function `op`. `op` **must** be an [associative](https://en.wikipedia.org/wiki/Associative_property) function,
+in the sense that `op(a, op(b, c)) ≈ op(op(a, b), c)`. If `op` is not (approximately) associative, you will
+get undefined results.
 
-For a very well known example of `reduce`, `sum(itr)` is equivalent to `reduce(+, itr)`. Doing
+For a very well known example of `reduce`, `sum(A)` is equivalent to `reduce(+, A)`. Doing
 
      treduce(+, [1, 2, 3, 4, 5])
 
@@ -107,89 +99,72 @@ is the parallelized version of
 
      (1 + 2) + (3 + 4) + 5
 
-This reduction is tree-based.
+
+This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/m3g/ChunkSplitters.jl).
 
 ## Keyword arguments:
 
-- Uses can provide *either* `chunk_size`, or `chunks_per_thread` (and if both are provided, `chunk_size` is used)
-    - `chunks_per_thread` (defaults `2`), will try to split up `itr` so that each thread will recieve *approximately* `chunks_per_thread` pieces of data to work on. More `chunks_per_thread`, typically means better [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)).
-    - `chunk_size` (computed based on `chunks_per_thread` by deault). Data from `itr` will be divided in half using `halve` from [SplittablesBase.jl](https://github.com/JuliaFolds2/SplittablesBase.jl) until those chunks have an `SplittablesBase.amount` less than or equal to `chunk_size`. The chunks are then operated on sequentially with `reduce(op, chunk; [init])`, and then the chunks are combined using `op`.
-- `init` optional keyword argument forwarded to `reduce` for the sequential parts of the calculation.
+- `init` optional keyword argument forwarded to `mapreduce` for the sequential parts of the calculation.
+- `nchunks::Int` (default 2 * nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
+- `split::Symbol` (default `:batch`) is passed to `ChunkSplitters.chunks` to inform it if the data chunks to be worked on should be contiguous (:batch) or shuffled (:scatter). If `scatter` is chosen, then your reducing operator `op` **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in addition to being associative, or you could get incorrect results!
+- `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling is generally preferred since it is more flexible and better at load balancing, but `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
+- `outputtype::Type` (default `Any`) will work as the asserted output type of parallel calculations. This is typically only
+needed if you are using a `:static` schedule, since the `:dynamic` schedule is uses [StableTasks.jl](https://github.com/MasonProtter/StableTasks.jl), but if you experience problems with type stability, you may be able to recover it with the `outputtype` keyword argument.
 """
-function treduce(op, itr;
-                 chunks_per_thread::Int = 2,
-                 chunk_size = max(1, amount(itr) ÷ (chunks_per_thread * nthreads())))
-    _tmapreduce(identity, op, itr; chunk_size, init)
-end
-
+function treduce end
 
 """
-    tforeach(f, itr; chunks_per_thread::Int = 2,
-             chunk_size = max(1, amount(itr) ÷ (chunks_per_thread * nthreads())))
+    tforeach(f, A::AbstractArray;
+             nchunks::Int = 2 * nthreads(),
+             split::Symbol = :batch,
+             schedule::Symbol =:dynamic) :: Nothing
 
-Apply `f` to each element of `itr` on multiple parallel tasks, with each thread being given a number of chunks
-from `itr` to work on approximately equal to `chunks_per_thread`. Instead of providing `chunks_per_thread`,
-users can provide `chunk_size` directly, which means that the data will be split into chunks of at most
-`chunk_size` in length.
+Apply `f` to each element of `A` on multiple parallel tasks, and return `nothing`.
 
 ## Keyword arguments:
 
-- Uses can provide *either* `chunk_size`, or `chunks_per_thread` (and if both are provided, `chunk_size` is used)
-    - `chunks_per_thread` (defaults `2`), will try to split up `itr` so that each thread will recieve *approximately* `chunks_per_thread` pieces of data to work on. More `chunks_per_thread`, typically means better [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)).
-    - `chunk_size` (computed based on `chunks_per_thread` by deault). Data from `itr` will be divided in half using `halve` from [SplittablesBase.jl](https://github.com/JuliaFolds2/SplittablesBase.jl) until those chunks have an `SplittablesBase.amount` less than or equal to `chunk_size`. The chunks are then operated on in sequential with `reduce(op, chunk; [init])`, and then the chunks are combined using `op`.
+- `nchunks::Int` (default 2 * nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
+- `split::Symbol` (default `:batch`) is passed to `ChunkSplitters.chunks` to inform it if the data chunks to be worked on should be contiguous (:batch) or shuffled (:scatter). If `scatter` is chosen, then your reducing operator `op` **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in addition to being associative, or you could get incorrect results!
+- `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling is generally preferred since it is more flexible and better at load balancing, but `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
 """
-function tforeach(f, itr;
-                  chunks_per_thread::Int = 2,
-                  chunk_size = max(1, amount(itr) ÷ (chunks_per_thread * nthreads())))::Nothing
-    tmapreduce(f, (l, r)->l, itr; init=nothing)
-end
+function tforeach end
 
 """
-    tmap(f, ::Type{T}, A::AbstractArray; 
-         chunks_per_thread::Int = 2,
-         chunk_size = max(1, amount(itr) ÷ (chunks_per_thread * nthreads()))
+    tmap(f, ::Type{OutputType}, A::AbstractArray; 
+         nchunks::Int = 2 * nthreads(),
+         split::Symbol = :batch,
+         schedule::Symbol =:dynamic)
 
-A multithreaded function like `Base.map`. Create a new container `similar` to `A` with eltype `T`, whose `i`th
-element is equal to `f(A[i])`. This container is filled in parallel on multiple tasks.
-
+A multithreaded function like `Base.map`. Create a new container `similar` to `A` with element type
+`OutputType`, whose `i`th element is equal to `f(A[i])`. This container is filled in parallel on multiple tasks.
 
 ## Keyword arguments:
 
-- Uses can provide *either* `chunk_size`, or `chunks_per_thread` (and if both are provided, `chunk_size` is used)
-    - `chunks_per_thread` (defaults `2`), will try to split up `itr` so that each thread will recieve *approximately* `chunks_per_thread` pieces of data to work on. More `chunks_per_thread`, typically means better [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)).
-    - `chunk_size` (computed based on `chunks_per_thread` by deault). Data from `itr` will be divided in half using `halve` from [SplittablesBase.jl](https://github.com/JuliaFolds2/SplittablesBase.jl) until those chunks have an `SplittablesBase.amount` less than or equal to `chunk_size`. The chunks are then operated on sequentially.
+- `nchunks::Int` (default 2 * nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
+- `split::Symbol` (default `:batch`) is passed to `ChunkSplitters.chunks` to inform it if the data chunks to be worked on should be contiguous (:batch) or shuffled (:scatter). If `scatter` is chosen, then your reducing operator `op` **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in addition to being associative, or you could get incorrect results!
+- `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling is generally preferred since it is more flexible and better at load balancing, but `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
 """
-function tmap(f, ::Type{T}, A::AbstractArray; 
-              chunks_per_thread::Int = 2,
-              chunk_size = max(1, amount(itr) ÷ (chunks_per_thread * nthreads()))) where {T}
-    tmap!(f, similar(A, T), A; chunk_size)
-end
-
+function tmap end
 
 """
     tmap!(f, out, A::AbstractArray; 
-          chunks_per_thread::Int = 2,
-          chunk_size = max(1, amount(itr) ÷ (chunks_per_thread * nthreads()))
+          nchunks::Int = 2 * nthreads(),
+          split::Symbol = :batch,
+          schedule::Symbol =:dynamic)
 
 A multithreaded function like `Base.map!`. In parallel on multiple tasks, this function assigns each element
 of `out[i] = f(A[i])` for each index `i` of `A` and `out`.
 
 ## Keyword arguments:
 
-- Uses can provide *either* `chunk_size`, or `chunks_per_thread` (and if both are provided, `chunk_size` is used)
-    - `chunks_per_thread` (defaults `2`), will try to split up `itr` so that each thread will recieve *approximately* `chunks_per_thread` pieces of data to work on. More `chunks_per_thread`, typically means better [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)).
-    - `chunk_size` (computed based on `chunks_per_thread` by deault). Data from `itr` will be divided in half using `halve` from [SplittablesBase.jl](https://github.com/JuliaFolds2/SplittablesBase.jl) until those chunks have an `SplittablesBase.amount` less than or equal to `chunk_size`. The chunks are then operated on sequentially.
+- `nchunks::Int` (default 2 * nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
+- `split::Symbol` (default `:batch`) is passed to `ChunkSplitters.chunks` to inform it if the data chunks to be worked on should be contiguous (:batch) or shuffled (:scatter). If `scatter` is chosen, then your reducing operator `op` **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in addition to being associative, or you could get incorrect results!
+- `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling is generally preferred since it is more flexible and better at load balancing, but `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
 """
-@propagate_inbounds function tmap!(f, out, A::AbstractArray; 
-                                   chunks_per_thread::Int = 2,
-                                   chunk_size = max(1, amount(itr) ÷ (chunks_per_thread * nthreads())))
-    @boundscheck eachindex(out) == eachindex(A) ||
-        error("The indices of the input array must match the indices of the output array.")
-    tforeach(eachindex(A)) do i
-        fAi = f(@inbounds A[i])
-        @inbounds out[i] = fAi 
-    end
-    out
-end
+function tmap! end
+
+
+include("implementation.jl")
+
 
 end # module ThreadsBasics

@@ -1,16 +1,34 @@
 using Test, ThreadsBasics
 
 @testset "Basics" begin
-    for (f, op, itr) ∈ [(sin, *, rand(ComplexF64, 100)),
-                        (cos, +, (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)),
-                        ]
+    for (~, f, op, itr) ∈ [
+        (isapprox, sin, +, rand(ComplexF64, 100)),
+        (isapprox, cos, max, 1:100000),
+        (==, round, vcat, randn(1000)),
+        (==, last, *, [1=>"a", 2=>"b", 3=>"c", 4=>"d", 5=>"e"])
+    ]
+        @testset for schedule ∈ (:static, :dynamic,)
+            @testset for split ∈ (:batch, :scatter)
+                if split == :scatter # scatter only works for commutative operators
+                    if op ∈ (vcat, *)
+                        continue
+                    end
+                end
+                for nchunks ∈ (1, 2, 6, 10, 100)
+                    kwargs = (; schedule, split, nchunks)
+                    mapreduce_f_op_itr = mapreduce(f, op, itr)
+                    @test tmapreduce(f, op, itr; kwargs...) ~ mapreduce_f_op_itr
+                    @test treducemap(op, f, itr; kwargs...) ~ mapreduce_f_op_itr
+                    @test treduce(op, f.(itr); kwargs...) ~ mapreduce_f_op_itr
 
-        @test tmapreduce(f, op, itr) ≈ mapreduce(f, op, itr) ≈ treducemap(op, f, itr)
-        @test treduce(op, itr) ≈ reduce(op, itr)
-        @test tmap(f, ComplexF64, collect(itr)) ≈ map(f, itr)
+                    map_f_itr = map(f, itr)
+                    @test all(tmap(f, Any, itr; kwargs...) .~ map_f_itr)
+                    RT = Core.Compiler.return_type(f, Tuple{eltype(itr)})
+                    @test tmap(f, RT, itr; kwargs...) ~ map_f_itr
+                end
+            end
+        end
     end
-    # https://github.com/JuliaFolds2/SplittablesBase.jl/issues/1
-    @test_broken tmapreduce(last, join, Dict(:a =>"one", :b=>"two", :c=>"three", :d=>"four", :e=>"five"))
 end
 
-# Todo way more testing
+# Todo way more testing, and easier tests to deal with

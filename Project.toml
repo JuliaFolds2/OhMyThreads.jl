@@ -1,16 +1,16 @@
 name = "ThreadsBasics"
 uuid = "67456a42-1dca-4109-a031-0a68de7e3ad5"
 authors = ["Mason Protter <mason.protter@icloud.com>"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
-SplittablesBase = "171d559e-b47b-412a-8079-5efa626c420e"
+ChunkSplitters = "ae650224-84b6-46f8-82ea-d812ca08434e"
 StableTasks = "91464d47-22a1-43fe-8b7f-2d57ee82463f"
 
 [compat]
-julia = "1.6"
+ChunkSplitters = "2"
 StableTasks = "0.1"
-SplittablesBase = "0.1"
+julia = "1.6"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
