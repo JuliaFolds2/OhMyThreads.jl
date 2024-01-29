@@ -6,6 +6,8 @@ using ThreadsBasics: chunks, @spawn
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 
+using BangBang: append!!
+
 function tmapreduce(f, op, A;
                     nchunks::Int = 2 * nthreads(),
                     split::Symbol = :batch,
@@ -48,7 +50,7 @@ end
 #-------------------------------------------------------------
 
 function tforeach(f, A::AbstractArray; kwargs...)::Nothing
-    tmapreduce(f, (l, r)->l, A; init=nothing, outputtype=Nothing, kwargs...)
+    tmapreduce(f, (l, r)->l, A; kwargs..., init=nothing, outputtype=Nothing)
 end
 
 #-------------------------------------------------------------
@@ -57,10 +59,20 @@ function tmap(f, ::Type{T}, A::AbstractArray; kwargs...) where {T}
     tmap!(f, similar(A, T), A; kwargs...)
 end
 
+function tmap(f, A; nchunks::Int= 2*nthreads(), kwargs...)
+    the_chunks = collect(chunks(A; n=nchunks))
+    # It's vital that we force split=:batch here because we're not doing a commutative operation!
+    v = tmapreduce(append!!, the_chunks; kwargs...,  nchunks, split=:batch) do inds
+        map(f, @view A[inds])
+    end
+    reshape(v, size(A)...)
+end
+
 @propagate_inbounds function tmap!(f, out, A::AbstractArray; kwargs...)
     @boundscheck eachindex(out) == eachindex(A) ||
         error("The indices of the input array must match the indices of the output array.")
-    tforeach(eachindex(A); kwargs...) do i
+    # It's vital that we force split=:batch here because we're not doing a commutative operation!
+    tforeach(eachindex(A); kwargs..., split=:batch) do i
         fAi = f(@inbounds A[i])
         out[i] = fAi 
     end
@@ -69,10 +81,12 @@ end
 
 #-------------------------------------------------------------
 
-function tcollect(::Type{T}, gen::Base.Generator{<:AbstractArray, F}; kwargs...) where {T, F}
+function tcollect(::Type{T}, gen::Base.Generator{<:AbstractArray}; kwargs...) where {T}
     tmap(gen.f, T, gen.iter; kwargs...)
 end
-tcollect(::Type{T}, A; kwargs...) where {T} = tmap(identity, T, A; kwargs...)
+tcollect(gen::Base.Generator{<:AbstractArray}; kwargs...) = tmap(gen.f, gen.iter; kwargs...)
 
+tcollect(::Type{T}, A; kwargs...) where {T} = tmap(identity, T, A; kwargs...)
+tcollect(A; kwargs...) = tmap(identity, A; kwargs...)
 
 end # module Implementation
