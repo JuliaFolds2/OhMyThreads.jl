@@ -5,7 +5,7 @@ import ThreadsBasics: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tc
 using ThreadsBasics: chunks, @spawn, @spawnat
 using ThreadsBasics.Tools: nthtid
 using Base: @propagate_inbounds
-using Base.Threads: nthreads, @threads, threadpoolsize
+using Base.Threads: nthreads, @threads
 
 using BangBang: append!!
 
