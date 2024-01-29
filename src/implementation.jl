@@ -1,13 +1,13 @@
 module Implementation
 
-import ThreadsBasics: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
+import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
 
-using ThreadsBasics: chunks, @spawn, @spawnat
-using ThreadsBasics.Tools: nthtid
+using OhMyThreads: StableTasks, chunks, @spawn, @spawnat
+using OhMyThreads.Tools: nthtid
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 
-using BangBang: append!!
+using BangBang: BangBang, append!!
 
 function tmapreduce(f, op, A;
     nchunks::Int=nthreads(),

@@ -1,8 +1,8 @@
-using ThreadsBasics
+using OhMyThreads
 
 open("README.md", "w+") do io
     println(io, """
-# ThreadsBasics
+# OhMyThreads
 
 #### This package is in very early development and is not yet registered
 
@@ -14,7 +14,7 @@ provides the following functions:
 """)
     for sym ∈ (:tmapreduce, :treducemap, :treduce, :tmap, :tmap!, :tforeach, :tcollect)
         println(io, "<details><summary> $sym </summary>\n<p>\n")
-        println(io, Base.Docs.doc(Base.Docs.Binding(ThreadsBasics, sym)))
+        println(io, Base.Docs.doc(Base.Docs.Binding(OhMyThreads, sym)))
         println(io, "\n</details>\n</p>")
         println(io, "\n____________________________\n")
     end

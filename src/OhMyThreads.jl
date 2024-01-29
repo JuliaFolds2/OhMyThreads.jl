@@ -1,7 +1,7 @@
-module ThreadsBasics
+module OhMyThreads
 
 
-using StableTasks: @spawn, @spawnat
+using StableTasks: StableTasks, @spawn, @spawnat
 using ChunkSplitters: chunks
 
 export chunks, treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
@@ -189,4 +189,4 @@ include("tools.jl")
 include("implementation.jl")
 
 
-end # module ThreadsBasics
+end # module OhMyThreads
