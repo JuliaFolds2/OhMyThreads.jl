@@ -72,7 +72,7 @@ end
 function tcollect(::Type{T}, gen::Base.Generator{<:AbstractArray, F}; kwargs...) where {T, F}
     tmap(gen.f, T, gen.iter; kwargs...)
 end
-tcollect(::Type{T}, A; kwargs...) = tmap(identity, T, A; kwargs...)
+tcollect(::Type{T}, A; kwargs...) where {T} = tmap(identity, T, A; kwargs...)
 
 
 end # module Implementation
