@@ -25,6 +25,7 @@ using Test, ThreadsBasics
                     @test all(tmap(f, Any, itr; kwargs...) .~ map_f_itr)
                     RT = Core.Compiler.return_type(f, Tuple{eltype(itr)})
                     @test tmap(f, RT, itr; kwargs...) ~ map_f_itr
+                    @test tcollect(RT, (f(x) for x in itr); kwargs...) ~ map_f_itr
                 end
             end
         end
