@@ -9,6 +9,7 @@ ChunkSplitters = "ae650224-84b6-46f8-82ea-d812ca08434e"
 StableTasks = "91464d47-22a1-43fe-8b7f-2d57ee82463f"
 
 [compat]
+BangBang = "0.4"
 ChunkSplitters = "2.1"
 StableTasks = "0.1.2"
 julia = "1.6"
