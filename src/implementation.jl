@@ -6,6 +6,8 @@ using ThreadsBasics: chunks, @spawn
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 
+using BangBang: append!!
+
 function tmapreduce(f, op, A;
                     nchunks::Int = 2 * nthreads(),
                     split::Symbol = :batch,
@@ -48,7 +50,7 @@ end
 #-------------------------------------------------------------
 
 function tforeach(f, A::AbstractArray; kwargs...)::Nothing
-    tmapreduce(f, (l, r)->l, A; init=nothing, outputtype=Nothing, kwargs...)
+    tmapreduce(f, (l, r)->l, A; kwargs..., init=nothing, outputtype=Nothing)
 end
 
 #-------------------------------------------------------------
@@ -56,6 +58,15 @@ end
 function tmap(f, ::Type{T}, A::AbstractArray; kwargs...) where {T}
     tmap!(f, similar(A, T), A; kwargs...)
 end
+
+function tmap(f, A; nchunks::Int= 2*nthreads(), kwargs...)
+    the_chunks = collect(chunks(A; n=nchunks))
+    v = tmapreduce(append!!, the_chunks; kwargs...,  nchunks, split=:batch) do inds
+        map(f, @view A[inds])
+    end
+    reshape(v, size(A)...)
+end
+
 
 @propagate_inbounds function tmap!(f, out, A::AbstractArray; kwargs...)
     @boundscheck eachindex(out) == eachindex(A) ||
