@@ -4,7 +4,7 @@ module ThreadsBasics
 using StableTasks: @spawn
 using ChunkSplitters: chunks
 
-export chunks, treduce, tmapreduce, treducemap, tmap, tmap!, tforeach
+export chunks, treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
 
 """
     tmapreduce(f, op, A::AbstractArray;
@@ -162,6 +162,22 @@ of `out[i] = f(A[i])` for each index `i` of `A` and `out`.
 - `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling is generally preferred since it is more flexible and better at load balancing, but `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
 """
 function tmap! end
+
+"""
+    tcollect(::Type{OutputType}, gen::Base.Generator{AbstractArray, F};
+             nchunks::Int = 2 * nthreads(),
+             split::Symbol = :batch,
+             schedule::Symbol =:dynamic)
+
+A multithreaded function like `Base.collect`. Essentially just calls `tmap` on the generator function and inputs.
+
+## Keyword arguments:
+
+- `nchunks::Int` (default 2 * nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
+- `split::Symbol` (default `:batch`) is passed to `ChunkSplitters.chunks` to inform it if the data chunks to be worked on should be contiguous (:batch) or shuffled (:scatter). If `scatter` is chosen, then your reducing operator `op` **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in addition to being associative, or you could get incorrect results!
+- `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling is generally preferred since it is more flexible and better at load balancing, but `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
+"""
+function tcollect end
 
 
 include("implementation.jl")
