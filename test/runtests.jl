@@ -15,7 +15,7 @@ using Test, ThreadsBasics
                     end
                 end
                 for nchunks ∈ (1, 2, 6, 10, 100)
-                    if schedule == :staitc && nchunks > Threads.nthreads()
+                    if schedule == :static && nchunks > Threads.nthreads()
                         continue
                     end
                     kwargs = (; schedule, split, nchunks)
