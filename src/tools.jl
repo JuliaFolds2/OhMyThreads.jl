@@ -1,6 +1,6 @@
 module Tools
 
-using Base.Threads: nthreads, threadpoolsize
+using Base.Threads: nthreads
 
 """
 Returns the thread id of the `n`th Julia thread in the `:default` threadpool.
@@ -11,7 +11,7 @@ Returns the thread id of the `n`th Julia thread in the `:default` threadpool.
         return n
     else
         @boundscheck 1 <= n <= nthreads(:default)
-        return n + threadpoolsize(:interactive) # default threads after interactive threads
+        return n + Threads.threadpoolsize(:interactive) # default threads after interactive threads
     end
 end
 
