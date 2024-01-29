@@ -9,7 +9,7 @@ StableTasks = "91464d47-22a1-43fe-8b7f-2d57ee82463f"
 
 [compat]
 ChunkSplitters = "2.1"
-StableTasks = "0.1.1"
+StableTasks = "0.1.2"
 julia = "1.6"
 
 [extras]
