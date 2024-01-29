@@ -119,7 +119,11 @@ function treduce end
              split::Symbol = :batch,
              schedule::Symbol =:dynamic) :: Nothing
 
-Apply `f` to each element of `A` on multiple parallel tasks, and return `nothing`.
+A multithreaded function like `Base.foreach`. Apply `f` to each element of `A` on multiple parallel tasks, and return `nothing`, i.e. it is the parallel equivalent of
+
+    for x in A
+        f(x)
+    end
 
 ## Keyword arguments:
 
@@ -130,15 +134,16 @@ Apply `f` to each element of `A` on multiple parallel tasks, and return `nothing
 function tforeach end
 
 """
-    tmap(f, [OutputType], A::AbstractArray; 
+    tmap(f, [OutputElementType], A::AbstractArray; 
          nchunks::Int = 2 * nthreads(),
          split::Symbol = :batch,
          schedule::Symbol =:dynamic)
 
 A multithreaded function like `Base.map`. Create a new container `similar` to `A` whose `i`th element is
 equal to `f(A[i])`. This container is filled in parallel on multiple tasks. The optional argument
-`OutputType` will select a specific output type for the returned container, and will generally incur fewer
-allocations than the version where `OutputType` is not specified.
+`OutputElementType` will select a specific element type for the returned container, and will generally incur
+fewer allocations than the version where `OutputElementType` is not specified.
+
 
 ## Keyword arguments:
 
@@ -166,11 +171,12 @@ of `out[i] = f(A[i])` for each index `i` of `A` and `out`.
 function tmap! end
 
 """
-    tcollect(::Type{OutputType}, gen::Base.Generator{<:AbstractArray};
+    tcollect([OutputElementType], gen::Union{AbstractArray, Generator{<:AbstractArray}};
              nchunks::Int = 2 * nthreads(),
              schedule::Symbol =:dynamic)
 
-A multithreaded function like `Base.collect`. Essentially just calls `tmap` on the generator function and inputs.
+A multithreaded function like `Base.collect`. Essentially just calls `tmap` on the generator function and
+inputs. The optional argument `OutputElementType` will select a specific element type for the returned container, and will generally incur fewer allocations than the version where `OutputElementType` is not specified.
 
 ## Keyword arguments:
 
