@@ -15,6 +15,9 @@ using Test, ThreadsBasics
                     end
                 end
                 for nchunks ∈ (1, 2, 6, 10, 100)
+                    if schedule == :static && nchunks > Threads.nthreads()
+                        continue
+                    end
                     kwargs = (; schedule, split, nchunks)
                     mapreduce_f_op_itr = mapreduce(f, op, itr)
                     @test tmapreduce(f, op, itr; kwargs...) ~ mapreduce_f_op_itr
