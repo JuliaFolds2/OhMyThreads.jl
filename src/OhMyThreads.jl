@@ -28,7 +28,7 @@ is the parallelized version of
 
      (√1 + √2) + (√3 + √4) + √5
 
-This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/m3g/ChunkSplitters.jl).
+This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl).
 
 ## Keyword arguments:
 
@@ -64,7 +64,7 @@ is the parallelized version of
      (√1 + √2) + (√3 + √4) + √5
 
 
-This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/m3g/ChunkSplitters.jl).
+This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl).
 
 ## Keyword arguments:
 
@@ -100,7 +100,7 @@ is the parallelized version of
      (1 + 2) + (3 + 4) + 5
 
 
-This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/m3g/ChunkSplitters.jl).
+This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl).
 
 ## Keyword arguments:
 
