@@ -18,7 +18,7 @@ A multithreaded function like `Base.mapreduce`. Perform a reduction over `A`, ap
 function `f` to each element, and then combining them with the two-argument function `op`. `op` **must** be an
 [associative](https://en.wikipedia.org/wiki/Associative_property) function, in the sense that
 `op(a, op(b, c)) ≈ op(op(a, b), c)`. If `op` is not (approximately) associative, you will get undefined
-results. 
+results.
 
 For a very well known example of `mapreduce`, `sum(f, A)` is equivalent to `mapreduce(f, +, A)`. Doing
 
@@ -130,7 +130,7 @@ Apply `f` to each element of `A` on multiple parallel tasks, and return `nothing
 function tforeach end
 
 """
-    tmap(f, ::Type{OutputType}, A::AbstractArray; 
+    tmap(f, ::Type{OutputType}, A::AbstractArray;
          nchunks::Int = 2 * nthreads(),
          split::Symbol = :batch,
          schedule::Symbol =:dynamic)
@@ -147,7 +147,7 @@ A multithreaded function like `Base.map`. Create a new container `similar` to `A
 function tmap end
 
 """
-    tmap!(f, out, A::AbstractArray; 
+    tmap!(f, out, A::AbstractArray;
           nchunks::Int = 2 * nthreads(),
           split::Symbol = :batch,
           schedule::Symbol =:dynamic)
@@ -165,6 +165,7 @@ function tmap! end
 
 
 include("implementation.jl")
+include("tools.jl")
 
 
 end # module ThreadsBasics
