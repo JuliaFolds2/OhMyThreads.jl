@@ -1,7 +1,7 @@
 module ThreadsBasics
 
 
-using StableTasks: @spawn
+using StableTasks: @spawn, @spawnat
 using ChunkSplitters: chunks
 
 export chunks, treduce, tmapreduce, treducemap, tmap, tmap!, tforeach
@@ -9,7 +9,7 @@ export chunks, treduce, tmapreduce, treducemap, tmap, tmap!, tforeach
 """
     tmapreduce(f, op, A::AbstractArray;
                [init],
-               nchunks::Int = 2 * nthreads(),
+               nchunks::Int = nthreads(),
                split::Symbol = :batch,
                schedule::Symbol =:dynamic,
                outputtype::Type = Any)
@@ -33,7 +33,7 @@ This data is divided into chunks to be worked on in parallel using [ChunkSplitte
 ## Keyword arguments:
 
 - `init` optional keyword argument forwarded to `mapreduce` for the sequential parts of the calculation.
-- `nchunks::Int` (default 2 * nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
+- `nchunks::Int` (default nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
 - `split::Symbol` (default `:batch`) is passed to `ChunkSplitters.chunks` to inform it if the data chunks to be worked on should be contiguous (:batch) or shuffled (:scatter). If `scatter` is chosen, then your reducing operator `op` **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in addition to being associative, or you could get incorrect results!
 - `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling is generally preferred since it is more flexible and better at load balancing, but `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
 - `outputtype::Type` (default `Any`) will work as the asserted output type of parallel calculations. This is typically only
@@ -44,7 +44,7 @@ function tmapreduce end
 """
     treducemap(op, f, A::AbstractArray;
                [init],
-               nchunks::Int = 2 * nthreads(),
+               nchunks::Int = nthreads(),
                split::Symbol = :batch,
                schedule::Symbol =:dynamic,
                outputtype::Type = Any)
@@ -69,7 +69,7 @@ This data is divided into chunks to be worked on in parallel using [ChunkSplitte
 ## Keyword arguments:
 
 - `init` optional keyword argument forwarded to `mapreduce` for the sequential parts of the calculation.
-- `nchunks::Int` (default 2 * nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
+- `nchunks::Int` (default nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
 - `split::Symbol` (default `:batch`) is passed to `ChunkSplitters.chunks` to inform it if the data chunks to be worked on should be contiguous (:batch) or shuffled (:scatter). If `scatter` is chosen, then your reducing operator `op` **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in addition to being associative, or you could get incorrect results!
 - `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling should be preferred since it is more flexible and better at load balancing, and more likely to be type stable. However, `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
 - `outputtype::Type` (default `Any`) will work as the asserted output type of parallel calculations. This is typically only
@@ -80,7 +80,7 @@ function treducemap end
 
 """
     treduce(op, A::AbstractArray; [init],
-            nchunks::Int = 2 * nthreads(),
+            nchunks::Int = nthreads(),
             split::Symbol = :batch,
             schedule::Symbol =:dynamic,
             outputtype::Type = Any)
@@ -105,7 +105,7 @@ This data is divided into chunks to be worked on in parallel using [ChunkSplitte
 ## Keyword arguments:
 
 - `init` optional keyword argument forwarded to `mapreduce` for the sequential parts of the calculation.
-- `nchunks::Int` (default 2 * nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
+- `nchunks::Int` (default nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
 - `split::Symbol` (default `:batch`) is passed to `ChunkSplitters.chunks` to inform it if the data chunks to be worked on should be contiguous (:batch) or shuffled (:scatter). If `scatter` is chosen, then your reducing operator `op` **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in addition to being associative, or you could get incorrect results!
 - `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling is generally preferred since it is more flexible and better at load balancing, but `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
 - `outputtype::Type` (default `Any`) will work as the asserted output type of parallel calculations. This is typically only
@@ -115,7 +115,7 @@ function treduce end
 
 """
     tforeach(f, A::AbstractArray;
-             nchunks::Int = 2 * nthreads(),
+             nchunks::Int = nthreads(),
              split::Symbol = :batch,
              schedule::Symbol =:dynamic) :: Nothing
 
@@ -123,7 +123,7 @@ Apply `f` to each element of `A` on multiple parallel tasks, and return `nothing
 
 ## Keyword arguments:
 
-- `nchunks::Int` (default 2 * nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
+- `nchunks::Int` (default nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
 - `split::Symbol` (default `:batch`) is passed to `ChunkSplitters.chunks` to inform it if the data chunks to be worked on should be contiguous (:batch) or shuffled (:scatter). If `scatter` is chosen, then your reducing operator `op` **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in addition to being associative, or you could get incorrect results!
 - `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling is generally preferred since it is more flexible and better at load balancing, but `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
 """
@@ -131,7 +131,7 @@ function tforeach end
 
 """
     tmap(f, ::Type{OutputType}, A::AbstractArray;
-         nchunks::Int = 2 * nthreads(),
+         nchunks::Int = nthreads(),
          split::Symbol = :batch,
          schedule::Symbol =:dynamic)
 
@@ -140,7 +140,7 @@ A multithreaded function like `Base.map`. Create a new container `similar` to `A
 
 ## Keyword arguments:
 
-- `nchunks::Int` (default 2 * nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
+- `nchunks::Int` (default nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
 - `split::Symbol` (default `:batch`) is passed to `ChunkSplitters.chunks` to inform it if the data chunks to be worked on should be contiguous (:batch) or shuffled (:scatter). If `scatter` is chosen, then your reducing operator `op` **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in addition to being associative, or you could get incorrect results!
 - `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling is generally preferred since it is more flexible and better at load balancing, but `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
 """
@@ -148,7 +148,7 @@ function tmap end
 
 """
     tmap!(f, out, A::AbstractArray;
-          nchunks::Int = 2 * nthreads(),
+          nchunks::Int = nthreads(),
           split::Symbol = :batch,
           schedule::Symbol =:dynamic)
 
@@ -157,15 +157,14 @@ of `out[i] = f(A[i])` for each index `i` of `A` and `out`.
 
 ## Keyword arguments:
 
-- `nchunks::Int` (default 2 * nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
+- `nchunks::Int` (default nthreads()) is passed to `ChunkSplitters.chunks` to inform it how many pieces of data should be worked on in parallel. Greater `nchunks` typically helps with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead.
 - `split::Symbol` (default `:batch`) is passed to `ChunkSplitters.chunks` to inform it if the data chunks to be worked on should be contiguous (:batch) or shuffled (:scatter). If `scatter` is chosen, then your reducing operator `op` **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in addition to being associative, or you could get incorrect results!
 - `schedule::Symbol` either `:dynamic` or `:static` (default `:dynamic`), determines how the parallel portions of the calculation are scheduled. `:dynamic` scheduling is generally preferred since it is more flexible and better at load balancing, but `:static` scheduling can sometimes be more performant when the time it takes to complete a step of the calculation is highly uniform, and no other parallel functions are running at the same time.
 """
 function tmap! end
 
-
-include("implementation.jl")
 include("tools.jl")
+include("implementation.jl")
 
 
 end # module ThreadsBasics

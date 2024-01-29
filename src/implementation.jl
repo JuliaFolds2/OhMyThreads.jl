@@ -2,20 +2,21 @@ module Implementation
 
 import ThreadsBasics: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!
 
-using ThreadsBasics: chunks, @spawn
+using ThreadsBasics: chunks, @spawn, @spawnat
+using ThreadsBasics.Tools: nthtid
 using Base: @propagate_inbounds
-using Base.Threads: nthreads, @threads
+using Base.Threads: nthreads, @threads, threadpoolsize
 
 function tmapreduce(f, op, A;
-                    nchunks::Int = 2 * nthreads(),
-                    split::Symbol = :batch,
-                    schedule::Symbol =:dynamic,
-                    outputtype::Type = Any,
-                    kwargs...)
+    nchunks::Int=nthreads(),
+    split::Symbol=:batch,
+    schedule::Symbol=:dynamic,
+    outputtype::Type=Any,
+    kwargs...)
     if schedule === :dynamic
         _tmapreduce(f, op, A, outputtype, nchunks, split; kwargs...)
     elseif schedule === :static
-        _tmapreduce_static(f, op, outputtype, A, nchunks, split; kwargs...)
+        _tmapreduce_static(f, op, A, outputtype, nchunks, split; kwargs...)
     else
         schedule_err(schedule)
     end
@@ -31,12 +32,17 @@ function _tmapreduce(f, op, A, ::Type{OutputType}, nchunks, split=:batch; kwargs
     mapreduce(fetch, op, tasks)
 end
 
-function _tmapreduce_static(f, op, ::Type{OutputType}, A, nchunks, split; kwargs...) where {OutputType}
-    results = Vector{OutputType}(undef, min(nchunks, length(A)))
-    @threads :static for (ichunk, inds) ∈ enumerate(chunks(A; n=nchunks, split))
-        results[ichunk] = mapreduce(f, op, @view(A[inds]); kwargs...)
+function _tmapreduce_static(f, op, A, ::Type{OutputType}, nchunks, split; kwargs...) where {OutputType}
+    nt = nthreads()
+    if nchunks > nt
+        # We could implement strategies, like round-robin, in the future
+        throw(ArgumentError("We currently only support `nchunks <= nthreads()` for static scheduling."))
     end
-    reduce(op, results; kwargs...)
+    tasks = map(enumerate(chunks(A; n=nchunks, split))) do (c, inds)
+        tid = @inbounds nthtid(c)
+        @spawnat tid mapreduce(f, op, @view(A[inds]); kwargs...)
+    end
+    mapreduce(fetch, op, tasks)
 end
 
 #-------------------------------------------------------------
@@ -48,7 +54,7 @@ end
 #-------------------------------------------------------------
 
 function tforeach(f, A::AbstractArray; kwargs...)::Nothing
-    tmapreduce(f, (l, r)->l, A; init=nothing, outputtype=Nothing, kwargs...)
+    tmapreduce(f, (l, r) -> l, A; init=nothing, outputtype=Nothing, kwargs...)
 end
 
 #-------------------------------------------------------------
@@ -59,10 +65,10 @@ end
 
 @propagate_inbounds function tmap!(f, out, A::AbstractArray; kwargs...)
     @boundscheck eachindex(out) == eachindex(A) ||
-        error("The indices of the input array must match the indices of the output array.")
+                 error("The indices of the input array must match the indices of the output array.")
     tforeach(eachindex(A); kwargs...) do i
         fAi = f(@inbounds A[i])
-        out[i] = fAi 
+        out[i] = fAi
     end
     out
 end
