@@ -56,6 +56,10 @@ end
 function tmap(f, ::Type{T}, A::AbstractArray; kwargs...) where {T}
     tmap!(f, similar(A, T), A; kwargs...)
 end
+function tmap(f, A::AbstractArray{T_in}; kwargs...) where {T_in}
+    RT = Core.Compiler.return_type(f, Tuple{T_in})
+    tmap!(f, similar(A, RT), A; kwargs...)
+end
 
 @propagate_inbounds function tmap!(f, out, A::AbstractArray; kwargs...)
     @boundscheck eachindex(out) == eachindex(A) ||
@@ -69,8 +73,12 @@ end
 
 #-------------------------------------------------------------
 
-function tcollect(::Type{T}, gen::Base.Generator{<:AbstractArray, F}; kwargs...) where {T, F}
-    tmap(gen.f, T, gen.iter; kwargs...)
+function tcollect(::Type{T_out}, gen::Base.Generator{<:AbstractArray, F}; kwargs...) where {T_out, F}
+    tmap(gen.f, T_out, gen.iter; kwargs...)
+end
+function tcollect(gen::Base.Generator{<:AbstractArray{T_in}, F}; kwargs...) where {T_in, F}
+    T_out = Core.Compiler.return_type(gen.f, Tuple{T_in})
+    tmap(gen.f, T_out, gen.iter; kwargs...)
 end
 
 
