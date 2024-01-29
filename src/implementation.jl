@@ -1,6 +1,6 @@
 module Implementation
 
-import ThreadsBasics: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!
+import ThreadsBasics: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
 
 using ThreadsBasics: chunks, @spawn
 using Base: @propagate_inbounds
@@ -66,6 +66,13 @@ end
     end
     out
 end
+
+#-------------------------------------------------------------
+
+function tcollect(::Type{T}, gen::Base.Generator{<:AbstractArray, F}; kwargs...) where {T, F}
+    tmap(gen.f, T, gen.iter; kwargs...)
+end
+tcollect(::Type{T}, A; kwargs...) where {T} = tmap(identity, T, A; kwargs...)
 
 
 end # module Implementation

@@ -23,8 +23,14 @@ using Test, ThreadsBasics
 
                     map_f_itr = map(f, itr)
                     @test all(tmap(f, Any, itr; kwargs...) .~ map_f_itr)
+                    @test all(tcollect(Any, (f(x) for x in itr); kwargs...) .~ map_f_itr)
+                    @test all(tcollect(Any, f.(itr); kwargs...) .~ map_f_itr)
+                    
                     RT = Core.Compiler.return_type(f, Tuple{eltype(itr)})
+                    
                     @test tmap(f, RT, itr; kwargs...) ~ map_f_itr
+                    @test tcollect(RT, (f(x) for x in itr); kwargs...) ~ map_f_itr
+                    @test tcollect(RT, f.(itr); kwargs...) ~ map_f_itr
                 end
             end
         end
