@@ -1,4 +1,4 @@
-using Test, ThreadsBasics
+using Test, OhMyThreads
 
 @testset "Basics" begin
     for (~, f, op, itr) ∈ [

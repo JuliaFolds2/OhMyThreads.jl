@@ -1,8 +1,8 @@
-using ThreadsBasics
+using OhMyThreads
 
 open("README.md", "w+") do io
     println(io, """
-# ThreadsBasics
+# OhMyThreads
 
 #### This package is in very early development and is not yet registered
 
