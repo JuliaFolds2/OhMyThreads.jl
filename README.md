@@ -12,14 +12,14 @@ Unlike most JuliaFolds2 packages, it is not built off of
 Rather, OhMyThreads is meant to be a simpler, more maintainable, and more accessible alternative to packages
 like [ThreadsX.jl](https://github.com/tkf/ThreadsX.jl) or [Folds.jl](https://github.com/JuliaFolds2/Folds.jl).
 
-OhMyThreads.jl re-exports the very useful function `chunks` from
+OhMyThreads.jl re-exports the function `chunks` from
 [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl), and provides the following functions:
 
 <details><summary> tmapreduce </summary>
 <p>
 
 ```
-tmapreduce(f, op, A::AbstractArray;
+tmapreduce(f, op, A::AbstractArray...;
            [init],
            nchunks::Int = nthreads(),
            split::Symbol = :batch,
@@ -63,7 +63,7 @@ ____________________________
 <p>
 
 ```
-treducemap(op, f, A::AbstractArray;
+treducemap(op, f, A::AbstractArray...;
            [init],
            nchunks::Int = nthreads(),
            split::Symbol = :batch,
@@ -107,7 +107,8 @@ ____________________________
 <p>
 
 ```
-treduce(op, A::AbstractArray; [init],
+treduce(op, A::AbstractArray...;
+        [init],
         nchunks::Int = nthreads(),
         split::Symbol = :batch,
         schedule::Symbol =:dynamic,
@@ -150,7 +151,7 @@ ____________________________
 <p>
 
 ```
-tmap(f, [OutputElementType], A::AbstractArray; 
+tmap(f, [OutputElementType], A::AbstractArray...; 
      nchunks::Int = nthreads(),
      split::Symbol = :batch,
      schedule::Symbol =:dynamic)
@@ -174,7 +175,7 @@ ____________________________
 <p>
 
 ```
-tmap!(f, out, A::AbstractArray;
+tmap!(f, out, A::AbstractArray...;
       nchunks::Int = nthreads(),
       split::Symbol = :batch,
       schedule::Symbol =:dynamic)
@@ -198,7 +199,7 @@ ____________________________
 <p>
 
 ```
-tforeach(f, A::AbstractArray;
+tforeach(f, A::AbstractArray...;
          nchunks::Int = nthreads(),
          split::Symbol = :batch,
          schedule::Symbol =:dynamic) :: Nothing

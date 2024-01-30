@@ -7,7 +7,7 @@ using ChunkSplitters: chunks
 export chunks, treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
 
 """
-    tmapreduce(f, op, A::AbstractArray;
+    tmapreduce(f, op, A::AbstractArray...;
                [init],
                nchunks::Int = nthreads(),
                split::Symbol = :batch,
@@ -42,7 +42,7 @@ needed if you are using a `:static` schedule, since the `:dynamic` schedule is u
 function tmapreduce end
 
 """
-    treducemap(op, f, A::AbstractArray;
+    treducemap(op, f, A::AbstractArray...;
                [init],
                nchunks::Int = nthreads(),
                split::Symbol = :batch,
@@ -79,7 +79,8 @@ function treducemap end
 
 
 """
-    treduce(op, A::AbstractArray; [init],
+    treduce(op, A::AbstractArray...;
+            [init],
             nchunks::Int = nthreads(),
             split::Symbol = :batch,
             schedule::Symbol =:dynamic,
@@ -114,7 +115,7 @@ needed if you are using a `:static` schedule, since the `:dynamic` schedule is u
 function treduce end
 
 """
-    tforeach(f, A::AbstractArray;
+    tforeach(f, A::AbstractArray...;
              nchunks::Int = nthreads(),
              split::Symbol = :batch,
              schedule::Symbol =:dynamic) :: Nothing
@@ -134,7 +135,7 @@ A multithreaded function like `Base.foreach`. Apply `f` to each element of `A` o
 function tforeach end
 
 """
-    tmap(f, [OutputElementType], A::AbstractArray; 
+    tmap(f, [OutputElementType], A::AbstractArray...; 
          nchunks::Int = nthreads(),
          split::Symbol = :batch,
          schedule::Symbol =:dynamic)
@@ -154,7 +155,7 @@ fewer allocations than the version where `OutputElementType` is not specified.
 function tmap end
 
 """
-    tmap!(f, out, A::AbstractArray;
+    tmap!(f, out, A::AbstractArray...;
           nchunks::Int = nthreads(),
           split::Symbol = :batch,
           schedule::Symbol =:dynamic)
