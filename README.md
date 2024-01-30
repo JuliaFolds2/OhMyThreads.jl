@@ -13,7 +13,7 @@ Rather, OhMyThreads is meant to be a simpler, more maintainable, and more access
 like [ThreadsX.jl](https://github.com/tkf/ThreadsX.jl) or [Folds.jl](https://github.com/JuliaFolds2/Folds.jl).
 
 OhMyThreads.jl re-exports the very useful function `chunks` from
-[ChunkSplitters.jl](https://github.com/m3g/ChunkSplitters.jl), and provides the following functions:
+[ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl), and provides the following functions:
 
 <details><summary> tmapreduce </summary>
 <p>
@@ -41,7 +41,7 @@ is the parallelized version of
  (√1 + √2) + (√3 + √4) + √5
 ```
 
-This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/m3g/ChunkSplitters.jl).
+This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl).
 
 ## Keyword arguments:
 
@@ -85,7 +85,7 @@ is the parallelized version of
  (√1 + √2) + (√3 + √4) + √5
 ```
 
-This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/m3g/ChunkSplitters.jl).
+This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl).
 
 ## Keyword arguments:
 
@@ -128,7 +128,7 @@ is the parallelized version of
  (1 + 2) + (3 + 4) + 5
 ```
 
-This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/m3g/ChunkSplitters.jl).
+This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl).
 
 ## Keyword arguments:
 

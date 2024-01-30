@@ -16,8 +16,8 @@ Unlike most JuliaFolds2 packages, it is not built off of
 Rather, OhMyThreads is meant to be a simpler, more maintainable, and more accessible alternative to packages
 like [ThreadsX.jl](https://github.com/tkf/ThreadsX.jl) or [Folds.jl](https://github.com/JuliaFolds2/Folds.jl).
 
-OhMyThreads.jl re-exports the very useful function `chunks` from
-[ChunkSplitters.jl](https://github.com/m3g/ChunkSplitters.jl), and provides the following functions:
+OhMyThreads.jl re-exports the function `chunks` from
+[ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl), and provides the following functions:
 """)
     for sym ∈ (:tmapreduce, :treducemap, :treduce, :tmap, :tmap!, :tforeach, :tcollect)
         println(io, "<details><summary> $sym </summary>\n<p>\n")
