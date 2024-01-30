@@ -10,9 +10,8 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.6'
           - '1.9'
-          - '1.10.0'
+          - '1.10'
           - 'nightly'
         os:
           - ubuntu-latest
