@@ -15,4 +15,11 @@ Returns the thread id of the `n`th Julia thread in the `:default` threadpool.
     end
 end
 
+"""
+    taskid() :: UInt
+
+Return a `UInt` identifier for the current running [Task](https://docs.julialang.org/en/v1/base/parallel/#Core.Task). This identifier will 
+"""
+taskid() = objectid(current_task())
+
 end # Tools
