@@ -40,4 +40,4 @@ jobs:
         with:
           file: lcov.info
         env:
-          JULIA_NUM_THREADS: 4
+          JULIA_NUM_THREADS: 4,2
