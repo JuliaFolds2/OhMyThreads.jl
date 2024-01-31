@@ -44,11 +44,13 @@ function _tmapreduce_greedy(f, op, Arrs, ::Type{OutputType}, nchunks, split, map
     nchunks > 0 || throw("Error: nchunks must be a positive integer")
     if Base.IteratorSize(first(Arrs)) isa Base.SizeUnknown
         ntasks = nchunks
+        ch_len = 0
     else
         check_all_have_same_indices(Arrs)
         ntasks = min(length(first(Arrs)), nchunks)
+        ch_len = length(first(Arrs))
     end
-    ch = Channel{Tuple{eltype.(Arrs)...}}(0; spawn=true) do ch
+    ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn=true) do ch
         for args ∈ zip(Arrs...)
             put!(ch, args)
         end
