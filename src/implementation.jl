@@ -41,11 +41,12 @@ function _tmapreduce(f, op, Arrs, ::Type{OutputType}, nchunks, split, threadpool
 end
 
 function _tmapreduce_greedy(f, op, Arrs, ::Type{OutputType}, nchunks, split, mapreduce_kwargs)::OutputType where {OutputType}
+    nchunks > 0 || throw("Error: nchunks must be a positive integer")
     if Base.IteratorSize(first(Arrs)) isa Base.SizeUnknown
         ntasks = nchunks
     else
         check_all_have_same_indices(Arrs)
-        nchunks > 0 || throw("Error: nchunks must be a positive integer")
+        ntasks = min(length(first(Arrs)), nchunks)
     end
     ch = Channel{Tuple{eltype.(Arrs)...}}(0; spawn=true) do ch
         for args ∈ zip(Arrs...)
