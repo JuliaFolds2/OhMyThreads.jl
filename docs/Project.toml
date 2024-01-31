@@ -1,7 +1,9 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DocumenterTools = "35a29f4d-8980-5a13-9543-d66fff28ecb8"
+StableTasks = "91464d47-22a1-43fe-8b7f-2d57ee82463f"
 
 [compat]
 Documenter = "1.2"
 DocumenterTools = "0.1"
+StableTasks = "0.1.4"
