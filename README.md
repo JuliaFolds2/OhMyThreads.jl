@@ -1,5 +1,37 @@
 # OhMyThreads
 
+[docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
+[docs-dev-url]: https://JuliaFolds2.github.io/OhMyThreads.jl/dev
+
+[docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
+[docs-stable-url]: https://JuliaFolds2.github.io/OhMyThreads.jl/stable
+
+[ci-img]: https://github.com/JuliaFolds2/OhMyThreads.jl/actions/workflows/ci.yml/badge.svg
+[ci-url]: https://github.com/JuliaFolds2/OhMyThreads.jl/actions/workflows/ci.yml
+
+[cov-img]: https://codecov.io/gh/JuliaFolds2/OhMyThreads.jl/branch/main/graph/badge.svg?token=Ze61CbGoO5
+[cov-url]: https://codecov.io/gh/JuliaFolds2/OhMyThreads.jl
+
+[lifecycle-img]: https://img.shields.io/badge/lifecycle-experimental-red.svg
+
+[code-style-img]: https://img.shields.io/badge/code%20style-blue-4495d1.svg
+[code-style-url]: https://github.com/invenia/BlueStyle
+
+<!--
+![Lifecycle](https://img.shields.io/badge/lifecycle-maturing-blue.svg)
+![Lifecycle](https://img.shields.io/badge/lifecycle-stable-green.svg)
+![Lifecycle](https://img.shields.io/badge/lifecycle-retired-orange.svg)
+![Lifecycle](https://img.shields.io/badge/lifecycle-archived-red.svg)
+![Lifecycle](https://img.shields.io/badge/lifecycle-dormant-blue.svg)
+![Lifecycle](https://img.shields.io/badge/lifecycle-experimental-orange.svg)
+-->
+
+*Simple Multithreading in Julia*
+
+| **Documentation**                                                               | **Build Status**                                                                                |  **Quality**                                                                                |
+|:-------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|
+| [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] | [![][ci-img]][ci-url] [![][cov-img]][cov-url] | ![][lifecycle-img] |
+
 #### This package is in very early development and is not yet registered
 
 This is meant to be a simple, unambitious package that provides user-friendly ways of doing task-parallel
