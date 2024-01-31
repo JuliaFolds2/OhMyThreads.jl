@@ -94,8 +94,7 @@ function treducemap end
             schedule::Symbol =:dynamic,
             outputtype::Type = Any)
 
-Like `tmapreduce` except the order of the `f` and `op` arguments are switched. Perform a reduction over `A`,
-applying a single-argument function `f` to each element, and then combining them with the two-argument
+A multithreaded function like `Base.reduce`. Perform a reduction over `A` using the two-argument
 function `op`. `op` **must** be an [associative](https://en.wikipedia.org/wiki/Associative_property) function,
 in the sense that `op(a, op(b, c)) ≈ op(op(a, b), c)`. If `op` is not (approximately) associative, you will
 get undefined results.
