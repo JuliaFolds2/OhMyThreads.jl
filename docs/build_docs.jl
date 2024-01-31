@@ -1,3 +1,4 @@
+cd(@__DIR__)
 println("--- :julia: Instantiating project")
 using Pkg
 Pkg.activate("..")
