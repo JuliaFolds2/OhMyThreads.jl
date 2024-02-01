@@ -2,7 +2,7 @@ module OhMyThreads
 
 
 using StableTasks: StableTasks, @spawn, @spawnat
-using ChunkSplitters: chunks
+using ChunkSplitters: ChunkSplitters, chunks
 
 export chunks, treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
 

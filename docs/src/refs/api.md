@@ -9,11 +9,17 @@ Order   = [:function, :macro]
 
 ## Exported
 
-```@autodocs
-Modules = [OhMyThreads]
-Private = false
-Pages   = ["OhMyThreads.jl"]
+```@docs
+tmapreduce
+treduce
+tmap
+tmap!
+tforeach
+tcollect
+treducemap
 ```
+
+as well as [chunks](https://juliafolds2.github.io/ChunkSplitters.jl/dev/references/#ChunkSplitters.chunks) from [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/).
 
 ## Non-Exported
 
