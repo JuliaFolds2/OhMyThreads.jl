@@ -32,8 +32,6 @@
 |:-------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|
 | [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] | [![][ci-img]][ci-url] [![][cov-img]][cov-url] | ![][lifecycle-img] |
 
-#### This package is in very early development and is not yet registered
-
 This is meant to be a simple, unambitious package that provides user-friendly ways of doing task-parallel
 multithreaded calculations via higher-order functions, with a focus on
 [data parallelism](https://en.wikipedia.org/wiki/Data_parallelism) without needing to expose julia's
