@@ -1,6 +1,6 @@
 # OhMyThreads.jl
 
-[OhMyThreads.jl](https://github.com/carstenbauer/OhMyThreads.jl/) is meant to be a simple, unambitious package that provides user-friendly ways of doing task-parallel multithreaded calculations via higher-order functions, with a
+[OhMyThreads.jl](https://github.com/JuliaFolds2/OhMyThreads.jl/) is meant to be a simple, unambitious package that provides user-friendly ways of doing task-parallel multithreaded calculations via higher-order functions, with a
 focus on [data parallelism](https://en.wikipedia.org/wiki/Data_parallelism) without needing to expose julia's
 [Task](https://docs.julialang.org/en/v1/base/parallel/) model to users.
 

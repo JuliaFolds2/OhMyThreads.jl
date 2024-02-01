@@ -19,11 +19,15 @@ tcollect
 treducemap
 ```
 
-as well as [chunks](https://juliafolds2.github.io/ChunkSplitters.jl/dev/references/#ChunkSplitters.chunks) from [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/).
+as well as the following re-exported functions:
+
+|                        |                                                                     |
+|------------------------|---------------------------------------------------------------------|
+| `chunks`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/dev/references/#ChunkSplitters.chunks) |
 
 ## Non-Exported
 
-```@docs
-OhMyThreads.@spawn
-OhMyThreads.@spawnat
-```
+|                        |                                                                     |
+|------------------------|---------------------------------------------------------------------|
+| `OhMyThreads.@spawn`   | see [StableTasks.jl](https://github.com/JuliaFolds2/StableTasks.jl) |
+| `OhMyThreads.@spawnat` | see [StableTasks.jl](https://github.com/JuliaFolds2/StableTasks.jl) |

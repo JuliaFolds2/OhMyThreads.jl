@@ -1,6 +1,5 @@
 using Documenter
 using OhMyThreads
-using StableTasks
 
 const ci = get(ENV, "CI", "") == "true"
 
@@ -8,14 +7,15 @@ const ci = get(ENV, "CI", "") == "true"
 makedocs(;
     sitename = "OhMyThreads.jl",
     authors = "Carsten Bauer, Mason Protter",
-    modules = [OhMyThreads, StableTasks],
+    modules = [OhMyThreads],
     checkdocs = :exports,
-    # doctest = ci,
+    doctest = false,
     pages = [
         "OhMyThreads" => "index.md",
-        #  "Examples" => [
-        #      "A" => "examples/A.md",
-        #  ],
+         "Examples" => [
+             "Parallel Monte Carlo" => "examples/mc/mc.md",
+             "Julia Set" => "examples/juliaset/juliaset.md",
+         ],
         #  "Explanations" => [
         #      "B" => "explanations/B.md",
         #  ],
