@@ -1,4 +1,4 @@
-# Public API
+# [Public API](@id API)
 
 ## Index
 
