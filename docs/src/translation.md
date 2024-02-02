@@ -76,7 +76,8 @@ treduce(+, data)
 
 ## Mutation
 
-TODO: Remark why one has to be careful here (e.g. false sharing).
+!!! warning
+    Parallel mutation of non-local state, like writing to a shared array, can be the source of correctness errors (e.g. race conditions) and big performance issues (e.g. [false sharing](https://en.wikipedia.org/wiki/False_sharing#:~:text=False%20sharing%20is%20an%20inherent,is%20limited%20to%20RAM%20caches.)). You should carefully consider whether this is necessary or whether the use of task-local storage is the better option.
 
 ```julia
 # Base.Threads
@@ -97,7 +98,7 @@ end
 ```julia
 # OhMyThreads: Variant 2
 data = rand(10)
-tmap!(data, data) do i # TODO: comment on aliasing
+tmap!(data, data) do i # this kind of aliasing is fine
     calc(i)
 end
 ```
