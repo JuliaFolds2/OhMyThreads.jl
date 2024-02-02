@@ -34,7 +34,7 @@ mc(N)
 ````
 
 ````
-3.14169568
+3.141517
 ````
 
 ## Parallelization with `tmapreduce`
@@ -58,7 +58,7 @@ mc_parallel(N)
 ````
 
 ````
-3.14169096
+3.14159924
 ````
 
 Let's run a quick benchmark.
@@ -76,8 +76,8 @@ using Base.Threads: nthreads
 
 ````
 nthreads() = 5
-  317.421 ms (0 allocations: 0 bytes)
-  88.188 ms (37 allocations: 3.02 KiB)
+  318.467 ms (0 allocations: 0 bytes)
+  88.553 ms (37 allocations: 3.02 KiB)
 
 ````
 
@@ -91,7 +91,7 @@ simulation. Finally, we fetch the results and compute the average estimate for $
 ````julia
 using OhMyThreads: @spawn
 
-function mc_parallel_manual(N; nchunks=nthreads())
+function mc_parallel_manual(N; nchunks = nthreads())
     tasks = map(chunks(1:N; n = nchunks)) do idcs # TODO: replace by `tmap` once ready
         @spawn mc(length(idcs))
     end
@@ -103,7 +103,7 @@ mc_parallel_manual(N)
 ````
 
 ````
-3.1414561999999995
+3.1415844
 ````
 
 And this is the performance:
@@ -113,7 +113,27 @@ And this is the performance:
 ````
 
 ````
-  63.512 ms (31 allocations: 2.80 KiB)
+  63.825 ms (31 allocations: 2.80 KiB)
+
+````
+
+It is faster than `mc_parallel` above because the task-local computation
+`mc(length(idcs))` is faster than the implicit task-local computation within
+`tmapreduce` (which itself is a `mapreduce`).
+
+````julia
+idcs = first(chunks(1:N; n = nthreads()))
+
+@btime mapreduce($+, $idcs) do i
+    rand()^2 + rand()^2 < 1.0
+end samples=10 evals=3;
+
+@btime mc($(length(idcs))) samples=10 evals=3;
+````
+
+````
+  87.617 ms (0 allocations: 0 bytes)
+  63.398 ms (0 allocations: 0 bytes)
 
 ````
 
