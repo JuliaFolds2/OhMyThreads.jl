@@ -55,7 +55,7 @@ mc_parallel(N) # gives, e.g., 3.14159924
 
 using BenchmarkTools
 
-@assert Threads.nthreads() == 5
+@show Threads.nthreads()          # 5 in this example
 
 @btime mc_parallel($N; nchunks=1) # effectively running with a single Julia thread
 @btime mc_parallel($N)            # running with all 5 Julia threads
