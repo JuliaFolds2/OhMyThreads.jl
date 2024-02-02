@@ -13,7 +13,6 @@ makedocs(;
     pages = [
         "OhMyThreads" => "index.md",
         # "Getting Started" => "examples/getting_started.md",
-        "Translation" => "translation.md",
          "Examples" => [
              "Parallel Monte Carlo" => "examples/mc/mc.md",
              "Julia Set" => "examples/juliaset/juliaset.md",
@@ -21,6 +20,7 @@ makedocs(;
         #  "Explanations" => [
         #      "B" => "explanations/B.md",
         #  ],
+        "Translation Guide" => "translation.md",
         "References" => [
             "Public API" => "refs/api.md",
             "Internal" => "refs/internal.md",
