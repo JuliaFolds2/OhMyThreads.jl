@@ -12,6 +12,8 @@ makedocs(;
     doctest = false,
     pages = [
         "OhMyThreads" => "index.md",
+        # "Getting Started" => "examples/getting_started.md",
+        "Translation" => "translation.md",
          "Examples" => [
              "Parallel Monte Carlo" => "examples/mc/mc.md",
              "Julia Set" => "examples/juliaset/juliaset.md",
