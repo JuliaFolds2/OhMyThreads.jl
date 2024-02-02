@@ -9,7 +9,7 @@
 [ci-img]: https://github.com/JuliaFolds2/OhMyThreads.jl/actions/workflows/ci.yml/badge.svg
 [ci-url]: https://github.com/JuliaFolds2/OhMyThreads.jl/actions/workflows/ci.yml
 
-[cov-img]: https://codecov.io/gh/JuliaFolds2/OhMyThreads.jl/branch/main/graph/badge.svg?token=Ze61CbGoO5
+[cov-img]: https://codecov.io/gh/JuliaFolds2/OhMyThreads.jl/branch/master/graph/badge.svg
 [cov-url]: https://codecov.io/gh/JuliaFolds2/OhMyThreads.jl
 
 [lifecycle-img]: https://img.shields.io/badge/lifecycle-experimental-red.svg
