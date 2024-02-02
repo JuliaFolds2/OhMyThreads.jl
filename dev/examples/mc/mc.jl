@@ -65,7 +65,7 @@ using Base.Threads: nthreads
 
 using OhMyThreads: @spawn
 
-function mc_parallel_manual(N; nchunks=nthreads())
+function mc_parallel_manual(N; nchunks = nthreads())
     tasks = map(chunks(1:N; n = nchunks)) do idcs # TODO: replace by `tmap` once ready
         @spawn mc(length(idcs))
     end
@@ -78,3 +78,15 @@ mc_parallel_manual(N)
 # And this is the performance:
 
 @btime mc_parallel_manual($N) samples=10 evals=3;
+
+# It is faster than `mc_parallel` above because the task-local computation
+# `mc(length(idcs))` is faster than the implicit task-local computation within
+# `tmapreduce` (which itself is a `mapreduce`).
+
+idcs = first(chunks(1:N; n = nthreads()))
+
+@btime mapreduce($+, $idcs) do i
+    rand()^2 + rand()^2 < 1.0
+end samples=10 evals=3;
+
+@btime mc($(length(idcs))) samples=10 evals=3;

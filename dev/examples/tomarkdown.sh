@@ -10,9 +10,16 @@ const repourl = "https://github.com/JuliaFolds2/OhMyThreads.jl/blob/main/docs"
 using Literate
 using Pkg
 
-dirs = filter(isdir, readdir())
-if length(ARGS) > 0
-    dirs = ARGS
+if length(ARGS) == 0
+    println("Error: Please provide the folder names of the examples you want to compile to markdown. " *
+    "Alternatively, you can pass \"all\" as the first argument to compile them all.")
+    exit()
+else
+    if first(ARGS) == "all"
+        dirs = filter(isdir, readdir())
+    else
+        dirs = ARGS
+    end
 end
 @show dirs
 
