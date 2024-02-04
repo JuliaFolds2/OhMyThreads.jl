@@ -14,21 +14,29 @@ export chunks, treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
                schedule::Symbol =:dynamic,
                outputtype::Type = Any)
 
-A multithreaded function like `Base.mapreduce`. Perform a reduction over `A`, applying a single-argument
-function `f` to each element, and then combining them with the two-argument function `op`. `op` **must** be an
-[associative](https://en.wikipedia.org/wiki/Associative_property) function, in the sense that
-`op(a, op(b, c)) ≈ op(op(a, b), c)`. If `op` is not (approximately) associative, you will get undefined
-results.
+A multithreaded function like `Base.mapreduce`. Perform a reduction over `A`, applying a
+single-argument function `f` to each element, and then combining them with the two-argument
+function `op`.
 
-For a very well known example of `mapreduce`, `sum(f, A)` is equivalent to `mapreduce(f, +, A)`. Doing
+Note that `op` **must** be an
+[associative](https://en.wikipedia.org/wiki/Associative_property) function, in the sense
+that `op(a, op(b, c)) ≈ op(op(a, b), c)`. If `op` is not (approximately) associative, you
+will get undefined results.
+
+For parallelization, the data is divided into chunks and a parallel task is created per
+chunk.
+
+To see the keyword argument options, check out `??tmapreduce`.
+
+## Example:
 
      tmapreduce(√, +, [1, 2, 3, 4, 5])
 
-is the parallelized version of
+is the parallelized version of `sum(√, [1, 2, 3, 4, 5])` in the form
 
      (√1 + √2) + (√3 + √4) + √5
 
-This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl).
+# Extended help
 
 ## Keyword arguments:
 
@@ -53,22 +61,30 @@ function tmapreduce end
                schedule::Symbol =:dynamic,
                outputtype::Type = Any)
 
-Like `tmapreduce` except the order of the `f` and `op` arguments are switched. This is sometimes convenient with `do`-block notation.
-Perform a reduction over `A`, applying a single-argument function `f` to each element, and then combining them with the two-argument
-function `op`. `op` **must** be an [associative](https://en.wikipedia.org/wiki/Associative_property) function,
-in the sense that `op(a, op(b, c)) ≈ op(op(a, b), c)`. If `op` is not (approximately) associative, you will
-get undefined results.
+Like `tmapreduce` except the order of the `f` and `op` arguments are switched. This is
+sometimes convenient with `do`-block notation. Perform a reduction over `A`, applying a
+single-argument function `f` to each element, and then combining them with the two-argument
+function `op`.
 
-For a very well known example of `mapreduce`, `sum(f, A)` is equivalent to `mapreduce(f, +, A)`. Doing
+Note that `op` **must** be an
+[associative](https://en.wikipedia.org/wiki/Associative_property) function, in the sense
+that `op(a, op(b, c)) ≈ op(op(a, b), c)`. If `op` is not (approximately) associative, you
+will get undefined results.
 
-     treducemap(+, √, [1, 2, 3, 4, 5])
+For parallelization, the data is divided into chunks and a parallel task is created per
+chunk.
 
-is the parallelized version of
+To see the keyword argument options, check out `??treducemap`.
+
+## Example:
+
+     tmapreduce(√, +, [1, 2, 3, 4, 5])
+
+is the parallelized version of `sum(√, [1, 2, 3, 4, 5])` in the form
 
      (√1 + √2) + (√3 + √4) + √5
 
-
-This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl).
+# Extended help
 
 ## Keyword arguments:
 
@@ -94,21 +110,28 @@ function treducemap end
             schedule::Symbol =:dynamic,
             outputtype::Type = Any)
 
-A multithreaded function like `Base.reduce`. Perform a reduction over `A` using the two-argument
-function `op`. `op` **must** be an [associative](https://en.wikipedia.org/wiki/Associative_property) function,
-in the sense that `op(a, op(b, c)) ≈ op(op(a, b), c)`. If `op` is not (approximately) associative, you will
-get undefined results.
+A multithreaded function like `Base.reduce`. Perform a reduction over `A` using the
+two-argument function `op`.
 
-For a very well known example of `reduce`, `sum(A)` is equivalent to `reduce(+, A)`. Doing
+Note that `op` **must** be an
+[associative](https://en.wikipedia.org/wiki/Associative_property) function, in the sense
+that `op(a, op(b, c)) ≈ op(op(a, b), c)`. If `op` is not (approximately) associative, you
+will get undefined results.
 
-     treduce(+, [1, 2, 3, 4, 5])
+For parallelization, the data is divided into chunks and a parallel task is created per
+chunk.
 
-is the parallelized version of
+To see the keyword argument options, check out `??treduce`.
 
-     (1 + 2) + (3 + 4) + 5
+## Example:
 
+        treduce(+, [1, 2, 3, 4, 5])
 
-This data is divided into chunks to be worked on in parallel using [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl).
+is the parallelized version of `sum([1, 2, 3, 4, 5])` in the form
+
+        (1 + 2) + (3 + 4) + 5
+
+# Extended help
 
 ## Keyword arguments:
 
@@ -131,11 +154,25 @@ function treduce end
              split::Symbol = :batch,
              schedule::Symbol =:dynamic) :: Nothing
 
-A multithreaded function like `Base.foreach`. Apply `f` to each element of `A` on multiple parallel tasks, and return `nothing`, i.e. it is the parallel equivalent of
+A multithreaded function like `Base.foreach`. Apply `f` to each element of `A` on
+multiple parallel tasks, and return `nothing`. I.e. it is the parallel equivalent of
 
     for x in A
         f(x)
     end
+
+For parallelization, the data is divided into chunks and a parallel task is created per
+chunk.
+
+To see the keyword argument options, check out `??tforeach`.
+
+## Example:
+
+        tforeach(1:10) do i
+            println(i^2)
+        end
+
+# Extended help
 
 ## Keyword arguments:
 
@@ -150,16 +187,26 @@ A multithreaded function like `Base.foreach`. Apply `f` to each element of `A` o
 function tforeach end
 
 """
-    tmap(f, [OutputElementType], A::AbstractArray...; 
+    tmap(f, [OutputElementType], A::AbstractArray...;
          nchunks::Int = nthreads(),
          split::Symbol = :batch,
          schedule::Symbol =:dynamic)
 
-A multithreaded function like `Base.map`. Create a new container `similar` to `A` whose `i`th element is
-equal to `f(A[i])`. This container is filled in parallel on multiple tasks. The optional argument
-`OutputElementType` will select a specific element type for the returned container, and will generally incur
-fewer allocations than the version where `OutputElementType` is not specified.
+A multithreaded function like `Base.map`. Create a new container `similar` to `A` whose
+`i`th element is equal to `f(A[i])`. This container is filled in parallel: the data is
+divided into chunks and a parallel task is created per chunk.
 
+The optional argument `OutputElementType` will select a specific element type for the
+returned container, and will generally incur fewer allocations than the version where
+`OutputElementType` is not specified.
+
+To see the keyword argument options, check out `??tmap`.
+
+## Example:
+
+        tmap(sin, 1:10)
+
+# Extended help
 
 ## Keyword arguments:
 
@@ -179,8 +226,15 @@ function tmap end
           split::Symbol = :batch,
           schedule::Symbol =:dynamic)
 
-A multithreaded function like `Base.map!`. In parallel on multiple tasks, this function assigns each element
-of `out[i] = f(A[i])` for each index `i` of `A` and `out`.
+A multithreaded function like `Base.map!`. In parallel on multiple tasks, this function
+assigns each element of `out[i] = f(A[i])` for each index `i` of `A` and `out`.
+
+For parallelization, the data is divided into chunks and a parallel task is created per
+chunk.
+
+To see the keyword argument options, check out `??tmap!`.
+
+# Extended help
 
 ## Keyword arguments:
 
@@ -199,8 +253,20 @@ function tmap! end
              nchunks::Int = nthreads(),
              schedule::Symbol =:dynamic)
 
-A multithreaded function like `Base.collect`. Essentially just calls `tmap` on the generator function and
-inputs. The optional argument `OutputElementType` will select a specific element type for the returned container, and will generally incur fewer allocations than the version where `OutputElementType` is not specified.
+A multithreaded function like `Base.collect`. Essentially just calls `tmap` on the
+generator function and inputs.
+
+The optional argument `OutputElementType` will select a specific element type for the
+returned container, and will generally incur fewer allocations than the version where
+`OutputElementType` is not specified.
+
+To see the keyword argument options, check out `??tcollect`.
+
+## Example:
+
+        tcollect(sin(i) for i in 1:10)
+
+# Extended help
 
 ## Keyword arguments:
 
