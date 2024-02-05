@@ -34,7 +34,7 @@ treducemap(op, f, A...; kwargs...) = tmapreduce(f, op, A...; kwargs...)
 function _tmapreduce(f, op, Arrs, ::Type{OutputType}, nchunks, split, threadpool, mapreduce_kwargs)::OutputType where {OutputType}
     check_all_have_same_indices(Arrs)
     tasks = map(chunks(first(Arrs); n=nchunks, split)) do inds
-        args = map(A -> A[inds], Arrs)
+        args = map(A -> view(A, inds), Arrs)
         @spawn threadpool mapreduce(f, op, args...; $mapreduce_kwargs...)
     end
     mapreduce(fetch, op, tasks)
@@ -69,7 +69,7 @@ function _tmapreduce_static(f, op, Arrs, ::Type{OutputType}, nchunks, split, map
     n = min(nthreads(), nchunks) # We could implement strategies, like round-robin, in the future
     tasks = map(enumerate(chunks(first(Arrs); n, split))) do (c, inds)
         tid = @inbounds nthtid(c)
-        args = map(A -> A[inds], Arrs)
+        args = map(A -> view(A, inds), Arrs)
         @spawnat tid mapreduce(f, op, args...; mapreduce_kwargs...)
     end
     mapreduce(fetch, op, tasks)
