@@ -16,6 +16,7 @@ makedocs(;
          "Examples" => [
              "Parallel Monte Carlo" => "examples/mc/mc.md",
              "Julia Set" => "examples/juliaset/juliaset.md",
+             "Trapezoidal Integration" => "examples/integration/integration.md",
          ],
         #  "Explanations" => [
         #      "B" => "explanations/B.md",

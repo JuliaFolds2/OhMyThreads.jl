@@ -1,49 +1,70 @@
 # # Trapezoidal Integration
 #
-
-# Function to be integrated (from 0 to 1). The analytic result is π.
+# In this example, we want to parallelize the computation of a simple numerical integral
+# via the trapezoidal rule. The latter is given by
+#
+# $\int_{a}^{b}f(x)\,dx \approx h \sum_{i=1}^{N}\frac{f(x_{i-1})+f(x_{i})}{2}.$
+#
+# The function to be integrated is the following.
 
 f(x) = 4 * √(1 - x^2)
 
-# Integration routine
+# The analytic result of the definite integral (from 0 to 1) is known to be $\pi$.
+#
+# ## Sequential
+#
+# Naturally, we implement the trapezoidal rule as a straightforward, sequential `for` loop.
 
-"Evaluate definite integral (from `a` to `b`) by using the trapezoidal rule."
-function trapezoidal(a, b, n, h)
+function trapezoidal(a, b, n; h = (b - a) / n)
     y = (f(a) + f(b)) / 2.0
-    for i in 1:n-1
+    for i in 1:(n - 1)
         x = a + i * h
         y = y + f(x)
     end
     return y * h
 end
 
+# Let's compute the integral of `f` above and see if we get the expected result.
+# For simplicity, we choose `N`, the number of panels used to discretize the integration
+# interval, as a multiple of the number of available Julia threads.
+
 using Base.Threads: nthreads
+@show nthreads()
+N = nthreads() * 1_000_000
 
-N = 10_000
+# Calling `trapezoidal` we do indeed find the (approximate) value of $\pi$.
 
-function integrate_parallel(N)
-    # compute local integration interval etc.
-    h     = 1.0 / N
-    a_loc = [i * n_loc * h for i in 0:nthreads()-1]
-    b_loc = a_loc + n_loc * h
+trapezoidal(0, 1, N) ≈ π
 
-    result = tmapreduce(+, ...) do
-        trapezoidal(a_loc, b_loc, n, h)
+# ## Parallel
+#
+# Our strategy is the following: Divide the integration interval among the available
+# Julia threads. On each thread, use the sequential trapezoidal rule to compute the partial
+# integral.
+# It is straightforward to implement this strategy with `tmapreduce`. The `map` part
+# is, essentially, the application of `trapezoidal` and the reduction operator is chosen to
+# be `+` to sum up the local integrals.
+
+using OhMyThreads
+
+function trapezoidal_parallel(a, b, N)
+    n = N ÷ nthreads()
+    h = (b - a) / N
+    return tmapreduce(+, 1:nthreads()) do i
+        local α = a + (i - 1) * n * h
+        local β = α + n * h
+        trapezoidal(α, β, n; h)
     end
-
-    res_loc = trapezoidal(a_loc, b_loc, n_loc, h)
-
-    println("π (numerical integration) ≈ ", res)
 end
 
+# First, we check the correctness of our parallel implementation.
+trapezoidal_parallel(0, 1, N) ≈ π
 
-# perform local integration
-res_loc = trapezoidal(a_loc, b_loc, n_loc, h)
+# Then, we benchmark and compare the performance of the sequential and parallel versions.
 
-# parallel reduction
-res = MPI.Reduce(res_loc, +, comm)
+using BenchmarkTools
+@btime trapezoidal(0, 1, $N);
+@btime trapezoidal_parallel(0, 1, $N);
 
-# print result
-if 0 == rank
-    @printf("π (numerical integration) ≈ %20.16f\\n", res)
-end
+# Because the problem is trivially parallel - all threads to the same thing and don't need
+# to communicate - we expect an ideal speedup of (close to) the number of available threads.
