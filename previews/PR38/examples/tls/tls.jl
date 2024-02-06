@@ -155,11 +155,13 @@ res ≈ res_manual
 
 using BenchmarkTools
 
+@show nthreads()
+
 @btime matmulsums($As, $Bs);
 @btime matmulsums_naive($As, $Bs);
 @btime matmulsums_tls($As, $Bs);
 @btime matmulsums_manual($As, $Bs);
 
 # As we see, the recommened version `matmulsums_tls` is both convenient as well as
-# efficient: It allocates much less memory than `matmulsums_naive` and only slightly
-# more than the manual implementation.
+# efficient: It allocates much less memory than `matmulsums_naive` (5 vs 64 times 8 MiB)
+# and is very much comparable to the manual implementation.
