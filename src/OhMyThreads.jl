@@ -3,9 +3,9 @@ module OhMyThreads
 
 using StableTasks: StableTasks, @spawn, @spawnat
 using ChunkSplitters: ChunkSplitters, chunks
-using TaskLocalValues: TaskLocalValue
+using TaskLocalValues: TaskLocalValues, TaskLocalValue
 
-export chunks, treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
+export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
 
 """
     tmapreduce(f, op, A::AbstractArray...;
