@@ -1,7 +1,7 @@
 OhMyThreads.jl Changelog
 =========================
 
-Version 0.3.0 (not released yet)
+Version 0.3.0
 -------------
 
 - ![BREAKING][badge-breaking] We don't (re-)export `chunks` anymore. Use `OhMyThreads.chunks` instead.
