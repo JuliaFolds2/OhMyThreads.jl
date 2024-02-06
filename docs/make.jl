@@ -23,7 +23,7 @@ makedocs(;
         #  ],
         "Translation Guide" => "translation.md",
         "Task-Local Storage" => "examples/tls/tls.md",
-        "References" => [
+        "API" => [
             "Public API" => "refs/api.md",
             "Internal" => "refs/internal.md",
         ],
