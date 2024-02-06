@@ -115,7 +115,7 @@ res ≈ res_tls
 # Hence, this is precisely what we need and will only lead to O(# parallel tasks)
 # allocations.
 #
-# ## The performant but cumbersome way
+# ## The cumbersome manual way
 #
 # Before we benchmark and compare the performance of all discussed variants, let's implement
 # the idea of a task-local `C` for each parallel task manually.
