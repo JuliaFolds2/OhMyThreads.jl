@@ -12,7 +12,7 @@ makedocs(;
     doctest = false,
     pages = [
         "OhMyThreads" => "index.md",
-        # "Getting Started" => "examples/getting_started.md",
+        # "Getting Started" => "getting_started.md",
          "Examples" => [
              "Parallel Monte Carlo" => "examples/mc/mc.md",
              "Julia Set" => "examples/juliaset/juliaset.md",
@@ -22,6 +22,7 @@ makedocs(;
         #      "B" => "explanations/B.md",
         #  ],
         "Translation Guide" => "translation.md",
+        "Task-Local Storage" => "examples/tls/tls.md",
         "References" => [
             "Public API" => "refs/api.md",
             "Internal" => "refs/internal.md",
