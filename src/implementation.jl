@@ -15,6 +15,11 @@ function tmapreduce(f, op, Arrs...;
     schedule::Symbol=:dynamic,
     outputtype::Type=Any,
     mapreduce_kwargs...)
+
+    min_kwarg_len = haskey(mapreduce_kwargs, :init) ? 1 : 0
+    if length(mapreduce_kwargs) > min_kwarg_len
+        tmapreduce_kwargs_err(;mapreduce_kwargs...)
+    end
     if schedule === :dynamic 
         _tmapreduce(f, op, Arrs, outputtype, nchunks, split, :default, mapreduce_kwargs)
     elseif schedule === :interactive
@@ -28,6 +33,10 @@ function tmapreduce(f, op, Arrs...;
     end
 end
 @noinline schedule_err(s) = error(ArgumentError("Invalid schedule option: $s, expected :dynamic, :interactive, :greedy, or :static."))
+
+@noinline function tmapreduce_kwargs_err(;init=nothing, kwargs...)
+    error("got unsupported keyword arguments: $((;kwargs...,)) ")
+end
 
 treducemap(op, f, A...; kwargs...) = tmapreduce(f, op, A...; kwargs...)
 
