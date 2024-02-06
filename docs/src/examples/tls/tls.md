@@ -47,15 +47,11 @@ Bs = [rand(1024, 1024) for _ in 1:64]
 res = matmulsums(As, Bs);
 ````
 
-## Parallelization
+## The wrong way
 
 The key idea for creating a parallel version of `matmulsums` is to replace the `map` by
 OhMyThreads' parallel [`tmap`](@ref) function. However, because we re-use `C`, this isn't
-entirely trivial.
-
-### The wrong way
-
-Someone new to parallel computing might be tempted to parallelize `matmulsums` like so:
+entirely trivial. Someone new to parallel computing might be tempted to parallelize `matmulsums` like so:
 
 ````julia
 using OhMyThreads: tmap
@@ -90,7 +86,7 @@ The reason is that there is a race condition: different parallel
 tasks are trying to use the shared variable `C` simultaneously leading to
 non-deterministic behavior. Let's see how we can fix this.
 
-### The naive (and inefficient) way
+## The naive (and inefficient) way
 
 A simple solution for the race condition issue above is to move the allocation of `C`
 into the body of the parallel `tmap`:
