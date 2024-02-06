@@ -51,7 +51,8 @@ res = matmulsums(As, Bs);
 
 The key idea for creating a parallel version of `matmulsums` is to replace the `map` by
 OhMyThreads' parallel [`tmap`](@ref) function. However, because we re-use `C`, this isn't
-entirely trivial. Someone new to parallel computing might be tempted to parallelize `matmulsums` like so:
+entirely trivial. Someone new to parallel computing might be tempted to parallelize
+`matmulsums` like so:
 
 ````julia
 using OhMyThreads: tmap
@@ -208,6 +209,8 @@ compare the performance of the variants discussed above.
 ````julia
 using BenchmarkTools
 
+@show nthreads()
+
 @btime matmulsums($As, $Bs);
 @btime matmulsums_naive($As, $Bs);
 @btime matmulsums_tls($As, $Bs);
@@ -215,16 +218,17 @@ using BenchmarkTools
 ````
 
 ````
-  2.916 s (3 allocations: 8.00 MiB)
-  597.915 ms (174 allocations: 512.01 MiB)
-  575.507 ms (67 allocations: 40.01 MiB)
-  572.501 ms (49 allocations: 40.00 MiB)
+nthreads() = 5
+  2.903 s (3 allocations: 8.00 MiB)
+  582.991 ms (174 allocations: 512.01 MiB)
+  576.002 ms (67 allocations: 40.01 MiB)
+  575.374 ms (49 allocations: 40.00 MiB)
 
 ````
 
 As we see, the recommened version `matmulsums_tls` is both convenient as well as
-efficient: It allocates much less memory than `matmulsums_naive` and only slightly
-more than the manual implementation.
+efficient: It allocates much less memory than `matmulsums_naive` (5 vs 64 times 8 MiB)
+and is very much comparable to the manual implementation.
 
 ---
 
