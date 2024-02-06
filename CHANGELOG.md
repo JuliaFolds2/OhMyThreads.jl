@@ -1,6 +1,11 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.3.1
+-------------
+
+- ![Bugfix][badge-bugfix] The documented Public API wasn't updated in 0.3.0 and thus out of sync with the actual API. Fixed in this version.
+
 Version 0.3.0
 -------------
 
@@ -27,6 +32,7 @@ Version 0.2.0
 [badge-feature]: https://img.shields.io/badge/Feature-green.svg
 [badge-enhancement]: https://img.shields.io/badge/Enhancement-blue.svg
 [badge-bugfix]: https://img.shields.io/badge/Bugfix-purple.svg
+[badge-fix]: https://img.shields.io/badge/Fix-purple.svg
 [badge-info]: https://img.shields.io/badge/Info-gray.svg
 
 [gh-issue-27]: https://github.com/JuliaFolds2/OhMyThreads.jl/issues/27
