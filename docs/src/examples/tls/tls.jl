@@ -10,7 +10,7 @@
 # further assume that our goal is to compute the total sum of all pairwise matrix products.
 # We can readily implement a (sequential) function that performs the necessary computations.
 using LinearAlgebra: mul!, BLAS
-BLAS.set_num_threads(1) # for simplicity, we turn of OpenBLAS multithreading
+BLAS.set_num_threads(1) #  for simplicity, we turn off OpenBLAS multithreading
 
 function matmulsums(As, Bs)
     N = size(first(As), 1)
@@ -115,7 +115,7 @@ res ≈ res_tls
 # Hence, this is precisely what we need and will only lead to O(# parallel tasks)
 # allocations.
 #
-# ## The cumbersome manual way
+# ## The manual (and cumbersome) way
 #
 # Before we benchmark and compare the performance of all discussed variants, let's implement
 # the idea of a task-local `C` for each parallel task manually.
@@ -135,7 +135,7 @@ function matmulsums_manual(As, Bs)
             results
         end
     end
-    reduce(vcat, fetch.(tasks))
+    mapreduce(fetch, vcat, tasks)
 end
 
 res_manual = matmulsums_manual(As, Bs)
