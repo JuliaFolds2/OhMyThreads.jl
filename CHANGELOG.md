@@ -1,9 +1,10 @@
 OhMyThreads.jl Changelog
 =========================
 
-Version X.X.X
+Version 0.4.0
 -------------
 
+- ![BREAKING][badge-breaking] Instead of taking keyword arguments `schedule`, `nchunks`, `split` directly, we now use `Scheduler` structs to specify scheduling options ([#22](https://github.com/JuliaFolds2/OhMyThreads.jl/issues/22)). The latter can be provided to all API functions via the new `scheduler` keyword argument.
 - ![Enhancement][badge-enhancement] We reject unsupported keyword arguments early and give a more helpful error message.
 
 Version 0.3.1
