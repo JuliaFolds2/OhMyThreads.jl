@@ -27,6 +27,13 @@ Base.@kwdef struct DynamicScheduler <: Scheduler
     nchunks::Int = 2 * nthreads() # a multiple of nthreads to enable load balancing
     split::Symbol = :batch
     threadpool::Symbol = :default
+
+    function DynamicScheduler(nchunks::Int, split::Symbol, threadpool::Symbol)
+        nchunks > 0 || throw(ArgumentError("nchunks must be a positive integer"))
+        threadpool in (:default, :interactive) ||
+            throw(ArgumentError("threadpool must be either :default or :interactive"))
+        new(nchunks, split, threadpool)
+    end
 end
 
 """
@@ -48,6 +55,11 @@ they are guaranteed to stay on the assigned threads (**no task migration**).
 Base.@kwdef struct StaticScheduler <: Scheduler
     nchunks::Int = nthreads()
     split::Symbol = :batch
+
+    function StaticScheduler(nchunks::Int, split::Symbol)
+        nchunks > 0 || throw(ArgumentError("nchunks must be a positive integer"))
+        new(nchunks, split)
+    end
 end
 
 """
@@ -64,6 +76,11 @@ some additional overhead.
 """
 Base.@kwdef struct GreedyScheduler <: Scheduler
     ntasks::Int = nthreads()
+
+    function GreedyScheduler(ntasks::Int)
+        ntasks > 0 || throw(ArgumentError("ntasks must be a positive integer"))
+        new(ntasks)
+    end
 end
 
 end # module
