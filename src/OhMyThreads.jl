@@ -1,11 +1,8 @@
 module OhMyThreads
 
-
 using StableTasks: StableTasks, @spawn, @spawnat
 using ChunkSplitters: ChunkSplitters, chunks
 using TaskLocalValues: TaskLocalValues, TaskLocalValue
-
-export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
 
 """
     tmapreduce(f, op, A::AbstractArray...;
@@ -281,7 +278,12 @@ To see the keyword argument options, check out `??tcollect`.
 function tcollect end
 
 include("tools.jl")
+include("schedulers.jl")
+using .Schedulers: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
 include("implementation.jl")
 
+
+export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
+export Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
 
 end # module OhMyThreads

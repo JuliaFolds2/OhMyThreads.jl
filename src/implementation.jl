@@ -4,6 +4,7 @@ import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcol
 
 using OhMyThreads: StableTasks, chunks, @spawn, @spawnat
 using OhMyThreads.Tools: nthtid
+using OhMyThreads: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 
@@ -20,7 +21,7 @@ function tmapreduce(f, op, Arrs...;
     if length(mapreduce_kwargs) > min_kwarg_len
         tmapreduce_kwargs_err(;mapreduce_kwargs...)
     end
-    if schedule === :dynamic 
+    if schedule === :dynamic
         _tmapreduce(f, op, Arrs, outputtype, nchunks, split, :default, mapreduce_kwargs)
     elseif schedule === :interactive
         _tmapreduce(f, op, Arrs, outputtype, nchunks, split, :interactive, mapreduce_kwargs)
@@ -89,7 +90,7 @@ check_all_have_same_indices(Arrs) = let A = first(Arrs), Arrs = Arrs[2:end]
     if !all(B -> eachindex(A) == eachindex(B), Arrs)
         error("The indices of the input arrays must match the indices of the output array.")
     end
-end 
+end
 
 #-------------------------------------------------------------
 
