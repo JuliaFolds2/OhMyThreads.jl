@@ -4,10 +4,12 @@
 
 ```@index
 Pages   = ["api.md"]
-Order   = [:function, :macro]
+Order   = [:function, :macro, :type]
 ```
 
 ## Exported
+
+### Functions
 
 ```@docs
 tmapreduce
@@ -17,6 +19,15 @@ tmap!
 tforeach
 tcollect
 treducemap
+```
+
+### Schedulers
+
+```@docs
+Scheduler
+DynamicScheduler
+StaticScheduler
+GreedyScheduler
 ```
 
 ## Non-Exported

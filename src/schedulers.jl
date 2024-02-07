@@ -2,7 +2,13 @@ module Schedulers
 
 using Base.Threads: nthreads
 
-"Supertype for all schedulers"
+"""
+Supertype for all available schedulers:
+
+* [`DynamicScheduler`](@ref): default dynamic scheduler
+* [`StaticScheduler`](@ref): low-overhead static scheduler
+* [`GreedyScheduler`](@ref): greedy load-balancing scheduler
+"""
 abstract type Scheduler end
 
 """
@@ -10,6 +16,9 @@ The default dynamic scheduler. Divides the given collection into chunks and
 then spawns a task per chunk to perform the requested operation in parallel.
 The tasks are assigned to threads by Julia's dynamic scheduler and are non-sticky, that is,
 they can migrate between threads.
+
+Generally preferred since it is flexible, can provide load balancing, and is composable
+with other multithreaded code.
 
 ## Keyword arguments:
 
@@ -22,6 +31,7 @@ they can migrate between threads.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
 - `threadpool::Symbol` (default `:default`):
     * Possible options are `:default` and `:interactive`.
+    * The high-priority pool `:interactive` should be used very carefully since tasks on this threadpool should not be allowed to run for a long time without `yield`ing as it can interfere with [heartbeat](https://en.wikipedia.org/wiki/Heartbeat_(computing)) processes.
 """
 Base.@kwdef struct DynamicScheduler <: Scheduler
     nchunks::Int = 2 * nthreads() # a multiple of nthreads to enable load balancing
@@ -41,6 +51,10 @@ A static low-overhead scheduler. Divides the given collection into chunks and
 then spawns a task per chunk to perform the requested operation in parallel.
 The tasks are statically assigned to threads up front and are made *sticky*, that is,
 they are guaranteed to stay on the assigned threads (**no task migration**).
+
+Can sometimes be more performant than `DynamicScheduler` when the workload is (close to)
+uniform and, because of the lower overhead, for small workloads.
+Isn't well composable with other multithreaded code though.
 
 ## Keyword arguments:
 
@@ -64,8 +78,13 @@ end
 
 """
 A greedy dynamic scheduler. The elements of the collection are first put into a `Channel`
-and then dynamic, non-sticky tasks are spawned to process the elements of the channel in
-parallel. Can be good choice for load-balancing slower, uneven computations, but does carry
+and then dynamic, non-sticky tasks are spawned to process channel content in parallel.
+
+Note that elements are processed in a non-deterministic order, and thus a potential reducing
+function **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in
+addition to being associative, or you could get incorrect results!
+
+Can be good choice for load-balancing slower, uneven computations, but does carry
 some additional overhead.
 
 ## Keyword arguments:

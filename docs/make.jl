@@ -12,15 +12,11 @@ makedocs(;
     doctest = false,
     pages = [
         "OhMyThreads" => "index.md",
-        # "Getting Started" => "getting_started.md",
          "Examples" => [
              "Parallel Monte Carlo" => "examples/mc/mc.md",
              "Julia Set" => "examples/juliaset/juliaset.md",
              "Trapezoidal Integration" => "examples/integration/integration.md",
          ],
-        #  "Explanations" => [
-        #      "B" => "explanations/B.md",
-        #  ],
         "Translation Guide" => "translation.md",
         "Task-Local Storage" => "examples/tls/tls.md",
         "API" => [
