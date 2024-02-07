@@ -20,10 +20,13 @@ they can migrate between threads.
 - `split::Symbol` (default `:batch`):
     * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
+- `threadpool::Symbol` (default `:default`):
+    * Possible options are `:default` and `:interactive`.
 """
 Base.@kwdef struct DynamicScheduler <: Scheduler
-    nchunks::Int  = 2 * nthreads() # a multiple of nthreads to enable load balancing
+    nchunks::Int = 2 * nthreads() # a multiple of nthreads to enable load balancing
     split::Symbol = :batch
+    threadpool::Symbol = :default
 end
 
 """
@@ -43,7 +46,7 @@ they are guaranteed to stay on the assigned threads (**no task migration**).
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
 """
 Base.@kwdef struct StaticScheduler <: Scheduler
-    nchunks::Int  = nthreads()
+    nchunks::Int = nthreads()
     split::Symbol = :batch
 end
 
@@ -60,7 +63,7 @@ some additional overhead.
     * Setting `nchunks < nthreads()` is an effective way to use only a subset of the available threads.
 """
 Base.@kwdef struct GreedyScheduler <: Scheduler
-    ntasks::Int  = nthreads()
+    ntasks::Int = nthreads()
 end
 
 end # module
