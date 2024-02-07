@@ -31,7 +31,7 @@ end
 
 ```julia
 # OhMyThreads
-tforeach(1:10; schedule=:static) do i
+tforeach(1:10; scheduler=StaticScheduler()) do i
     println(i)
 end
 ```
@@ -47,7 +47,7 @@ end
 
 ```julia
 # OhMyThreads
-tforeach(1:10; nchunks=10) do i
+tforeach(1:10; scheduler=DynamicScheduler(nchunks=10)) do i
     println(i)
 end
 ```
