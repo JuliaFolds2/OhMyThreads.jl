@@ -1,6 +1,11 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version X.X.X
+-------------
+
+- ![Enhancement][badge-enhancement] We reject unsupported keyword arguments early and give a more helpful error message.
+
 Version 0.3.1
 -------------
 
