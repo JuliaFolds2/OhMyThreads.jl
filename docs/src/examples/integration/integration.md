@@ -47,6 +47,7 @@ interval, as a multiple of the number of available Julia threads.
 ````julia
 using Base.Threads: nthreads
 @show nthreads()
+
 N = nthreads() * 1_000_000
 ````
 
@@ -110,8 +111,8 @@ using BenchmarkTools
 ````
 
 ````
-  13.871 ms (0 allocations: 0 bytes)
-  2.781 ms (38 allocations: 3.19 KiB)
+  12.782 ms (0 allocations: 0 bytes)
+  2.563 ms (37 allocations: 3.16 KiB)
 
 ````
 

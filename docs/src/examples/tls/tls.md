@@ -2,7 +2,7 @@
 EditURL = "tls.jl"
 ```
 
-# [Task-Local Storage](@id TLS)
+# Task-Local Storage
 
 For some programs, it can be useful or even necessary to allocate and (re-)use memory in
 your parallel code. The following section uses a simple example to explain how task-local
@@ -16,7 +16,7 @@ We can readily implement a (sequential) function that performs the necessary com
 
 ````julia
 using LinearAlgebra: mul!, BLAS
-BLAS.set_num_threads(1) # for simplicity, we turn off OpenBLAS multithreading
+BLAS.set_num_threads(1) #  for simplicity, we turn off OpenBLAS multithreading
 
 function matmulsums(As, Bs)
     N = size(first(As), 1)
@@ -172,7 +172,7 @@ using Base.Threads: nthreads
 
 function matmulsums_manual(As, Bs)
     N = size(first(As), 1)
-    tasks = map(chunks(As; n = nthreads())) do idcs
+    tasks = map(chunks(As; n = 2 * nthreads())) do idcs
         @spawn begin
             local C = Matrix{Float64}(undef, N, N)
             local results = Vector{Float64}(undef, length(idcs))
@@ -196,7 +196,7 @@ true
 
 The first thing to note is pretty obvious: This is very cumbersome and you probably don't
 want to write it. But let's take a closer look and see what's happening here.
-First, we divide the number of matrix pairs into `nthreads()` chunks. Then, for each of
+First, we divide the number of matrix pairs into `2 * nthreads()` chunks. Then, for each of
 those chunks, we spawn a parallel task that (1) allocates a task-local `C` matrix (and a
 `results` vector) and (2) performs the actual computations using these pre-allocated
 values. Finally, we `fetch` the results of the tasks and combine them.
@@ -219,16 +219,45 @@ using BenchmarkTools
 
 ````
 nthreads() = 5
-  2.980 s (3 allocations: 8.00 MiB)
-  603.631 ms (174 allocations: 512.01 MiB)
-  578.180 ms (67 allocations: 40.01 MiB)
-  578.769 ms (50 allocations: 40.01 MiB)
+  2.876 s (3 allocations: 8.00 MiB)
+  585.177 ms (210 allocations: 512.01 MiB)
+  575.003 ms (123 allocations: 80.01 MiB)
+  573.201 ms (100 allocations: 80.01 MiB)
 
 ````
 
 As we see, the recommened version `matmulsums_tls` is both convenient as well as
-efficient: It allocates much less memory than `matmulsums_naive` (5 vs 64 times 8 MiB)
+efficient: It allocates much less memory than `matmulsums_naive` (10 vs 64 times 8 MiB)
 and is very much comparable to the manual implementation.
+
+### Tuning the scheduling
+
+Since the workload is uniform, we don't need load balancing. We can thus try to use
+`DynamicScheduler(nchunks=nthreads())` and `StaticScheduler()` to improve the performance
+and/or reduce the number of allocations.
+
+````julia
+using OhMyThreads: DynamicScheduler, StaticScheduler
+
+function matmulsums_tls_kwargs(As, Bs; kwargs...)
+    N = size(first(As), 1)
+    tls = TaskLocalValue{Matrix{Float64}}(() -> Matrix{Float64}(undef, N, N))
+    tmap(As, Bs; kwargs...) do A, B
+        C = tls[]
+        mul!(C, A, B)
+        sum(C)
+    end
+end
+
+@btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(DynamicScheduler(nchunks=nthreads())));
+@btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(StaticScheduler()));
+````
+
+````
+  576.448 ms (67 allocations: 40.01 MiB)
+  574.186 ms (67 allocations: 40.01 MiB)
+
+````
 
 ---
 

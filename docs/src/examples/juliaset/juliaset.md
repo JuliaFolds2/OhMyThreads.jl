@@ -102,45 +102,55 @@ using Base.Threads: nthreads
 N = 2000
 img = zeros(Int, N, N)
 
+@show nthreads()
+
 @btime compute_juliaset_sequential!($img) samples=10 evals=3;
 @btime compute_juliaset_parallel!($img) samples=10 evals=3;
 ````
 
 ````
-  138.377 ms (0 allocations: 0 bytes)
-  63.707 ms (39 allocations: 3.30 KiB)
+nthreads() = 5
+  138.157 ms (0 allocations: 0 bytes)
+  40.373 ms (67 allocations: 6.20 KiB)
 
 ````
 
-As hoped, the parallel implementation is faster. But can we improve the performance
-further?
+As hoped, the parallel implementation is much faster!
 
-### Tuning `nchunks`
+### Dynamic vs static scheduling
 
-As stated above, the per-pixel computation is non-uniform. Hence, we might benefit from
-load balancing. The simplest way to get it is to increase `nchunks` to a value larger
-than `nthreads`. This divides the overall workload into smaller tasks than can be
-dynamically distributed among threads (by Julia's scheduler) to balance the per-thread
-load.
+As stated above, the per-pixel computation is non-uniform. Hence, we do benefit from
+the load balancing of the default dynamic scheduler. The latter divides the overall
+workload into tasks that can then be dynamically distributed among threads to adjust the
+per-thread load. We can try to fine tune and improve the load balancing further by
+increasing the `nchunks` parameter of the scheduler, that is, creating more and smaller
+tasks.
 
 ````julia
-@btime compute_juliaset_parallel!($img; schedule=:dynamic, nchunks=N) samples=10 evals=3;
+using OhMyThreads: DynamicScheduler
+
+@btime compute_juliaset_parallel!($img; scheduler=DynamicScheduler(nchunks=N)) samples=10 evals=3;
 ````
 
 ````
-  32.000 ms (12013 allocations: 1.14 MiB)
+  31.751 ms (12011 allocations: 1.14 MiB)
 
 ````
 
-Note that if we opt out of dynamic scheduling and set `schedule=:static`, this strategy
-doesn't help anymore (because chunks are naively distributed up front).
+Note that while this turns out to be a bit faster, it comes at the expense of much more
+allocations.
+
+To quantify the impact of load balancing we can opt out of dynamic scheduling and use the
+`StaticScheduler` instead. The latter doesn't provide any form of load balancing.
 
 ````julia
-@btime compute_juliaset_parallel!($img; schedule=:static, nchunks=N) samples=10 evals=3;
+using OhMyThreads: StaticScheduler
+
+@btime compute_juliaset_parallel!($img; scheduler=StaticScheduler()) samples=10 evals=3;
 ````
 
 ````
-  63.439 ms (42 allocations: 3.37 KiB)
+  63.147 ms (37 allocations: 3.26 KiB)
 
 ````
 

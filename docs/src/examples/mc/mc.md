@@ -34,7 +34,7 @@ mc(N)
 ````
 
 ````
-3.141517
+3.14145748
 ````
 
 ## Parallelization with `tmapreduce`
@@ -46,8 +46,8 @@ element.
 ````julia
 using OhMyThreads
 
-function mc_parallel(N)
-    M = tmapreduce(+, 1:N) do i
+function mc_parallel(N; kwargs...)
+    M = tmapreduce(+, 1:N; kwargs...) do i
         rand()^2 + rand()^2 < 1.0
     end
     pi = 4 * M / N
@@ -58,7 +58,7 @@ mc_parallel(N)
 ````
 
 ````
-3.14159924
+3.14134792
 ````
 
 Let's run a quick benchmark.
@@ -76,8 +76,26 @@ using Base.Threads: nthreads
 
 ````
 nthreads() = 5
-  318.467 ms (0 allocations: 0 bytes)
-  88.553 ms (37 allocations: 3.02 KiB)
+  317.745 ms (0 allocations: 0 bytes)
+  88.384 ms (66 allocations: 5.72 KiB)
+
+````
+
+### Static scheduling
+
+Because the workload is highly uniform, it makes sense to also try the `StaticScheduler`
+and compare the performance of static and dynamic scheduling (with default parameters).
+
+````julia
+using OhMyThreads: StaticScheduler
+
+@btime mc_parallel($N) samples=10 evals=3;
+@btime mc_parallel($N; scheduler=StaticScheduler()) samples=10 evals=3;
+````
+
+````
+  88.222 ms (66 allocations: 5.72 KiB)
+  88.203 ms (36 allocations: 2.98 KiB)
 
 ````
 
@@ -89,7 +107,7 @@ per chunk. Each task will locally and independently perform a sequential Monte C
 simulation. Finally, we fetch the results and compute the average estimate for $\pi$.
 
 ````julia
-using OhMyThreads: @spawn
+using OhMyThreads: @spawn, chunks
 
 function mc_parallel_manual(N; nchunks = nthreads())
     tasks = map(chunks(1:N; n = nchunks)) do idcs # TODO: replace by `tmap` once ready
@@ -103,7 +121,7 @@ mc_parallel_manual(N)
 ````
 
 ````
-3.1415844
+3.1414609999999996
 ````
 
 And this is the performance:
@@ -113,7 +131,7 @@ And this is the performance:
 ````
 
 ````
-  63.825 ms (31 allocations: 2.80 KiB)
+  64.042 ms (31 allocations: 2.80 KiB)
 
 ````
 
@@ -132,8 +150,8 @@ end samples=10 evals=3;
 ````
 
 ````
-  87.617 ms (0 allocations: 0 bytes)
-  63.398 ms (0 allocations: 0 bytes)
+  88.041 ms (0 allocations: 0 bytes)
+  63.427 ms (0 allocations: 0 bytes)
 
 ````
 
