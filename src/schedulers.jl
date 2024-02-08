@@ -22,7 +22,7 @@ with other multithreaded code.
 
 ## Keyword arguments:
 
-- `nchunks::Int` (default `2 * nthreads()`):
+- `nchunks::Int` (default `2 * nthreads(threadpool)`):
     * Determines the number of chunks (and thus also the number of parallel tasks).
     * Increasing `nchunks` can help with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead. For `nchunks <= nthreads()` there are not enough chunks for any load balancing.
     * Setting `nchunks < nthreads()` is an effective way to use only a subset of the available threads.
@@ -34,14 +34,14 @@ with other multithreaded code.
     * The high-priority pool `:interactive` should be used very carefully since tasks on this threadpool should not be allowed to run for a long time without `yield`ing as it can interfere with [heartbeat](https://en.wikipedia.org/wiki/Heartbeat_(computing)) processes.
 """
 Base.@kwdef struct DynamicScheduler <: Scheduler
-    nchunks::Int = 2 * nthreads() # a multiple of nthreads to enable load balancing
-    split::Symbol = :batch
     threadpool::Symbol = :default
+    nchunks::Int = 2 * nthreads(threadpool) # a multiple of nthreads to enable load balancing
+    split::Symbol = :batch
 
-    function DynamicScheduler(nchunks::Int, split::Symbol, threadpool::Symbol)
-        nchunks > 0 || throw(ArgumentError("nchunks must be a positive integer"))
+    function DynamicScheduler(threadpool::Symbol, nchunks::Int, split::Symbol)
         threadpool in (:default, :interactive) ||
             throw(ArgumentError("threadpool must be either :default or :interactive"))
+        nchunks > 0 || throw(ArgumentError("nchunks must be a positive integer"))
         new(nchunks, split, threadpool)
     end
 end
