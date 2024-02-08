@@ -129,7 +129,7 @@ tasks.
 ````julia
 using OhMyThreads: DynamicScheduler
 
-@btime compute_juliaset_parallel!($img; scheduler=DynamicScheduler(nchunks=N)) samples=10 evals=3;
+@btime compute_juliaset_parallel!($img; scheduler=DynamicScheduler(; nchunks=N)) samples=10 evals=3;
 ````
 
 ````

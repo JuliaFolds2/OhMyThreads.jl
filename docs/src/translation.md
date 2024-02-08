@@ -47,7 +47,7 @@ end
 
 ```julia
 # OhMyThreads
-tforeach(1:10; scheduler=DynamicScheduler(nchunks=10)) do i
+tforeach(1:10; scheduler=DynamicScheduler(; nchunks=10)) do i
     println(i)
 end
 ```

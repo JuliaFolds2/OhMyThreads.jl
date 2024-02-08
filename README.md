@@ -57,7 +57,7 @@ using BenchmarkTools
 
 @show Threads.nthreads()                                        # 5 in this example
 
-@btime mc_parallel($N; scheduler=DynamicScheduler(nchunks=1))   # effectively using 1 thread
+@btime mc_parallel($N; scheduler=DynamicScheduler(; nchunks=1))   # effectively using 1 thread
 @btime mc_parallel($N)                                          # using all 5 threads
 ```
 
