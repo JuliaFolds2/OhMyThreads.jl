@@ -27,6 +27,7 @@ end
 
 treducemap(op, f, A...; kwargs...) = tmapreduce(f, op, A...; kwargs...)
 
+# DynamicScheduler
 function _tmapreduce(f,
         op,
         Arrs,
@@ -42,6 +43,7 @@ function _tmapreduce(f,
     mapreduce(fetch, op, tasks)
 end
 
+# GreedyScheduler
 function _tmapreduce(f,
         op,
         Arrs,
@@ -70,6 +72,7 @@ function _tmapreduce(f,
     mapreduce(fetch, op, tasks; mapreduce_kwargs...)
 end
 
+# StaticScheduler
 function _tmapreduce(f,
         op,
         Arrs,
