@@ -2,7 +2,7 @@
 EditURL = "tls.jl"
 ```
 
-# Task-Local Storage
+# [Task-Local Storage](@id TLS)
 
 For some programs, it can be useful or even necessary to allocate and (re-)use memory in
 your parallel code. The following section uses a simple example to explain how task-local
