@@ -12,17 +12,17 @@ end
 
 N = 100_000_000
 
-mc(N)</code></pre><pre><code class="nohighlight hljs">3.141517</code></pre><h2 id="Parallelization-with-tmapreduce"><a class="docs-heading-anchor" href="#Parallelization-with-tmapreduce">Parallelization with <code>tmapreduce</code></a><a id="Parallelization-with-tmapreduce-1"></a><a class="docs-heading-anchor-permalink" href="#Parallelization-with-tmapreduce" title="Permalink"></a></h2><p>To parallelize the Monte Carlo simulation, we use <a href="../../../refs/api/#OhMyThreads.tmapreduce"><code>tmapreduce</code></a> with <code>+</code> as the reduction operator. For the map part, we take <code>1:N</code> as our input collection and &quot;throw one dart&quot; per element.</p><pre><code class="language-julia hljs">using OhMyThreads
+mc(N)</code></pre><pre><code class="nohighlight hljs">3.14145748</code></pre><h2 id="Parallelization-with-tmapreduce"><a class="docs-heading-anchor" href="#Parallelization-with-tmapreduce">Parallelization with <code>tmapreduce</code></a><a id="Parallelization-with-tmapreduce-1"></a><a class="docs-heading-anchor-permalink" href="#Parallelization-with-tmapreduce" title="Permalink"></a></h2><p>To parallelize the Monte Carlo simulation, we use <a href="../../../refs/api/#OhMyThreads.tmapreduce"><code>tmapreduce</code></a> with <code>+</code> as the reduction operator. For the map part, we take <code>1:N</code> as our input collection and &quot;throw one dart&quot; per element.</p><pre><code class="language-julia hljs">using OhMyThreads
 
-function mc_parallel(N)
-    M = tmapreduce(+, 1:N) do i
+function mc_parallel(N; kwargs...)
+    M = tmapreduce(+, 1:N; kwargs...) do i
         rand()^2 + rand()^2 &lt; 1.0
     end
     pi = 4 * M / N
     return pi
 end
 
-mc_parallel(N)</code></pre><pre><code class="nohighlight hljs">3.14159924</code></pre><p>Let&#39;s run a quick benchmark.</p><pre><code class="language-julia hljs">using BenchmarkTools
+mc_parallel(N)</code></pre><pre><code class="nohighlight hljs">3.14134792</code></pre><p>Let&#39;s run a quick benchmark.</p><pre><code class="language-julia hljs">using BenchmarkTools
 using Base.Threads: nthreads
 
 @assert nthreads() &gt; 1 # make sure we have multiple Julia threads
@@ -30,9 +30,14 @@ using Base.Threads: nthreads
 
 @btime mc($N) samples=10 evals=3;
 @btime mc_parallel($N) samples=10 evals=3;</code></pre><pre><code class="nohighlight hljs">nthreads() = 5
-  318.467 ms (0 allocations: 0 bytes)
-  88.553 ms (37 allocations: 3.02 KiB)
-</code></pre><h2 id="Manual-parallelization"><a class="docs-heading-anchor" href="#Manual-parallelization">Manual parallelization</a><a id="Manual-parallelization-1"></a><a class="docs-heading-anchor-permalink" href="#Manual-parallelization" title="Permalink"></a></h2><p>First, using the <code>chunks</code> function, we divide the iteration interval <code>1:N</code> into <code>nthreads()</code> parts. Then, we apply a regular (sequential) <code>map</code> to spawn a Julia task per chunk. Each task will locally and independently perform a sequential Monte Carlo simulation. Finally, we fetch the results and compute the average estimate for <span>$\pi$</span>.</p><pre><code class="language-julia hljs">using OhMyThreads: @spawn
+  317.745 ms (0 allocations: 0 bytes)
+  88.384 ms (66 allocations: 5.72 KiB)
+</code></pre><h3 id="Static-scheduling"><a class="docs-heading-anchor" href="#Static-scheduling">Static scheduling</a><a id="Static-scheduling-1"></a><a class="docs-heading-anchor-permalink" href="#Static-scheduling" title="Permalink"></a></h3><p>Because the workload is highly uniform, it makes sense to also try the <code>StaticScheduler</code> and compare the performance of static and dynamic scheduling (with default parameters).</p><pre><code class="language-julia hljs">using OhMyThreads: StaticScheduler
+
+@btime mc_parallel($N) samples=10 evals=3;
+@btime mc_parallel($N; scheduler=StaticScheduler()) samples=10 evals=3;</code></pre><pre><code class="nohighlight hljs">  88.222 ms (66 allocations: 5.72 KiB)
+  88.203 ms (36 allocations: 2.98 KiB)
+</code></pre><h2 id="Manual-parallelization"><a class="docs-heading-anchor" href="#Manual-parallelization">Manual parallelization</a><a id="Manual-parallelization-1"></a><a class="docs-heading-anchor-permalink" href="#Manual-parallelization" title="Permalink"></a></h2><p>First, using the <code>chunks</code> function, we divide the iteration interval <code>1:N</code> into <code>nthreads()</code> parts. Then, we apply a regular (sequential) <code>map</code> to spawn a Julia task per chunk. Each task will locally and independently perform a sequential Monte Carlo simulation. Finally, we fetch the results and compute the average estimate for <span>$\pi$</span>.</p><pre><code class="language-julia hljs">using OhMyThreads: @spawn, chunks
 
 function mc_parallel_manual(N; nchunks = nthreads())
     tasks = map(chunks(1:N; n = nchunks)) do idcs # TODO: replace by `tmap` once ready
@@ -42,13 +47,13 @@ function mc_parallel_manual(N; nchunks = nthreads())
     return pi
 end
 
-mc_parallel_manual(N)</code></pre><pre><code class="nohighlight hljs">3.1415844</code></pre><p>And this is the performance:</p><pre><code class="language-julia hljs">@btime mc_parallel_manual($N) samples=10 evals=3;</code></pre><pre><code class="nohighlight hljs">  63.825 ms (31 allocations: 2.80 KiB)
+mc_parallel_manual(N)</code></pre><pre><code class="nohighlight hljs">3.1414609999999996</code></pre><p>And this is the performance:</p><pre><code class="language-julia hljs">@btime mc_parallel_manual($N) samples=10 evals=3;</code></pre><pre><code class="nohighlight hljs">  64.042 ms (31 allocations: 2.80 KiB)
 </code></pre><p>It is faster than <code>mc_parallel</code> above because the task-local computation <code>mc(length(idcs))</code> is faster than the implicit task-local computation within <code>tmapreduce</code> (which itself is a <code>mapreduce</code>).</p><pre><code class="language-julia hljs">idcs = first(chunks(1:N; n = nthreads()))
 
 @btime mapreduce($+, $idcs) do i
     rand()^2 + rand()^2 &lt; 1.0
 end samples=10 evals=3;
 
-@btime mc($(length(idcs))) samples=10 evals=3;</code></pre><pre><code class="nohighlight hljs">  87.617 ms (0 allocations: 0 bytes)
-  63.398 ms (0 allocations: 0 bytes)
-</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../../">« OhMyThreads</a><a class="docs-footer-nextpage" href="../../juliaset/juliaset/">Julia Set »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="auto">Automatic (OS)</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.2.1 on <span class="colophon-date" title="Wednesday 7 February 2024 08:19">Wednesday 7 February 2024</span>. Using Julia version 1.10.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+@btime mc($(length(idcs))) samples=10 evals=3;</code></pre><pre><code class="nohighlight hljs">  88.041 ms (0 allocations: 0 bytes)
+  63.427 ms (0 allocations: 0 bytes)
+</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../../">« OhMyThreads</a><a class="docs-footer-nextpage" href="../../juliaset/juliaset/">Julia Set »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="auto">Automatic (OS)</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.2.1 on <span class="colophon-date" title="Thursday 8 February 2024 18:19">Thursday 8 February 2024</span>. Using Julia version 1.10.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
