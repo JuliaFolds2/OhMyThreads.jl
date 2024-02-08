@@ -4,7 +4,8 @@ import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcol
 
 using OhMyThreads: StableTasks, chunks, @spawn, @spawnat
 using OhMyThreads.Tools: nthtid
-using OhMyThreads: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
+using OhMyThreads: Scheduler,
+    DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 
@@ -41,6 +42,22 @@ function _tmapreduce(f,
         @spawn threadpool mapreduce(f, op, args...; $mapreduce_kwargs...)
     end
     mapreduce(fetch, op, tasks)
+end
+
+# SpawnAllScheduler
+function _tmapreduce(f,
+        op,
+        Arrs,
+        ::Type{OutputType},
+        scheduler::SpawnAllScheduler,
+        mapreduce_kwargs)::OutputType where {OutputType}
+    (; threadpool) = scheduler
+    check_all_have_same_indices(Arrs)
+    tasks = map(eachindex(first(Arrs))) do i
+        args = map(A -> @inbounds(A[i]), Arrs)
+        @spawn threadpool map(f, args...)
+    end
+    mapreduce(fetch, op, tasks; mapreduce_kwargs...)
 end
 
 # GreedyScheduler
@@ -124,15 +141,20 @@ function tmap(f,
         kwargs...)
     if scheduler isa GreedyScheduler
         error("Greedy scheduler isn't supported with `tmap` unless you provide an `OutputElementType` argument, since the greedy schedule requires a commutative reducing operator.")
-    end
-    (; nchunks, split) = scheduler
-    if split != :batch
+    elseif hasfield(typeof(scheduler), :split) && scheduler.split != :batch
         error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $scheduler)")
     end
+
     Arrs = (A, _Arrs...)
     check_all_have_same_indices(Arrs)
-    chunk_idcs = collect(chunks(A; n = nchunks))
-    v = tmapreduce(append!!, chunk_idcs; scheduler, kwargs...) do inds
+    if scheduler isa SpawnAllScheduler
+        idcs = collect(eachindex(A))
+        reduction_f = vcat # TODO: can we do better here?
+    else
+        idcs = collect(chunks(A; n = scheduler.nchunks))
+        reduction_f = append!!
+    end
+    v = tmapreduce(reduction_f, idcs; scheduler, kwargs...) do inds
         args = map(A -> @view(A[inds]), Arrs)
         map(f, args...)
     end

@@ -8,6 +8,7 @@ Supertype for all available schedulers:
 * [`DynamicScheduler`](@ref): default dynamic scheduler
 * [`StaticScheduler`](@ref): low-overhead static scheduler
 * [`GreedyScheduler`](@ref): greedy load-balancing scheduler
+* [`SpawnAllScheduler`](@ref): `@spawn` one task per element
 """
 abstract type Scheduler end
 
@@ -99,6 +100,16 @@ Base.@kwdef struct GreedyScheduler <: Scheduler
     function GreedyScheduler(ntasks::Int)
         ntasks > 0 || throw(ArgumentError("ntasks must be a positive integer"))
         new(ntasks)
+    end
+end
+
+Base.@kwdef struct SpawnAllScheduler <: Scheduler
+    threadpool::Symbol = :default
+
+    function SpawnAllScheduler(threadpool::Symbol)
+        threadpool in (:default, :interactive) ||
+            throw(ArgumentError("threadpool must be either :default or :interactive"))
+        new(threadpool)
     end
 end
 
