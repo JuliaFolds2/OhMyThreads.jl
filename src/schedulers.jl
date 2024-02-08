@@ -42,7 +42,7 @@ Base.@kwdef struct DynamicScheduler <: Scheduler
         threadpool in (:default, :interactive) ||
             throw(ArgumentError("threadpool must be either :default or :interactive"))
         nchunks > 0 || throw(ArgumentError("nchunks must be a positive integer"))
-        new(nchunks, split, threadpool)
+        new(threadpool, nchunks, split)
     end
 end
 
