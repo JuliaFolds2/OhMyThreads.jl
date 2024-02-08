@@ -30,6 +30,7 @@ end
 
 using Base.Threads: nthreads
 @show nthreads()
+
 N = nthreads() * 1_000_000
 
 # Calling `trapezoidal` we do indeed find the (approximate) value of $\pi$.

@@ -1,4 +1,4 @@
-# # Task-Local Storage
+# # [Task-Local Storage](@id TLS)
 #
 # For some programs, it can be useful or even necessary to allocate and (re-)use memory in
 # your parallel code. The following section uses a simple example to explain how task-local
@@ -124,7 +124,7 @@ using Base.Threads: nthreads
 
 function matmulsums_manual(As, Bs)
     N = size(first(As), 1)
-    tasks = map(chunks(As; n = nthreads())) do idcs
+    tasks = map(chunks(As; n = 2 * nthreads())) do idcs
         @spawn begin
             local C = Matrix{Float64}(undef, N, N)
             local results = Vector{Float64}(undef, length(idcs))
@@ -143,7 +143,7 @@ res ≈ res_manual
 
 # The first thing to note is pretty obvious: This is very cumbersome and you probably don't
 # want to write it. But let's take a closer look and see what's happening here.
-# First, we divide the number of matrix pairs into `nthreads()` chunks. Then, for each of
+# First, we divide the number of matrix pairs into `2 * nthreads()` chunks. Then, for each of
 # those chunks, we spawn a parallel task that (1) allocates a task-local `C` matrix (and a
 # `results` vector) and (2) performs the actual computations using these pre-allocated
 # values. Finally, we `fetch` the results of the tasks and combine them.
@@ -163,5 +163,26 @@ using BenchmarkTools
 @btime matmulsums_manual($As, $Bs);
 
 # As we see, the recommened version `matmulsums_tls` is both convenient as well as
-# efficient: It allocates much less memory than `matmulsums_naive` (5 vs 64 times 8 MiB)
+# efficient: It allocates much less memory than `matmulsums_naive` (10 vs 64 times 8 MiB)
 # and is very much comparable to the manual implementation.
+
+# ### Tuning the scheduling
+#
+# Since the workload is uniform, we don't need load balancing. We can thus try to use
+# `DynamicScheduler(nchunks=nthreads())` and `StaticScheduler()` to improve the performance
+# and/or reduce the number of allocations.
+
+using OhMyThreads: DynamicScheduler, StaticScheduler
+
+function matmulsums_tls_kwargs(As, Bs; kwargs...)
+    N = size(first(As), 1)
+    tls = TaskLocalValue{Matrix{Float64}}(() -> Matrix{Float64}(undef, N, N))
+    tmap(As, Bs; kwargs...) do A, B
+        C = tls[]
+        mul!(C, A, B)
+        sum(C)
+    end
+end
+
+@btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(DynamicScheduler(nchunks=nthreads())));
+@btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(StaticScheduler()));

@@ -27,6 +27,7 @@ for d in dirs
     println("directory: ", d)
     cd(d) do
         Pkg.activate(".")
+        Pkg.resolve()
         Pkg.instantiate()
         jlfiles = filter(endswith(".jl"), readdir())
         for f in jlfiles
