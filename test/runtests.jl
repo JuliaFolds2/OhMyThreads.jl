@@ -11,13 +11,17 @@ sets_to_test = [
 @testset "Basics" begin
     for (; ~, f, op, itrs, init) ∈ sets_to_test
         @testset "f=$f, op=$op, itrs::$(typeof(itrs))" begin
-            @testset for schedule ∈ (:static, :dynamic, :interactive, :greedy)
+            @testset for sched ∈ (StaticScheduler, DynamicScheduler, GreedyScheduler)
                 @testset for split ∈ (:batch, :scatter)
                     for nchunks ∈ (1, 2, 6)
-                        rand() < 0.25 && continue # we don't really want full coverage here
-                        
-                        kwargs = (; schedule, split, nchunks)
-                        if (split == :scatter || schedule == :greedy) || op ∉ (vcat, *)
+                        if sched == GreedyScheduler
+                            scheduler = sched(; ntasks=nchunks)
+                        else
+                            scheduler = sched(; nchunks, split)
+                        end
+
+                        kwargs = (; scheduler)
+                        if (split == :scatter || sched == GreedyScheduler) || op ∉ (vcat, *)
                             # scatter and greedy only works for commutative operators!
                         else
                             mapreduce_f_op_itr = mapreduce(f, op, itrs...)
@@ -25,19 +29,20 @@ sets_to_test = [
                             @test treducemap(op, f, itrs...; init, kwargs...) ~ mapreduce_f_op_itr
                             @test treduce(op, f.(itrs...); init, kwargs...) ~ mapreduce_f_op_itr
                         end
-                        
+
+                        split == :scatter && continue
                         map_f_itr = map(f, itrs...)
                         @test all(tmap(f, Any, itrs...; kwargs...) .~ map_f_itr)
                         @test all(tcollect(Any, (f(x...) for x in collect(zip(itrs...))); kwargs...) .~ map_f_itr)
                         @test all(tcollect(Any, f.(itrs...); kwargs...) .~ map_f_itr)
-                        
+
                         RT = Core.Compiler.return_type(f, Tuple{eltype.(itrs)...})
-                            
+
                         @test tmap(f, RT, itrs...; kwargs...) ~ map_f_itr
                         @test tcollect(RT, (f(x...) for x in collect(zip(itrs...))); kwargs...) ~ map_f_itr
                         @test tcollect(RT, f.(itrs...); kwargs...) ~ map_f_itr
-                        
-                        if schedule !== :greedy
+
+                        if sched !== GreedyScheduler
                             @test tmap(f, itrs...; kwargs...) ~ map_f_itr
                             @test tcollect((f(x...) for x in collect(zip(itrs...))); kwargs...) ~ map_f_itr
                             @test tcollect(f.(itrs...); kwargs...) ~ map_f_itr

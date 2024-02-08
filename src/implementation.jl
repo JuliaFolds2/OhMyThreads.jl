@@ -4,63 +4,61 @@ import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcol
 
 using OhMyThreads: StableTasks, chunks, @spawn, @spawnat
 using OhMyThreads.Tools: nthtid
+using OhMyThreads: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 
 using BangBang: BangBang, append!!
 
 function tmapreduce(f, op, Arrs...;
-    nchunks::Int=nthreads(),
-    split::Symbol=:batch,
-    schedule::Symbol=:dynamic,
-    outputtype::Type=Any,
-    mapreduce_kwargs...)
-
+        scheduler::Scheduler = DynamicScheduler(),
+        outputtype::Type = Any,
+        mapreduce_kwargs...)
     min_kwarg_len = haskey(mapreduce_kwargs, :init) ? 1 : 0
     if length(mapreduce_kwargs) > min_kwarg_len
-        tmapreduce_kwargs_err(;mapreduce_kwargs...)
+        tmapreduce_kwargs_err(; mapreduce_kwargs...)
     end
-    if schedule === :dynamic 
-        _tmapreduce(f, op, Arrs, outputtype, nchunks, split, :default, mapreduce_kwargs)
-    elseif schedule === :interactive
-        _tmapreduce(f, op, Arrs, outputtype, nchunks, split, :interactive, mapreduce_kwargs)
-    elseif schedule === :greedy
-        _tmapreduce_greedy(f, op, Arrs, outputtype, nchunks, split, mapreduce_kwargs)
-    elseif schedule === :static
-        _tmapreduce_static(f, op, Arrs, outputtype, nchunks, split, mapreduce_kwargs)
-    else
-        schedule_err(schedule)
-    end
+    _tmapreduce(f, op, Arrs, outputtype, scheduler, mapreduce_kwargs)
 end
-@noinline schedule_err(s) = error(ArgumentError("Invalid schedule option: $s, expected :dynamic, :interactive, :greedy, or :static."))
 
-@noinline function tmapreduce_kwargs_err(;init=nothing, kwargs...)
+@noinline function tmapreduce_kwargs_err(; init = nothing, kwargs...)
     error("got unsupported keyword arguments: $((;kwargs...,)) ")
 end
 
 treducemap(op, f, A...; kwargs...) = tmapreduce(f, op, A...; kwargs...)
 
-function _tmapreduce(f, op, Arrs, ::Type{OutputType}, nchunks, split, threadpool, mapreduce_kwargs)::OutputType where {OutputType}
+function _tmapreduce(f,
+        op,
+        Arrs,
+        ::Type{OutputType},
+        scheduler::DynamicScheduler,
+        mapreduce_kwargs)::OutputType where {OutputType}
+    (; nchunks, split, threadpool) = scheduler
     check_all_have_same_indices(Arrs)
-    tasks = map(chunks(first(Arrs); n=nchunks, split)) do inds
+    tasks = map(chunks(first(Arrs); n = nchunks, split)) do inds
         args = map(A -> view(A, inds), Arrs)
         @spawn threadpool mapreduce(f, op, args...; $mapreduce_kwargs...)
     end
     mapreduce(fetch, op, tasks)
 end
 
-function _tmapreduce_greedy(f, op, Arrs, ::Type{OutputType}, nchunks, split, mapreduce_kwargs)::OutputType where {OutputType}
-    nchunks > 0 || throw("Error: nchunks must be a positive integer")
+function _tmapreduce(f,
+        op,
+        Arrs,
+        ::Type{OutputType},
+        scheduler::GreedyScheduler,
+        mapreduce_kwargs)::OutputType where {OutputType}
+    ntasks_desired = scheduler.ntasks
     if Base.IteratorSize(first(Arrs)) isa Base.SizeUnknown
-        ntasks = nchunks
+        ntasks = ntasks_desired
         ch_len = 0
     else
         check_all_have_same_indices(Arrs)
-        ntasks = min(length(first(Arrs)), nchunks)
+        ntasks = min(length(first(Arrs)), ntasks_desired)
         ch_len = length(first(Arrs))
     end
-    ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn=true) do ch
-        for args ∈ zip(Arrs...)
+    ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn = true) do ch
+        for args in zip(Arrs...)
             put!(ch, args)
         end
     end
@@ -72,9 +70,14 @@ function _tmapreduce_greedy(f, op, Arrs, ::Type{OutputType}, nchunks, split, map
     mapreduce(fetch, op, tasks; mapreduce_kwargs...)
 end
 
-function _tmapreduce_static(f, op, Arrs, ::Type{OutputType}, nchunks, split, mapreduce_kwargs) where {OutputType}
+function _tmapreduce(f,
+        op,
+        Arrs,
+        ::Type{OutputType},
+        scheduler::StaticScheduler,
+        mapreduce_kwargs) where {OutputType}
+    (; nchunks, split) = scheduler
     check_all_have_same_indices(Arrs)
-    nchunks > 0 || throw("Error: nchunks must be a positive integer")
     n = min(nthreads(), nchunks) # We could implement strategies, like round-robin, in the future
     tasks = map(enumerate(chunks(first(Arrs); n, split))) do (c, inds)
         tid = @inbounds nthtid(c)
@@ -84,12 +87,13 @@ function _tmapreduce_static(f, op, Arrs, ::Type{OutputType}, nchunks, split, map
     mapreduce(fetch, op, tasks)
 end
 
-
-check_all_have_same_indices(Arrs) = let A = first(Arrs), Arrs = Arrs[2:end]
-    if !all(B -> eachindex(A) == eachindex(B), Arrs)
-        error("The indices of the input arrays must match the indices of the output array.")
+function check_all_have_same_indices(Arrs)
+    let A = first(Arrs), Arrs = Arrs[2:end]
+        if !all(B -> eachindex(A) == eachindex(B), Arrs)
+            error("The indices of the input arrays must match the indices of the output array.")
+        end
     end
-end 
+end
 
 #-------------------------------------------------------------
 
@@ -100,7 +104,7 @@ end
 #-------------------------------------------------------------
 
 function tforeach(f, A...; kwargs...)::Nothing
-    tmapreduce(f, (l, r) -> l, A...; kwargs..., init=nothing, outputtype=Nothing)
+    tmapreduce(f, (l, r) -> l, A...; kwargs..., init = nothing, outputtype = Nothing)
 end
 
 #-------------------------------------------------------------
@@ -110,26 +114,40 @@ function tmap(f, ::Type{T}, A::AbstractArray, _Arrs::AbstractArray...; kwargs...
     tmap!(f, similar(A, T), Arrs...; kwargs...)
 end
 
-function tmap(f, A::AbstractArray, _Arrs::AbstractArray...; nchunks::Int=nthreads(), schedule=:dynamic, kwargs...)
+function tmap(f,
+        A::AbstractArray,
+        _Arrs::AbstractArray...;
+        scheduler::Scheduler = DynamicScheduler(),
+        kwargs...)
+    if scheduler isa GreedyScheduler
+        error("Greedy scheduler isn't supported with `tmap` unless you provide an `OutputElementType` argument, since the greedy schedule requires a commutative reducing operator.")
+    end
+    (; nchunks, split) = scheduler
+    if split != :batch
+        error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $scheduler)")
+    end
     Arrs = (A, _Arrs...)
     check_all_have_same_indices(Arrs)
-    the_chunks = collect(chunks(A; n=nchunks))
-    if schedule == :greedy
-        error("Greedy schedules are not supported with `tmap` unless you provide an `OutputElementType` argument, since the greedy schedule requires a commutative reducing operator.")
-    end
-    # It's vital that we force split=:batch here because we're not doing a commutative operation!
-    v = tmapreduce(append!!, the_chunks; kwargs...,  nchunks, split=:batch) do inds
+    chunk_idcs = collect(chunks(A; n = nchunks))
+    v = tmapreduce(append!!, chunk_idcs; scheduler, kwargs...) do inds
         args = map(A -> @view(A[inds]), Arrs)
         map(f, args...)
     end
     reshape(v, size(A)...)
 end
 
-@propagate_inbounds function tmap!(f, out, A::AbstractArray, _Arrs::AbstractArray...; kwargs...)
+@propagate_inbounds function tmap!(f,
+        out,
+        A::AbstractArray,
+        _Arrs::AbstractArray...;
+        scheduler::Scheduler = DynamicScheduler(),
+        kwargs...)
+    if hasfield(typeof(scheduler), :split) && scheduler.split != :batch
+        error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $scheduler)")
+    end
     Arrs = (A, _Arrs...)
     @boundscheck check_all_have_same_indices((out, Arrs...))
-    # It's vital that we force split=:batch here because we're not doing a commutative operation!
-    tforeach(eachindex(out); kwargs..., split=:batch) do i
+    tforeach(eachindex(out); scheduler, kwargs...) do i
         args = map(A -> @inbounds(A[i]), Arrs)
         res = f(args...)
         out[i] = res

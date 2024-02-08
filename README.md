@@ -55,17 +55,17 @@ mc_parallel(N) # gives, e.g., 3.14159924
 
 using BenchmarkTools
 
-@show Threads.nthreads()          # 5 in this example
+@show Threads.nthreads()                                        # 5 in this example
 
-@btime mc_parallel($N; nchunks=1) # effectively running with a single Julia thread
-@btime mc_parallel($N)            # running with all 5 Julia threads
+@btime mc_parallel($N; scheduler=DynamicScheduler(; nchunks=1))   # effectively using 1 thread
+@btime mc_parallel($N)                                          # using all 5 threads
 ```
 
 Timings might be something like this:
 
 ```
-438.394 ms (7 allocations: 624 bytes)
-88.050 ms (37 allocations: 3.02 KiB)
+447.093 ms (7 allocations: 624 bytes)
+89.401 ms (66 allocations: 5.72 KiB)
 ```
 
 (Check out the full [Parallel Monte Carlo](https://juliafolds2.github.io/OhMyThreads.jl/stable/examples/mc/mc/) example if you like.)

@@ -35,8 +35,8 @@ mc(N)
 
 using OhMyThreads
 
-function mc_parallel(N)
-    M = tmapreduce(+, 1:N) do i
+function mc_parallel(N; kwargs...)
+    M = tmapreduce(+, 1:N; kwargs...) do i
         rand()^2 + rand()^2 < 1.0
     end
     pi = 4 * M / N
@@ -56,6 +56,16 @@ using Base.Threads: nthreads
 @btime mc($N) samples=10 evals=3;
 @btime mc_parallel($N) samples=10 evals=3;
 
+# ### Static scheduling
+#
+# Because the workload is highly uniform, it makes sense to also try the `StaticScheduler`
+# and compare the performance of static and dynamic scheduling (with default parameters).
+
+using OhMyThreads: StaticScheduler
+
+@btime mc_parallel($N) samples=10 evals=3;
+@btime mc_parallel($N; scheduler=StaticScheduler()) samples=10 evals=3;
+
 # ## Manual parallelization
 #
 # First, using the `chunks` function, we divide the iteration interval `1:N` into
@@ -63,7 +73,7 @@ using Base.Threads: nthreads
 # per chunk. Each task will locally and independently perform a sequential Monte Carlo
 # simulation. Finally, we fetch the results and compute the average estimate for $\pi$.
 
-using OhMyThreads: @spawn
+using OhMyThreads: @spawn, chunks
 
 function mc_parallel_manual(N; nchunks = nthreads())
     tasks = map(chunks(1:N; n = nchunks)) do idcs # TODO: replace by `tmap` once ready
