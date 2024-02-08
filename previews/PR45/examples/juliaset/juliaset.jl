@@ -104,7 +104,7 @@ img = zeros(Int, N, N)
 
 using OhMyThreads: DynamicScheduler
 
-@btime compute_juliaset_parallel!($img; scheduler=DynamicScheduler(nchunks=N)) samples=10 evals=3;
+@btime compute_juliaset_parallel!($img; scheduler=DynamicScheduler(; nchunks=N)) samples=10 evals=3;
 
 # Note that while this turns out to be a bit faster, it comes at the expense of much more
 # allocations.

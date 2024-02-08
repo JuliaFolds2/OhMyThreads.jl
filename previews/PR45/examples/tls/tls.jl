@@ -169,7 +169,7 @@ using BenchmarkTools
 # ### Tuning the scheduling
 #
 # Since the workload is uniform, we don't need load balancing. We can thus try to use
-# `DynamicScheduler(nchunks=nthreads())` and `StaticScheduler()` to improve the performance
+# `DynamicScheduler(; nchunks=nthreads())` and `StaticScheduler()` to improve the performance
 # and/or reduce the number of allocations.
 
 using OhMyThreads: DynamicScheduler, StaticScheduler
@@ -184,5 +184,5 @@ function matmulsums_tls_kwargs(As, Bs; kwargs...)
     end
 end
 
-@btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(DynamicScheduler(nchunks=nthreads())));
+@btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(DynamicScheduler(; nchunks=nthreads())));
 @btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(StaticScheduler()));
