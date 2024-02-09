@@ -55,7 +55,7 @@ function _tmapreduce(f,
     check_all_have_same_indices(Arrs)
     tasks = map(eachindex(first(Arrs))) do i
         args = map(A -> @inbounds(A[i]), Arrs)
-        @spawn threadpool map(f, args...)
+        @spawn threadpool f(args...)
     end
     mapreduce(fetch, op, tasks; mapreduce_kwargs...)
 end
@@ -147,13 +147,36 @@ function tmap(f,
 
     Arrs = (A, _Arrs...)
     check_all_have_same_indices(Arrs)
-    if scheduler isa SpawnAllScheduler
-        idcs = collect(eachindex(A))
-        reduction_f = vcat # TODO: can we do better here?
-    else
-        idcs = collect(chunks(A; n = scheduler.nchunks))
-        reduction_f = append!!
+    _tmap(scheduler, f, A, _Arrs...; kwargs...)
+end
+
+# SpawnAllScheduler
+function _tmap(scheduler::SpawnAllScheduler,
+        f,
+        A::AbstractArray,
+        _Arrs::AbstractArray...;
+        kwargs...)
+    (; threadpool) = scheduler
+    Arrs = (A, _Arrs...)
+    ts = map(eachindex(A)) do i
+        @spawn threadpool begin
+            args = map(A -> A[i], Arrs)
+            f(args...)
+        end
     end
+    v = map(fetch, ts)
+    reshape(v, size(A)...)
+end
+
+# All other schedulers
+function _tmap(scheduler::Scheduler,
+        f,
+        A::AbstractArray,
+        _Arrs::AbstractArray...;
+        kwargs...)
+    Arrs = (A, _Arrs...)
+    idcs = collect(chunks(A; n = scheduler.nchunks))
+    reduction_f = append!!
     v = tmapreduce(reduction_f, idcs; scheduler, kwargs...) do inds
         args = map(A -> @view(A[inds]), Arrs)
         map(f, args...)
