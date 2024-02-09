@@ -1,6 +1,12 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.4.1
+-------------
+
+- ![Feature][badge-feature] Added a new `SpawnAllScheduler` that spawns a task per element of the input collection (can be many tasks!).
+
+
 Version 0.4.0
 -------------
 
