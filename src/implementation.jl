@@ -13,6 +13,13 @@ using BangBang: BangBang, append!!
 
 using ChunkSplitters: ChunkSplitters
 
+function auto_disable_chunking_warning()
+    @warn("You passed in a `ChunkSplitters.Chunk` but also a scheduler that has "*
+          "chunking enabled. Will turn off internal chunking to proceed.\n"*
+          "To avoid this warning, try to turn off chunking (`nchunks=0`) "*
+          "or pass in `collect(chunks(...))`.")
+end
+
 function tmapreduce(f, op, Arrs...;
         scheduler::Scheduler = DynamicScheduler(),
         outputtype::Type = Any,
@@ -62,20 +69,14 @@ function _tmapreduce(f,
         scheduler::DynamicScheduler,
         mapreduce_kwargs)::OutputType where {OutputType}
     (; nchunks, split, threadpool) = scheduler
-    if chunking_enabled(scheduler)
-        @warn("You passed in a ChunkSplitters.Chunk but also a scheduler that has "*
-              "chunking enabled. Will turn off internal chunking to proceed.\n"*
-              "To avoid this warning, try to turn off chunking (`nchunks=0`) "*
-              "or pass in `collect(chunks(...))`.")
-        # we don't have to do anything here but just use the no-chunking version below
-    end
+    chunking_enabled(scheduler) && auto_disable_chunking_warning()
     tasks = map(only(Arrs)) do idcs
         @spawn threadpool f(idcs)
     end
     mapreduce(fetch, op, tasks; mapreduce_kwargs...)
 end
 
-# StaticScheduler
+# StaticScheduler: AbstractArray/Generic
 function _tmapreduce(f,
         op,
         Arrs,
@@ -91,6 +92,27 @@ function _tmapreduce(f,
         @spawnat tid mapreduce(f, op, args...; mapreduce_kwargs...)
     end
     mapreduce(fetch, op, tasks)
+end
+
+# StaticScheduler: ChunkSplitters.Chunk
+function _tmapreduce(f,
+        op,
+        Arrs::Tuple{ChunkSplitters.Chunk{Vector{Float64}}}, # we don't support multiple chunks for now
+        ::Type{OutputType},
+        scheduler::StaticScheduler,
+        mapreduce_kwargs) where {OutputType}
+    chunking_enabled(scheduler) && auto_disable_chunking_warning()
+    check_all_have_same_indices(Arrs)
+    chnks = only(Arrs)
+    if length(chnks) > nthreads()
+        error("You provided a `ChunkSplitters.Chunk` with more than `nthreads()` chunks " *
+              "as input, which is not supported by the `StaticScheduler`.")
+    end
+    tasks = map(enumerate(chnks)) do (c, idcs)
+        tid = @inbounds nthtid(c)
+        @spawnat tid f(idcs)
+    end
+    mapreduce(fetch, op, tasks; mapreduce_kwargs...)
 end
 
 # GreedyScheduler
@@ -161,13 +183,18 @@ function tmap(f,
        scheduler.split != :batch
         error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $scheduler)")
     end
-    if A isa ChunkSplitters.Chunk && scheduler isa DynamicScheduler{true}
-        @warn("You passed in a ChunkSplitters.Chunk but also a `DynamicScheduler` that has "*
+    if A isa ChunkSplitters.Chunk && chunking_enabled(scheduler)
+        @warn("You passed in a `ChunkSplitters.Chunk` but also a scheduler that has "*
               "chunking enabled. Will turn off internal chunking to proceed.\n"*
               "To avoid this warning, try to turn off chunking (`nchunks=0`) "*
               "or pass in `collect(chunks(...))`.")
-        (; threadpool) = scheduler
-        scheduler = DynamicScheduler(; nchunks = 0, threadpool)
+        if scheduler isa DynamicScheduler
+            scheduler = DynamicScheduler(; nchunks = 0, scheduler.threadpool)
+        elseif scheduler isa StaticScheduler
+            scheduler = StaticScheduler(; nchunks = 0)
+        else
+            error("Unknown Scheduler?! Shouldn't be reached.")
+        end
     end
 
     Arrs = (A, _Arrs...)
@@ -203,7 +230,24 @@ function _tmap(scheduler::DynamicScheduler{false},
     tasks = map(A) do idcs
         @spawn threadpool f(idcs)
     end
-    v = map(fetch, tasks)
+    map(fetch, tasks)
+end
+
+# w/o chunking (StaticScheduler{false}): ChunkSplitters.Chunk
+function _tmap(scheduler::StaticScheduler{false},
+        f,
+        A::ChunkSplitters.Chunk,
+        _Arrs::AbstractArray...;
+        kwargs...)
+    if length(A) > nthreads()
+        error("You provided a `ChunkSplitters.Chunk` with more than `nthreads()` chunks " *
+              "as input, which is not supported by the `StaticScheduler`.")
+    end
+    tasks = map(enumerate(A)) do (c, idcs)
+        tid = @inbounds nthtid(c)
+        @spawnat tid f(idcs)
+    end
+    map(fetch, tasks)
 end
 
 # w/ chunking

@@ -72,18 +72,19 @@ Isn't well composable with other multithreaded code though.
     * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
 """
-Base.@kwdef struct StaticScheduler <: Scheduler
+Base.@kwdef struct StaticScheduler{C} <: Scheduler
     nchunks::Int = nthreads()
     split::Symbol = :batch
 
     function StaticScheduler(nchunks::Integer, split::Symbol)
-        nchunks > 0 ||
-            throw(ArgumentError("nchunks must be a positive integer."))
-        new(nchunks, split)
+        nchunks >= 0 ||
+            throw(ArgumentError("nchunks must be a positive integer (or zero)."))
+        C = !(nchunks == 0) # type parameter indicates whether chunking is enabled
+        new{C}(nchunks, split)
     end
 end
 
-chunking_enabled(::StaticScheduler) = true
+chunking_enabled(::StaticScheduler{C}) where {C} = C
 
 """
 A greedy dynamic scheduler. The elements of the collection are first put into a `Channel`
