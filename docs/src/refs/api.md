@@ -28,7 +28,6 @@ Scheduler
 DynamicScheduler
 StaticScheduler
 GreedyScheduler
-SpawnAllScheduler
 ```
 
 ## Non-Exported

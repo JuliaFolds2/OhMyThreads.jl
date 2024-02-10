@@ -5,7 +5,7 @@ import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcol
 using OhMyThreads: StableTasks, chunks, @spawn, @spawnat
 using OhMyThreads.Tools: nthtid
 using OhMyThreads: Scheduler,
-    chunking_enabled, DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
+    chunking_enabled, DynamicScheduler, StaticScheduler, GreedyScheduler
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 
@@ -71,22 +71,6 @@ function _tmapreduce(f,
     end
     tasks = map(only(Arrs)) do idcs
         @spawn threadpool f(idcs)
-    end
-    mapreduce(fetch, op, tasks; mapreduce_kwargs...)
-end
-
-# SpawnAllScheduler: AbstractArray
-function _tmapreduce(f,
-        op,
-        Arrs,
-        ::Type{OutputType},
-        scheduler::SpawnAllScheduler,
-        mapreduce_kwargs)::OutputType where {OutputType}
-    (; threadpool) = scheduler
-    check_all_have_same_indices(Arrs)
-    tasks = map(eachindex(first(Arrs))) do i
-        args = map(A -> @inbounds(A[i]), Arrs)
-        @spawn threadpool f(args...)
     end
     mapreduce(fetch, op, tasks; mapreduce_kwargs...)
 end
@@ -191,29 +175,35 @@ function tmap(f,
     _tmap(scheduler, f, A, _Arrs...; kwargs...)
 end
 
-# w/o chunking (SpawnAllScheduler, DynamicScheduler{false})
-function _tmap(scheduler::Union{SpawnAllScheduler, DynamicScheduler{false}},
+# w/o chunking (DynamicScheduler{false}): AbstractArray
+function _tmap(scheduler::DynamicScheduler{false},
         f,
-        A::Union{AbstractArray, ChunkSplitters.Chunk},
+        A::AbstractArray,
         _Arrs::AbstractArray...;
         kwargs...)
     (; threadpool) = scheduler
-    if A isa ChunkSplitters.Chunk
-        tasks = map(A) do idcs
-            @spawn threadpool f(idcs)
+    Arrs = (A, _Arrs...)
+    tasks = map(eachindex(A)) do i
+        @spawn threadpool begin
+            args = map(A -> A[i], Arrs)
+            f(args...)
         end
-        v = map(fetch, tasks)
-    else
-        Arrs = (A, _Arrs...)
-        tasks = map(eachindex(A)) do i
-            @spawn threadpool begin
-                args = map(A -> A[i], Arrs)
-                f(args...)
-            end
-        end
-        v = map(fetch, tasks)
-        reshape(v, size(A)...)
     end
+    v = map(fetch, tasks)
+    reshape(v, size(A)...)
+end
+
+# w/o chunking (DynamicScheduler{false}): ChunkSplitters.Chunk
+function _tmap(scheduler::DynamicScheduler{false},
+        f,
+        A::ChunkSplitters.Chunk,
+        _Arrs::AbstractArray...;
+        kwargs...)
+    (; threadpool) = scheduler
+    tasks = map(A) do idcs
+        @spawn threadpool f(idcs)
+    end
+    v = map(fetch, tasks)
 end
 
 # w/ chunking
