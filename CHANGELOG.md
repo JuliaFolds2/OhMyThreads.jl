@@ -7,6 +7,7 @@ Version X.X.X
 - ![Feature][badge-feature] `DynamicScheduler` now supports `nchunks=0`, which turns off internal chunking entirely.
 - ![Deprecation][badge-deprecation] `SpawnAllScheduler` is now deprecated in favor of `DynamicScheduler(; nchunks=0)`.
 - ![Feature][badge-feature] Partial support for passing in a `ChunkSplitters.Chunk` when using `DynamicScheduler` (default). In this case, one should generally use `DynamicScheduler(; nchunks=0)`, i.e. turn off internal chunking.
+- ![Feature][badge-feature] `StaticScheduler` now supports `nchunks=0`, which turns off internal chunking entirely. Only works for input that has `<= nthreads()` elements.
 
 Version 0.4.1
 -------------
