@@ -65,8 +65,8 @@ function _tmapreduce(f,
     if chunking_enabled(scheduler)
         @warn("You passed in a ChunkSplitters.Chunk but also a scheduler that has "*
               "chunking enabled. Will turn off internal chunking to proceed.\n"*
-              "To avoid this warning, try to turn off chunking (`nchunks=0`), use a "*
-              "different scheduler, or pass in `collect(chunks(...))`.")
+              "To avoid this warning, try to turn off chunking (`nchunks=0`) "*
+              "or pass in `collect(chunks(...))`.")
         # we don't have to do anything here but just use the no-chunking version below
     end
     tasks = map(only(Arrs)) do idcs
@@ -164,8 +164,8 @@ function tmap(f,
     if A isa ChunkSplitters.Chunk && scheduler isa DynamicScheduler
         @warn("You passed in a ChunkSplitters.Chunk but also a `DynamicScheduler` that has "*
               "chunking enabled. Will turn off internal chunking to proceed.\n"*
-              "To avoid this warning, try to turn off chunking (`nchunks=0`), use a "*
-              "different scheduler, or pass in `collect(chunks(...))`.")
+              "To avoid this warning, try to turn off chunking (`nchunks=0`) "*
+              "or pass in `collect(chunks(...))`.")
         (; threadpool) = scheduler
         scheduler = DynamicScheduler(; nchunks = 0, threadpool)
     end
