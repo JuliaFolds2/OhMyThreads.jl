@@ -198,7 +198,7 @@ function tcollect end
 include("tools.jl")
 include("schedulers.jl")
 using .Schedulers: Scheduler,
-    DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
+    DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler, chunking_enabled
 include("implementation.jl")
 
 export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect

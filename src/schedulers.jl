@@ -23,10 +23,12 @@ with other multithreaded code.
 
 ## Keyword arguments:
 
-- `nchunks::Int` (default `2 * nthreads(threadpool)`):
+- `nchunks::Integer` (default `2 * nthreads(threadpool)`):
     * Determines the number of chunks (and thus also the number of parallel tasks).
     * Increasing `nchunks` can help with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead. For `nchunks <= nthreads()` there are not enough chunks for any load balancing.
     * Setting `nchunks < nthreads()` is an effective way to use only a subset of the available threads.
+    * Setting `nchunks = 0` turns off the internal chunking entirely (a task is spawned for each element). Note that, depending on the input, this scheduler **might spawn many(!) tasks** and can be
+    very costly!
 - `split::Symbol` (default `:batch`):
     * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
@@ -34,18 +36,22 @@ with other multithreaded code.
     * Possible options are `:default` and `:interactive`.
     * The high-priority pool `:interactive` should be used very carefully since tasks on this threadpool should not be allowed to run for a long time without `yield`ing as it can interfere with [heartbeat](https://en.wikipedia.org/wiki/Heartbeat_(computing)) processes.
 """
-Base.@kwdef struct DynamicScheduler <: Scheduler
+Base.@kwdef struct DynamicScheduler{C} <: Scheduler
     threadpool::Symbol = :default
     nchunks::Int = 2 * nthreads(threadpool) # a multiple of nthreads to enable load balancing
     split::Symbol = :batch
 
-    function DynamicScheduler(threadpool::Symbol, nchunks::Int, split::Symbol)
+    function DynamicScheduler(threadpool::Symbol, nchunks::Integer, split::Symbol)
         threadpool in (:default, :interactive) ||
             throw(ArgumentError("threadpool must be either :default or :interactive"))
-        nchunks > 0 || throw(ArgumentError("nchunks must be a positive integer"))
-        new(threadpool, nchunks, split)
+        nchunks >= 0 ||
+            throw(ArgumentError("nchunks must be a positive integer (or zero)."))
+        C = !(nchunks == 0) # type parameter indicates whether chunking is enabled
+        new{C}(threadpool, nchunks, split)
     end
 end
+
+chunking_enabled(::DynamicScheduler{C}) where {C} = C
 
 """
 A static low-overhead scheduler. Divides the given collection into chunks and
@@ -59,7 +65,7 @@ Isn't well composable with other multithreaded code though.
 
 ## Keyword arguments:
 
-- `nchunks::Int` (default `nthreads()`):
+- `nchunks::Integer` (default `nthreads()`):
     * Determines the number of chunks (and thus also the number of parallel tasks).
     * Setting `nchunks < nthreads()` is an effective way to use only a subset of the available threads.
     * Currently, `nchunks > nthreads()` **isn't officialy supported** but, for now, will fall back to `nchunks = nthreads()`.
@@ -71,11 +77,14 @@ Base.@kwdef struct StaticScheduler <: Scheduler
     nchunks::Int = nthreads()
     split::Symbol = :batch
 
-    function StaticScheduler(nchunks::Int, split::Symbol)
-        nchunks > 0 || throw(ArgumentError("nchunks must be a positive integer"))
+    function StaticScheduler(nchunks::Integer, split::Symbol)
+        nchunks > 0 ||
+            throw(ArgumentError("nchunks must be a positive integer."))
         new(nchunks, split)
     end
 end
+
+chunking_enabled(::StaticScheduler) = true
 
 """
 A greedy dynamic scheduler. The elements of the collection are first put into a `Channel`
@@ -103,6 +112,8 @@ Base.@kwdef struct GreedyScheduler <: Scheduler
     end
 end
 
+chunking_enabled(::StaticScheduler) = false
+
 """
 A scheduler that spawns a task per element (i.e. there is no internal chunking) to perform
 the requested operation in parallel. The tasks are assigned to threads by Julia's dynamic
@@ -129,5 +140,7 @@ Base.@kwdef struct SpawnAllScheduler <: Scheduler
         new(threadpool)
     end
 end
+
+chunking_enabled(::SpawnAllScheduler) = false
 
 end # module
