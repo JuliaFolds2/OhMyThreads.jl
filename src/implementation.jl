@@ -198,16 +198,14 @@ function tmap(f,
         error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $scheduler)")
     end
     if A isa ChunkSplitters.Chunk && chunking_enabled(scheduler)
-        @warn("You passed in a `ChunkSplitters.Chunk` but also a scheduler that has "*
-              "chunking enabled. Will turn off internal chunking to proceed.\n"*
-              "To avoid this warning, try to turn off chunking (`nchunks=0`) "*
-              "or pass in `collect(chunks(...))`.")
+        auto_disable_chunking_warning()
         if scheduler isa DynamicScheduler
             scheduler = DynamicScheduler(; nchunks = 0, scheduler.threadpool)
         elseif scheduler isa StaticScheduler
             scheduler = StaticScheduler(; nchunks = 0)
         else
-            error("Unknown Scheduler?! Shouldn't be reached.")
+            error("Can't disable chunking for this scheduler?! Shouldn't be reached.",
+                scheduler)
         end
     end
 
