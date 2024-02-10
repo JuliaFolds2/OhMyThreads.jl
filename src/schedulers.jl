@@ -112,7 +112,7 @@ Base.@kwdef struct GreedyScheduler <: Scheduler
     end
 end
 
-chunking_enabled(::StaticScheduler) = false
+chunking_enabled(::GreedyScheduler) = false
 
 """
 A scheduler that spawns a task per element (i.e. there is no internal chunking) to perform
