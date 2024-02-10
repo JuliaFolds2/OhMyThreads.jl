@@ -56,11 +56,11 @@ sets_to_test = [
     end
 end
 
-@testset "ChunkSplitters.chunk" begin
+@testset "ChunkSplitters.Chunk" begin
     x = rand(100)
     chnks = OhMyThreads.chunks(x; n=Threads.nthreads())
     for scheduler in (DynamicScheduler(; nchunks=0), StaticScheduler(; nchunks=0))
-            @testset "$scheduler" begin
+        @testset "$scheduler" begin
             @test tmap(x -> sin.(x), chnks; scheduler) ≈ map(x -> sin.(x), chnks)
             @test tmapreduce(x -> sin.(x), vcat, chnks; scheduler) ≈ mapreduce(x -> sin.(x), vcat, chnks)
             @test tcollect(chnks; scheduler) == collect(chnks)

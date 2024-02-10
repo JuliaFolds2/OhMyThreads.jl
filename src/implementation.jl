@@ -85,13 +85,27 @@ function _tmapreduce(f,
         mapreduce_kwargs) where {OutputType}
     (; nchunks, split) = scheduler
     check_all_have_same_indices(Arrs)
-    n = min(nthreads(), nchunks) # We could implement strategies, like round-robin, in the future
-    tasks = map(enumerate(chunks(first(Arrs); n, split))) do (c, inds)
-        tid = @inbounds nthtid(c)
-        args = map(A -> view(A, inds), Arrs)
-        @spawnat tid mapreduce(f, op, args...; mapreduce_kwargs...)
+    if chunking_enabled(scheduler)
+        n = min(nthreads(), nchunks) # We could implement strategies, like round-robin, in the future
+        tasks = map(enumerate(chunks(first(Arrs); n, split))) do (c, inds)
+            tid = @inbounds nthtid(c)
+            args = map(A -> view(A, inds), Arrs)
+            @spawnat tid mapreduce(f, op, args...; mapreduce_kwargs...)
+        end
+        mapreduce(fetch, op, tasks)
+    else
+        if length(first(Arrs)) > nthreads()
+            error("You have disabled chunking but provided an input with more then " *
+                  "`nthreads()` elements. This is not supported for `StaticScheduler`.")
+        end
+        n = min(nthreads(), nchunks) # We could implement strategies, like round-robin, in the future
+        tasks = map(enumerate(eachindex(first(Arrs)))) do (c, i)
+            tid = @inbounds nthtid(c)
+            args = map(A -> @inbounds(A[i]), Arrs)
+            @spawnat tid f(args...)
+        end
+        mapreduce(fetch, op, tasks; mapreduce_kwargs...)
     end
-    mapreduce(fetch, op, tasks)
 end
 
 # StaticScheduler: ChunkSplitters.Chunk
