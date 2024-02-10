@@ -197,10 +197,11 @@ function tcollect end
 
 include("tools.jl")
 include("schedulers.jl")
-using .Schedulers: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
+using .Schedulers: Scheduler,
+    DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
 include("implementation.jl")
 
 export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
-export Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
+export Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
 
 end # module OhMyThreads

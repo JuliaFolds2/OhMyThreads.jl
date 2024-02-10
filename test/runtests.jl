@@ -11,11 +11,13 @@ sets_to_test = [
 @testset "Basics" begin
     for (; ~, f, op, itrs, init) ∈ sets_to_test
         @testset "f=$f, op=$op, itrs::$(typeof(itrs))" begin
-            @testset for sched ∈ (StaticScheduler, DynamicScheduler, GreedyScheduler)
+            @testset for sched ∈ (StaticScheduler, DynamicScheduler, GreedyScheduler, SpawnAllScheduler)
                 @testset for split ∈ (:batch, :scatter)
                     for nchunks ∈ (1, 2, 6)
                         if sched == GreedyScheduler
                             scheduler = sched(; ntasks=nchunks)
+                        elseif sched == SpawnAllScheduler
+                            scheduler = sched()
                         else
                             scheduler = sched(; nchunks, split)
                         end

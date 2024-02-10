@@ -8,6 +8,7 @@ Supertype for all available schedulers:
 * [`DynamicScheduler`](@ref): default dynamic scheduler
 * [`StaticScheduler`](@ref): low-overhead static scheduler
 * [`GreedyScheduler`](@ref): greedy load-balancing scheduler
+* [`SpawnAllScheduler`](@ref): `@spawn` one task per element
 """
 abstract type Scheduler end
 
@@ -99,6 +100,33 @@ Base.@kwdef struct GreedyScheduler <: Scheduler
     function GreedyScheduler(ntasks::Int)
         ntasks > 0 || throw(ArgumentError("ntasks must be a positive integer"))
         new(ntasks)
+    end
+end
+
+"""
+A scheduler that spawns a task per element (i.e. there is no internal chunking) to perform
+the requested operation in parallel. The tasks are assigned to threads by Julia's dynamic
+scheduler and are non-sticky, that is, they can migrate between threads.
+
+Note that, depending on the input, this scheduler **might spawn many(!) tasks** and can be
+very costly!
+
+Essentially the same as `DynamicScheduler(; nchunks=nelements)`, but with a simpler,
+potentially more efficient implementation.
+
+## Keyword arguments:
+
+- `threadpool::Symbol` (default `:default`):
+    * Possible options are `:default` and `:interactive`.
+    * The high-priority pool `:interactive` should be used very carefully since tasks on this threadpool should not be allowed to run for a long time without `yield`ing as it can interfere with [heartbeat](https://en.wikipedia.org/wiki/Heartbeat_(computing)) processes.
+"""
+Base.@kwdef struct SpawnAllScheduler <: Scheduler
+    threadpool::Symbol = :default
+
+    function SpawnAllScheduler(threadpool::Symbol)
+        threadpool in (:default, :interactive) ||
+            throw(ArgumentError("threadpool must be either :default or :interactive"))
+        new(threadpool)
     end
 end
 
