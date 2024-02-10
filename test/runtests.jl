@@ -56,4 +56,16 @@ sets_to_test = [
     end
 end
 
+@testset "ChunkSplitters.chunk" begin
+    x = rand(100)
+    chnks = OhMyThreads.chunks(x; n=10)
+    scheduler = DynamicScheduler(; nchunks=0)
+
+    @test tmap(x -> sin.(x), chnks; scheduler) ≈ map(x -> sin.(x), chnks)
+    @test tmapreduce(x -> sin.(x), +, chnks; scheduler) ≈ mapreduce(x -> sin.(x), +, chnks)
+    @test tcollect(chnks; scheduler) == collect(chnks)
+    @test treduce(+, chnks; scheduler) == reduce(+, chnks)
+    @test isnothing(tforeach(x -> sin.(x), chnks; scheduler))
+end
+
 # Todo way more testing, and easier tests to deal with
