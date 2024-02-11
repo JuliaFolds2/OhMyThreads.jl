@@ -5,7 +5,7 @@ Version 0.4.1
 -------------
 
 - ![Feature][badge-feature] Added a new, simple `SpawnAllScheduler` that spawns a task per input element (can be a lot of tasks!).
-
+- ![Info][badge-info] Added downgrade_CI which makes sure the testsuite works on the oldest versions of dependancies.
 
 Version 0.4.0
 -------------
