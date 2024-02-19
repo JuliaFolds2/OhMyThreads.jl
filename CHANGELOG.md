@@ -1,7 +1,7 @@
 OhMyThreads.jl Changelog
 =========================
 
-Version X.X.X
+Version 0.4.2
 -------------
 
 - ![Feature][badge-feature] `DynamicScheduler` now supports `nchunks=0`, which turns off internal chunking entirely.
