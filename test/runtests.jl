@@ -11,13 +11,13 @@ sets_to_test = [
 @testset "Basics" begin
     for (; ~, f, op, itrs, init) ∈ sets_to_test
         @testset "f=$f, op=$op, itrs::$(typeof(itrs))" begin
-            @testset for sched ∈ (StaticScheduler, DynamicScheduler, GreedyScheduler, SpawnAllScheduler)
+            @testset for sched ∈ (StaticScheduler, DynamicScheduler, GreedyScheduler, DynamicScheduler{false})
                 @testset for split ∈ (:batch, :scatter)
                     for nchunks ∈ (1, 2, 6)
                         if sched == GreedyScheduler
                             scheduler = sched(; ntasks=nchunks)
-                        elseif sched == SpawnAllScheduler
-                            scheduler = sched()
+                        elseif sched == DynamicScheduler{false}
+                            scheduler = DynamicScheduler(; nchunks=0)
                         else
                             scheduler = sched(; nchunks, split)
                         end
@@ -52,6 +52,20 @@ sets_to_test = [
                     end
                 end
             end
+        end
+    end
+end
+
+@testset "ChunkSplitters.Chunk" begin
+    x = rand(100)
+    chnks = OhMyThreads.chunks(x; n=Threads.nthreads())
+    for scheduler in (DynamicScheduler(; nchunks=0), StaticScheduler(; nchunks=0))
+        @testset "$scheduler" begin
+            @test tmap(x -> sin.(x), chnks; scheduler) ≈ map(x -> sin.(x), chnks)
+            @test tmapreduce(x -> sin.(x), vcat, chnks; scheduler) ≈ mapreduce(x -> sin.(x), vcat, chnks)
+            @test tcollect(chnks; scheduler) == collect(chnks)
+            @test treduce(vcat, chnks; scheduler) == reduce(vcat, chnks)
+            @test isnothing(tforeach(x -> sin.(x), chnks; scheduler))
         end
     end
 end
