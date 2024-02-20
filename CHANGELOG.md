@@ -1,6 +1,11 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.4.3
+-------------
+
+- ![Feature][badge-feature] We now forward (but don't export) the macros `@fetch` and `@fetchfrom` from StableTasks.jl (v0.1.5), which are analogous to same-named macros in Distributed.jl.
+
 Version 0.4.2
 -------------
 
