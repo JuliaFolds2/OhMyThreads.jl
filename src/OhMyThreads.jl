@@ -1,6 +1,6 @@
 module OhMyThreads
 
-using StableTasks: StableTasks, @spawn, @spawnat
+using StableTasks: StableTasks, @spawn, @spawnat, @fetch, @fetchfrom
 using ChunkSplitters: ChunkSplitters, chunks
 using TaskLocalValues: TaskLocalValues, TaskLocalValue
 
