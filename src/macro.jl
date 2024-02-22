@@ -26,21 +26,22 @@ function _tasklocal_assign_to_exprs(ex)
 end
 
 function _unfold_tasklocal_block(ex)
+    tlsinits = Expr[]
     if ex.head == :(=)
-        tlsinit, tlsblock = _tasklocal_assign_to_exprs(ex)
+        tlsi, tlsblock = _tasklocal_assign_to_exprs(ex)
+        push!(tlsinits, tlsi)
     elseif ex.head == :block
         tlsexprs = filter(x -> x isa Expr, ex.args) # skip LineNumberNode
-        tlsinit = quote end
         tlsblock = quote end
         for x in tlsexprs
             tlsi, tlsb = _tasklocal_assign_to_exprs(x)
-            push!(tlsinit.args, tlsi)
+            push!(tlsinits, tlsi)
             push!(tlsblock.args, tlsb)
         end
     else
         throw(ErrorException("Wrong usage of @tasklocal. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
     end
-    return tlsinit, tlsblock
+    return tlsinits, tlsblock
 end
 
 macro threaded(args...)
@@ -76,19 +77,18 @@ macro threaded(args...)
         forbody = forex.args[2]
     end
 
-    tlsinit = nothing
+    tlsinits = nothing
     tlsblock = nothing
     tlsidx = findfirst(forbody.args) do arg
         arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@tasklocal")
     end
     if !isnothing(tlsidx)
-        tlsinit, tlsblock = _unfold_tasklocal_block(forbody.args[tlsidx].args[3])
+        tlsinits, tlsblock = _unfold_tasklocal_block(forbody.args[tlsidx].args[3])
         deleteat!(forbody.args, tlsidx)
     end
 
     q = if isnothing(reducer)
         quote
-            $(tlsinit)
             OhMyThreads.tforeach($(itrng); scheduler = $(scheduler)) do $(itvar)
                 $(tlsblock)
                 $(forbody)
@@ -96,7 +96,6 @@ macro threaded(args...)
         end
     else
         quote
-            $(tlsinit)
             OhMyThreads.tmapreduce(
                 $(reducer), $(itrng); scheduler = $(scheduler)) do $(itvar)
                 $(tlsblock)
@@ -104,5 +103,15 @@ macro threaded(args...)
             end
         end
     end
-    esc(q)
+
+    result = :(let
+    end)
+    push!(result.args[2].args, q)
+    if !isnothing(tlsinits)
+        for x in tlsinits
+            push!(result.args[1].args, x)
+        end
+    end
+
+    esc(result)
 end
