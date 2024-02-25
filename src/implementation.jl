@@ -64,10 +64,10 @@ end
 # DynamicScheduler: ChunkSplitters.Chunk
 function _tmapreduce(f,
         op,
-        Arrs::Tuple{ChunkSplitters.Chunk{Vector{Float64}}}, # we don't support multiple chunks for now
+        Arrs::Tuple{ChunkSplitters.Chunk{T}}, # we don't support multiple chunks for now
         ::Type{OutputType},
         scheduler::DynamicScheduler,
-        mapreduce_kwargs)::OutputType where {OutputType}
+        mapreduce_kwargs)::OutputType where {OutputType, T}
     (; nchunks, split, threadpool) = scheduler
     chunking_enabled(scheduler) && auto_disable_chunking_warning()
     tasks = map(only(Arrs)) do idcs
@@ -111,10 +111,10 @@ end
 # StaticScheduler: ChunkSplitters.Chunk
 function _tmapreduce(f,
         op,
-        Arrs::Tuple{ChunkSplitters.Chunk{Vector{Float64}}}, # we don't support multiple chunks for now
+        Arrs::Tuple{ChunkSplitters.Chunk{T}}, # we don't support multiple chunks for now
         ::Type{OutputType},
         scheduler::StaticScheduler,
-        mapreduce_kwargs) where {OutputType}
+        mapreduce_kwargs) where {OutputType, T}
     chunking_enabled(scheduler) && auto_disable_chunking_warning()
     check_all_have_same_indices(Arrs)
     chnks = only(Arrs)
