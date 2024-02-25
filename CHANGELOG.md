@@ -1,6 +1,11 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.4.4
+-------------
+
+- ![Bugfix][badge-bugfix] Fixed a type specification bug that could occur when passing a `Chunk` into, say, `tmapreduce`.
+
 Version 0.4.3
 -------------
 
