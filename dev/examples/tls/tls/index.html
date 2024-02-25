@@ -62,6 +62,23 @@ function matmulsums_manual(As, Bs)
     mapreduce(fetch, vcat, tasks)
 end
 
+# Or alternatively:
+#
+# using OhMyThreads: DynamicScheduler, tmapreduce
+#
+# function matmulsums_manual2(As, Bs)
+#     N = size(first(As), 1)
+#     tmapreduce(vcat, chunks(As; n = 2 * nthreads()); scheduler=DynamicScheduler(; nchunks=0)) do idcs
+#         local C = Matrix{Float64}(undef, N, N)
+#         local results = Vector{Float64}(undef, length(idcs))
+#         for (i, idx) in enumerate(idcs)
+#             mul!(C, As[idx], Bs[idx])
+#             results[i] = sum(C)
+#         end
+#         results
+#     end
+# end
+
 res_manual = matmulsums_manual(As, Bs)
 res ≈ res_manual</code></pre><pre><code class="nohighlight hljs">true</code></pre><p>The first thing to note is pretty obvious: This is very cumbersome and you probably don&#39;t want to write it. But let&#39;s take a closer look and see what&#39;s happening here. First, we divide the number of matrix pairs into <code>2 * nthreads()</code> chunks. Then, for each of those chunks, we spawn a parallel task that (1) allocates a task-local <code>C</code> matrix (and a <code>results</code> vector) and (2) performs the actual computations using these pre-allocated values. Finally, we <code>fetch</code> the results of the tasks and combine them.</p><h2 id="Benchmark"><a class="docs-heading-anchor" href="#Benchmark">Benchmark</a><a id="Benchmark-1"></a><a class="docs-heading-anchor-permalink" href="#Benchmark" title="Permalink"></a></h2><p>The whole point of parallelization is increasing performance, so let&#39;s benchmark and compare the performance of the variants discussed above.</p><pre><code class="language-julia hljs">using BenchmarkTools
 
@@ -88,6 +105,6 @@ function matmulsums_tls_kwargs(As, Bs; kwargs...)
 end
 
 @btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(DynamicScheduler(; nchunks=nthreads())));
-@btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(StaticScheduler()));</code></pre><pre><code class="nohighlight hljs">  576.448 ms (67 allocations: 40.01 MiB)
+@btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(StaticScheduler()));</code></pre><pre><code class="nohighlight hljs">  576.448 ms (69 allocations: 40.01 MiB)
   574.186 ms (67 allocations: 40.01 MiB)
-</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../../translation/">« Translation Guide</a><a class="docs-footer-nextpage" href="../../../refs/api/">Public API »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="auto">Automatic (OS)</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.2.1 on <span class="colophon-date" title="Wednesday 21 February 2024 07:13">Wednesday 21 February 2024</span>. Using Julia version 1.10.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../../translation/">« Translation Guide</a><a class="docs-footer-nextpage" href="../../../refs/api/">Public API »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="auto">Automatic (OS)</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.2.1 on <span class="colophon-date" title="Sunday 25 February 2024 14:34">Sunday 25 February 2024</span>. Using Julia version 1.10.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
