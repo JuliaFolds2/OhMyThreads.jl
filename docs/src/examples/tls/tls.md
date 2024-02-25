@@ -186,6 +186,23 @@ function matmulsums_manual(As, Bs)
     mapreduce(fetch, vcat, tasks)
 end
 
+# Or alternatively:
+#
+# using OhMyThreads: DynamicScheduler, tmapreduce
+#
+# function matmulsums_manual2(As, Bs)
+#     N = size(first(As), 1)
+#     tmapreduce(vcat, chunks(As; n = 2 * nthreads()); scheduler=DynamicScheduler(; nchunks=0)) do idcs
+#         local C = Matrix{Float64}(undef, N, N)
+#         local results = Vector{Float64}(undef, length(idcs))
+#         for (i, idx) in enumerate(idcs)
+#             mul!(C, As[idx], Bs[idx])
+#             results[i] = sum(C)
+#         end
+#         results
+#     end
+# end
+
 res_manual = matmulsums_manual(As, Bs)
 res ≈ res_manual
 ````
@@ -254,7 +271,7 @@ end
 ````
 
 ````
-  576.448 ms (67 allocations: 40.01 MiB)
+  576.448 ms (69 allocations: 40.01 MiB)
   574.186 ms (67 allocations: 40.01 MiB)
 
 ````

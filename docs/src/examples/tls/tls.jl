@@ -65,6 +65,7 @@ res ≈ res_race
 #
 # A simple solution for the race condition issue above is to move the allocation of `C`
 # into the body of the parallel `tmap`:
+
 function matmulsums_naive(As, Bs)
     N = size(first(As), 1)
     tmap(As, Bs) do A, B
@@ -137,6 +138,23 @@ function matmulsums_manual(As, Bs)
     end
     mapreduce(fetch, vcat, tasks)
 end
+
+## Or alternatively:
+##
+## using OhMyThreads: DynamicScheduler, tmapreduce
+##
+## function matmulsums_manual2(As, Bs)
+##     N = size(first(As), 1)
+##     tmapreduce(vcat, chunks(As; n = 2 * nthreads()); scheduler=DynamicScheduler(; nchunks=0)) do idcs
+##         local C = Matrix{Float64}(undef, N, N)
+##         local results = Vector{Float64}(undef, length(idcs))
+##         for (i, idx) in enumerate(idcs)
+##             mul!(C, As[idx], Bs[idx])
+##             results[i] = sum(C)
+##         end
+##         results
+##     end
+## end
 
 res_manual = matmulsums_manual(As, Bs)
 res ≈ res_manual
