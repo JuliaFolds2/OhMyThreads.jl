@@ -204,3 +204,26 @@ end
 
 @btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(DynamicScheduler(; nchunks=nthreads())));
 @btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(StaticScheduler()));
+
+
+function matmulsums_channel_kwargs(As, Bs; kwargs...)
+    N = size(first(As), 1)
+    chnl = Channel{Matrix{Float64}}(nthreads())
+    for _ in 1:nthreads()
+        put!(chnl, Matrix{Float64}(undef, N, N))
+    end
+    tmap(As, Bs; kwargs...) do A, B
+        C = take!(chnl)
+        mul!(C, A, B)
+        put!(chnl, C)
+        sum(C)
+    end
+end
+
+res_channel = matmulsums_channel_kwargs(As, Bs)
+res ≈ res_channel
+
+@btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(DynamicScheduler(; nchunks=nthreads())));
+@btime matmulsums_channel_kwargs($As, $Bs; scheduler=$(DynamicScheduler(; nchunks=nthreads())));
+@btime matmulsums_tls_kwargs($As, $Bs; scheduler=$(DynamicScheduler(; nchunks=4*nthreads())));
+@btime matmulsums_channel_kwargs($As, $Bs; scheduler=$(DynamicScheduler(; nchunks=4*nthreads())));
