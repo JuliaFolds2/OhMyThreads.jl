@@ -1,6 +1,10 @@
 module OhMyThreads
 
-using StableTasks: @spawn, @spawnat, @fetch, @fetchfrom
+using StableTasks: StableTasks
+for mac ∈ Symbol.(["@spawn", "@spawnat", "@fetch", "@fetchfrom"])
+    @eval const $mac = getproperty(StableTasks, $(QuoteNode(mac)))
+end
+
 using ChunkSplitters: chunks
 using TaskLocalValues: TaskLocalValue
 
