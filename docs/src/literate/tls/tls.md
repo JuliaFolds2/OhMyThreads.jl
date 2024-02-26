@@ -158,7 +158,7 @@ task-local storage `tls` that behaves like this: The first time the storage is a
 (`tls[]`) from a task a task-local value is created according to the anonymous function
 (here, the task-local value will be a matrix) and stored in the storage. Afterwards,
 every other storage query from the same task(!) will simply return the task-local value.
-Hence, this is precisely what we need and will only lead to O(# parallel tasks)
+Hence, this is precisely what we need and will only lead to $O(\textrm{parallel tasks})$
 allocations.
 
 ## The manual (and cumbersome) way

@@ -12,17 +12,23 @@ makedocs(;
     doctest = false,
     pages = [
         "OhMyThreads" => "index.md",
-         "Examples" => [
-             "Parallel Monte Carlo" => "examples/mc/mc.md",
-             "Julia Set" => "examples/juliaset/juliaset.md",
-             "Trapezoidal Integration" => "examples/integration/integration.md",
-         ],
-        "Translation Guide" => "translation.md",
-        "Task-Local Storage" => "examples/tls/tls.md",
+        "Getting Started" => [
+            # "Basics" => "basics.md",
+            "Thread-Safe Storage" => "literate/tls/tls.md",
+            "Translation Guide" => "translation.md"
+        ],
+        "Examples" => [
+            "Parallel Monte Carlo" => "literate/mc/mc.md",
+            "Julia Set" => "literate/juliaset/juliaset.md",
+            "Trapezoidal Integration" => "literate/integration/integration.md"
+        ],
+        # "Explanations" => [
+        #     "Task-Based Multithreading" => "explain/taskbasedmt.md",
+        # ],
         "API" => [
             "Public API" => "refs/api.md",
-            "Internal" => "refs/internal.md",
-        ],
+            "Internal" => "refs/internal.md"
+        ]
     ],
     repo = "https://github.com/JuliaFolds2/OhMyThreads.jl/blob/{commit}{path}#{line}",
     format = Documenter.HTML(repolink = "https://github.com/JuliaFolds2/OhMyThreads.jl";
@@ -33,5 +39,5 @@ if ci
     deploydocs(;
         repo = "github.com/JuliaFolds2/OhMyThreads.jl.git",
         devbranch = "master",
-        push_preview = true,)
+        push_preview = true)
 end
