@@ -1,8 +1,8 @@
 module OhMyThreads
 
-using StableTasks: StableTasks, @spawn, @spawnat, @fetch, @fetchfrom
-using ChunkSplitters: ChunkSplitters, chunks
-using TaskLocalValues: TaskLocalValues, TaskLocalValue
+using StableTasks: @spawn, @spawnat, @fetch, @fetchfrom
+using ChunkSplitters: chunks
+using TaskLocalValues: TaskLocalValue
 
 """
     tmapreduce(f, op, A::AbstractArray...;
@@ -198,7 +198,7 @@ function tcollect end
 include("tools.jl")
 include("schedulers.jl")
 using .Schedulers: Scheduler,
-    DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler, chunking_enabled
+    DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
 include("implementation.jl")
 
 export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect

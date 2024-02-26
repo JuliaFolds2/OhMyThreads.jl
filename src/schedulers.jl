@@ -50,8 +50,6 @@ Base.@kwdef struct DynamicScheduler{C} <: Scheduler
     end
 end
 
-chunking_enabled(::DynamicScheduler{C}) where {C} = C
-
 """
 A static low-overhead scheduler. Divides the given collection into chunks and
 then spawns a task per chunk to perform the requested operation in parallel.
@@ -84,8 +82,6 @@ Base.@kwdef struct StaticScheduler{C} <: Scheduler
     end
 end
 
-chunking_enabled(::StaticScheduler{C}) where {C} = C
-
 """
 A greedy dynamic scheduler. The elements of the collection are first put into a `Channel`
 and then dynamic, non-sticky tasks are spawned to process channel content in parallel.
@@ -112,10 +108,13 @@ Base.@kwdef struct GreedyScheduler <: Scheduler
     end
 end
 
-chunking_enabled(::GreedyScheduler) = false
-
 @deprecate SpawnAllScheduler(args...; kwargs...) DynamicScheduler(args...;
     nchunks = 0,
     kwargs...)
+
+chunking_enabled(s::Scheduler) = chunking_enabled(typeof(s))
+chunking_enabled(::Type{DynamicScheduler{C}}) where {C} = C
+chunking_enabled(::Type{StaticScheduler{C}}) where {C} = C
+chunking_enabled(::Type{GreedyScheduler}) = false
 
 end # module

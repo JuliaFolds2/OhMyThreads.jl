@@ -2,14 +2,14 @@ module Implementation
 
 import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
 
-using OhMyThreads: StableTasks, chunks, @spawn, @spawnat
+using OhMyThreads: chunks, @spawn, @spawnat
 using OhMyThreads.Tools: nthtid
-using OhMyThreads: Scheduler,
-    chunking_enabled, DynamicScheduler, StaticScheduler, GreedyScheduler
+using OhMyThreads: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
+using OhMyThreads.Schedulers: chunking_enabled
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 
-using BangBang: BangBang, append!!
+using BangBang: append!!
 
 using ChunkSplitters: ChunkSplitters
 
