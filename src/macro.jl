@@ -19,7 +19,7 @@ function _tasklocal_assign_to_exprs(ex)
     tls_sym = left_ex.args[1]
     tls_type = left_ex.args[2]
     tls_def = ex.args[2]
-    tls_storage = gensym()
+    @gensym tls_storage
     tlsinit = :($(tls_storage) = OhMyThreads.TaskLocalValue{$tls_type}(() -> $(tls_def)))
     tlsblock = :($(tls_sym) = $(tls_storage)[])
     return tlsinit, tlsblock
