@@ -5,8 +5,11 @@ for mac ∈ Symbol.(["@spawn", "@spawnat", "@fetch", "@fetchfrom"])
     @eval const $mac = getproperty(StableTasks, $(QuoteNode(mac)))
 end
 
-using ChunkSplitters: chunks
-using TaskLocalValues: TaskLocalValue
+using ChunkSplitters: ChunkSplitters
+const chunks = ChunkSplitters.chunks
+
+using TaskLocalValues: TaskLocalValues
+const TaskLocalValue = TaskLocalValues.TaskLocalValue
 
 """
     tmapreduce(f, op, A::AbstractArray...;
