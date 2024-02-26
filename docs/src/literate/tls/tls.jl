@@ -236,17 +236,17 @@ res ≈ res_array
 #
 # TODO...
 # Issues:
-# * `threadid()` might not be constant per task due to task migration
+# * `threadid()` might not be constant per task due to task migration (can be "solved" by static scheduling)
 # * `threadid()` (of default threads) doesn't start at 1 when using interactive threads → out of bounds access
 #
 # ## Per-thread preallocation: the good way (`Channel`)
 #
 # TODO...
 #
-function matmulsums_perthread_channel(As, Bs; kwargs...)
+function matmulsums_perthread_channel(As, Bs; nbuffers = nthreads(), kwargs...)
     N = size(first(As), 1)
-    chnl = Channel{Matrix{Float64}}(nthreads())
-    foreach(1:nthreads()) do _
+    chnl = Channel{Matrix{Float64}}(nbuffers)
+    foreach(1:nbuffers) do _
         put!(chnl, Matrix{Float64}(undef, N, N))
     end
     tmap(As, Bs; kwargs...) do A, B
@@ -283,6 +283,25 @@ end
 res_channel2 = matmulsums_perthread_channel2(As, Bs)
 sort(res) ≈ sort(res_channel2) # input → task assignment (and thus output order) is non-deterministic
 
+function matmulsums_perthread_channel2_chunks(As, Bs; ntasks = nthreads(), nchunks)
+    N = size(first(As), 1)
+    chnl = Channel() do chnl
+        for idcs in chunks(1:N; n = nchunks)
+            put!(chnl, idcs)
+        end
+    end
+    tmapreduce(vcat, 1:ntasks; scheduler = DynamicScheduler(; nchunks = 0)) do _
+        local C = Matrix{Float64}(undef, N, N)
+        map(Iterators.flatten(chnl)) do i
+            mul!(C, As[i], Bs[i])
+            sum(C)
+        end
+    end
+end
+
+res_channel2_chunks = matmulsums_perthread_channel2_chunks(As, Bs; nchunks = 4 * nthreads())
+sort(res) ≈ sort(res_channel2_chunks) # input → task assignment (and thus output order) is non-deterministic
+
 #
 # TODO...
 #
@@ -297,3 +316,16 @@ sort(res) ≈ sort(res_channel2) # input → task assignment (and thus output or
 @btime matmulsums_perthread_channel(
     $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 4 * nthreads())));
 @btime matmulsums_perthread_channel2($As, $Bs; ntasks = $(4 * nthreads()));
+@btime matmulsums_perthread_channel2_chunks(
+    $As, $Bs; ntasks = $(4 * nthreads()), nchunks = $(nthreads()));
+@btime matmulsums_perthread_channel2_chunks(
+    $As, $Bs; ntasks = $(4 * nthreads()), nchunks = $(4 * nthreads()));
+@btime matmulsums_perthread_channel2_chunks(
+    $As, $Bs; ntasks = $(4 * nthreads()), nchunks = $(8 * nthreads()));
+
+# varying nbuffers:
+# @btime matmulsums_perthread_channel(
+#     $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 4 * nthreads())));
+# @btime matmulsums_perthread_channel(
+#     $As, $Bs; nbuffers = 4 * nthreads(),
+#     scheduler = $(DynamicScheduler(; nchunks = 4 * nthreads())));
