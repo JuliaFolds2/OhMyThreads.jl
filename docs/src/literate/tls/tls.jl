@@ -21,6 +21,7 @@ function matmulsums(As, Bs)
     N = size(first(As), 1)
     C = Matrix{Float64}(undef, N, N)
     map(As, Bs) do A, B
+        # mul!(C, A, B)
         mul!(C, A, B)
         sum(C)
     end
@@ -101,28 +102,15 @@ res ≈ res_naive
 using OhMyThreads: chunks, @spawn
 using Base.Threads: nthreads
 
-# function matmulsums_manual(As, Bs)
-#     N = size(first(As), 1)
-#     tasks = map(chunks(As; n = 2 * nthreads())) do idcs
-#         @spawn begin
-#             local C = Matrix{Float64}(undef, N, N)
-#             local results = Vector{Float64}(undef, length(idcs))
-#             for (i, idx) in enumerate(idcs)
-#                 mul!(C, As[idx], Bs[idx])
-#                 results[i] = sum(C)
-#             end
-#             results
-#         end
-#     end
-#     mapreduce(fetch, vcat, tasks)
-# end
 function matmulsums_manual(As, Bs)
     N = size(first(As), 1)
     tasks = map(chunks(As; n = 2 * nthreads())) do idcs
         @spawn begin
             local C = Matrix{Float64}(undef, N, N)
             map(idcs) do i
-                mul!(C, As[i], Bs[i])
+                A = As[i]
+                B = Bs[i]
+                mul!(C, A, B)
                 sum(C)
             end
         end
@@ -133,7 +121,7 @@ end
 res_manual = matmulsums_manual(As, Bs)
 res ≈ res_manual
 
-# The first thing to note is pretty obvious: This is rather cumbersome and you might not
+# We note that this is rather cumbersome and you might not
 # want to write it (repeatedly). But let's take a closer look and see what's happening here.
 # First, we divide the number of matrix pairs into `2 * nthreads()` chunks. Then, for each of
 # those chunks, we spawn a parallel task that (1) allocates a task-local `C` matrix (and a
@@ -151,10 +139,10 @@ res ≈ res_manual
 # This allows us to express the idea from above in few lines of code:
 using OhMyThreads: TaskLocalValue
 
-function matmulsums_tlv(As, Bs)
+function matmulsums_tlv(As, Bs; kwargs...)
     N = size(first(As), 1)
     tlv = TaskLocalValue{Matrix{Float64}}(() -> Matrix{Float64}(undef, N, N))
-    tmap(As, Bs) do A, B
+    tmap(As, Bs; kwargs...) do A, B
         C = tlv[]
         mul!(C, A, B)
         sum(C)
@@ -181,67 +169,111 @@ using BenchmarkTools
 
 @show nthreads()
 
+using ThreadPinning #hide
+pinthreads(:cores) #hide
 @btime matmulsums($As, $Bs);
 @btime matmulsums_naive($As, $Bs);
 @btime matmulsums_manual($As, $Bs);
 @btime matmulsums_tlv($As, $Bs);
 
 # As we can see, `matmulsums_tlv` (the version using `TaskLocalValue`) isn't only convenient
-# but also efficient: It allocates much less memory than `matmulsums_naive`
-# - the difference scales with the input, i.e. `length(As)` -
-# and essentially the same as the manual implementation.
+# but also efficient: It allocates much less memory than `matmulsums_naive` - the difference
+# scales with the input, i.e. `length(As)` - and essentially the same as the manual
+# implementation.
 
 # ### Tuning the scheduling
 #
-# Since the workload is uniform, we don't need load balancing. We can thus try to use
-# `DynamicScheduler(; nchunks=nthreads())` and `StaticScheduler()` to improve the performance
-# and/or reduce the number of allocations.
+# Since the workload is uniform, we don't need load balancing. We can thus try to improve
+# the performance and reduce the number of allocations by choosing the number of chunks
+# (i.e. tasks) to match the number of Julia threads. Concretely, this
+# amounts to passing in `DynamicScheduler(; nchunks=nthreads())`. If we further want to
+# opt-out of dynamic scheduling alltogether, we can choose the `StaticScheduler()`.
 
 using OhMyThreads: DynamicScheduler, StaticScheduler
-
-function matmulsums_tlv(As, Bs; kwargs...)
-    N = size(first(As), 1)
-    tlv = TaskLocalValue{Matrix{Float64}}(() -> Matrix{Float64}(undef, N, N))
-    tmap(As, Bs; kwargs...) do A, B
-        C = tlv[]
-        mul!(C, A, B)
-        sum(C)
-    end
-end
 
 @btime matmulsums_tlv(
     $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
 @btime matmulsums_tlv($As, $Bs; scheduler = $(StaticScheduler()));
 
 #
-# ## Per-thread preallocation: the bad way
+# ## Per-thread allocation: the bad way
 #
-# TODO....
+# The task-local solution above has one potential caveat: If we spawn many parallel tasks
+# (e.g. for load-balancing reasons) we need just as many task-local buffers. This can
+# clearly be suboptimal because only `nthreads()` tasks can run simultaneously. Hence, one
+# buffer per thread should actually suffice.
+# Of course, this raises the question of how to organize a pool of "per-thread" buffers
+# such that each running task always has exclusive (temporary) access to a buffer (we need
+# to make sure to avoid races).
+#
+# A naive approach to implementing this idea is to pre-allocate an array of buffers
+# and then to use the `threadid()` to select a buffer for a running task.
 #
 using Base.Threads: threadid
 
-function matmulsums_perthread_array(As, Bs; kwargs...)
+function matmulsums_perthread_naive(As, Bs)
     N = size(first(As), 1)
     Cs = [Matrix{Float64}(undef, N, N) for _ in 1:nthreads()]
-    tmap(As, Bs; kwargs...) do A, B
+    tmap(As, Bs) do A, B
         C = Cs[threadid()]
         mul!(C, A, B)
         sum(C)
     end
 end
 
-res_array = matmulsums_perthread_array(As, Bs)
-res ≈ res_array
+res_pt_naive = matmulsums_perthread_naive(As, Bs)
+res ≈ res_pt_naive
 
+# Unfortunately, this approach is [**generally wrong**](https://julialang.org/blog/2023/07/PSA-dont-use-threadid/). The first issue is that `threadid()`
+# doesn't necessarily start at 1 (and thus might return a value `> nthreads()`), in which
+# case `Cs[threadid()]` would be an out-of-bounds access attempt. This might be surprising
+# but is a simple consequence of the ordering of different kinds of Julia threads: If Julia
+# is started with a non-zero number of interactive threads, e.g. `--threads 5,2`, the
+# interactive threads come first (look at `Threads.threadpool.(1:Threads.maxthreadid())`).
 #
-# TODO...
-# Issues:
-# * `threadid()` might not be constant per task due to task migration (can be "solved" by static scheduling)
-# * `threadid()` (of default threads) doesn't start at 1 when using interactive threads → out of bounds access
+# But even if we account for this offset there is another, more fundamental problem, namely
+# **task-migration**. By default, all spawned parallel tasks are "non-sticky" and can
+# dynamically migrate between different Julia threads (loosely speaking, at any point in time).
+# This means nothing other than that **`threadid()` is not necessarily constant for a task**!
+# For example, imagine that task A starts on thread 4, loads the
+# buffer `Cs[4]`, but then gets paused, migrated, and continues executation on, say, thread 5.
+# Afterwards, while task A is performing `mul!(Cs[4], ...)`, a different task B might start on
+# (the now available) thread 4 and also read and use `Cs[4]`. This would lead to a race
+# condition because both tasks are mutating the same buffer.
+# (Note that, in practice, this - most likely 😉 - doesn't happen for the very simple example
+# above, but you can't rely on it!)
 #
-# ## Per-thread preallocation: the good way (`Channel`)
+# ## Per-thread allocation: the kind of ok way
 #
-# TODO...
+# A simple solution for the task-migration issue is to opt-out of dynamic scheduling with
+# the `StaticScheduler()`. This scheduler statically assigns tasks to threads
+# upfront without any dynamic rescheduling (the tasks are sticky and won't migrate).
+#
+function matmulsums_perthread_static(As, Bs)
+    N = size(first(As), 1)
+    Cs = [Matrix{Float64}(undef, N, N) for _ in 1:nthreads()]
+    tmap(As, Bs; scheduler = StaticScheduler()) do A, B
+        C = Cs[threadid()]
+        mul!(C, A, B)
+        sum(C)
+    end
+end
+
+res_pt_static = matmulsums_perthread_static(As, Bs)
+res ≈ res_pt_static
+
+# However, this approach doesn't solve the offset issue and, even worse, makes the parallel code
+# non-composable: If we call other multithreaded functions within the `tmap` or if
+# our parallel `matmulsums_perthread_static` itself gets called from another parallel region
+# we will likely oversubscribe the Julia threads and get subpar performance. Given these
+# caveats, we should therefore generally take a different approach.
+#
+# ## Per-thread allocation: the good way (`Channel`)
+#
+# Instead of storing the pre-allocated buffers in an array, we can put them into a `Channel`
+# which internally ensures that parallel access is safe. In this scenario, we simply `take!`
+# a buffer from the channel whenever we need it and `put!` it back after our computation is
+# done.
 #
 function matmulsums_perthread_channel(As, Bs; nbuffers = nthreads(), kwargs...)
     N = size(first(As), 1)
@@ -257,75 +289,57 @@ function matmulsums_perthread_channel(As, Bs; nbuffers = nthreads(), kwargs...)
     end
 end
 
-res_channel = matmulsums_perthread_channel(As, Bs)
-res ≈ res_channel
+res_pt_channel = matmulsums_perthread_channel(As, Bs)
+res ≈ res_pt_channel
 
 #
-# TODO...
+# ## Per-thread allocation: benchmark
 #
+# Let's benchmark the variants above and compare them to the task-local implementation.
+# We want to look at both `nchunks = nthreads()` and `nchunks = 4*nthreads()`, the latter
+# of which would give us dynamic load balancing (if we had a non-uniform workload).
+#
+@btime matmulsums_tlv(
+    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
+@btime matmulsums_perthread_static($As, $Bs);
+@btime matmulsums_perthread_channel(
+    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
 
-function matmulsums_perthread_channel2(As, Bs; ntasks = nthreads())
+@btime matmulsums_tlv(
+    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 4 * nthreads())));
+@btime matmulsums_perthread_channel(
+    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 4 * nthreads())));
+
+#
+# ## Per-thread allocation: another good way (`Channel`)
+#
+# Above, we chose to put a limited number of buffers (e.g. `nthreads()`) into the channel
+# and then spawn many tasks (one per input element). Sometimes it can make sense to flip
+# things around and put the (many) input elements into a channel and only spawn
+# a limited number of tasks (e.g. `nthreads()`) with a task-local buffer.
+#
+using OhMyThreads: tmapreduce
+function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
     N = size(first(As), 1)
     chnl = Channel() do chnl
         for i in 1:N
             put!(chnl, i)
         end
     end
-    tmapreduce(vcat, 1:ntasks; scheduler = DynamicScheduler(; nchunks = 0)) do _
+    tmapreduce(vcat, 1:ntasks; scheduler = DynamicScheduler(; nchunks = 0)) do _ # we turn chunking off
         local C = Matrix{Float64}(undef, N, N)
         map(chnl) do i
-            mul!(C, As[i], Bs[i])
+            A = As[i]
+            B = Bs[i]
+            mul!(C, A, B)
             sum(C)
         end
     end
 end
 
-res_channel2 = matmulsums_perthread_channel2(As, Bs)
-sort(res) ≈ sort(res_channel2) # input → task assignment (and thus output order) is non-deterministic
+# Note that one caveat of this approach is that the input → task assignment, and thus the
+# order of the output, is non-deterministic. For this reason, we sort the output to check
+# for correctness
 
-function matmulsums_perthread_channel2_chunks(As, Bs; ntasks = nthreads(), nchunks)
-    N = size(first(As), 1)
-    chnl = Channel() do chnl
-        for idcs in chunks(1:N; n = nchunks)
-            put!(chnl, idcs)
-        end
-    end
-    tmapreduce(vcat, 1:ntasks; scheduler = DynamicScheduler(; nchunks = 0)) do _
-        local C = Matrix{Float64}(undef, N, N)
-        map(Iterators.flatten(chnl)) do i
-            mul!(C, As[i], Bs[i])
-            sum(C)
-        end
-    end
-end
-
-res_channel2_chunks = matmulsums_perthread_channel2_chunks(As, Bs; nchunks = 4 * nthreads())
-sort(res) ≈ sort(res_channel2_chunks) # input → task assignment (and thus output order) is non-deterministic
-
-#
-# TODO...
-#
-
-@btime matmulsums_tlv(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
-@btime matmulsums_perthread_channel(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
-@btime matmulsums_perthread_channel2($As, $Bs; ntasks = $(nthreads()));
-@btime matmulsums_tlv(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 4 * nthreads())));
-@btime matmulsums_perthread_channel(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 4 * nthreads())));
-@btime matmulsums_perthread_channel2($As, $Bs; ntasks = $(4 * nthreads()));
-@btime matmulsums_perthread_channel2_chunks(
-    $As, $Bs; ntasks = $(4 * nthreads()), nchunks = $(nthreads()));
-@btime matmulsums_perthread_channel2_chunks(
-    $As, $Bs; ntasks = $(4 * nthreads()), nchunks = $(4 * nthreads()));
-@btime matmulsums_perthread_channel2_chunks(
-    $As, $Bs; ntasks = $(4 * nthreads()), nchunks = $(8 * nthreads()));
-
-# varying nbuffers:
-# @btime matmulsums_perthread_channel(
-#     $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 4 * nthreads())));
-# @btime matmulsums_perthread_channel(
-#     $As, $Bs; nbuffers = 4 * nthreads(),
-#     scheduler = $(DynamicScheduler(; nchunks = 4 * nthreads())));
+res_channel_flipped = matmulsums_perthread_channel_flipped(As, Bs)
+sort(res) ≈ sort(res_channel_flipped)
