@@ -15,7 +15,7 @@ manner.
 
 ## Sequential
 
-Let's say that we are given two arrays of (square) matrices, `As` and `Bs`, and let's
+Let's say that we are given two arrays of matrices, `As` and `Bs`, and let's
 further assume that our goal is to compute the total sum of all pairwise matrix products.
 We can readily implement a (sequential) function that performs the necessary computations.
 
@@ -46,8 +46,8 @@ temporary buffer, the output matrix `C`. This is to avoid the temporary allocati
 For later comparison, we generate some random input data and store the result.
 
 ````julia
-As = [rand(512, 512) for _ in 1:512]
-Bs = [rand(512, 512) for _ in 1:512]
+As = [rand(2056, 32) for _ in 1:192]
+Bs = [rand(32, 2056) for _ in 1:192]
 
 res = matmulsums(As, Bs);
 ````
@@ -147,7 +147,10 @@ function matmulsums_manual(As, Bs)
         @spawn begin
             local C = Matrix{Float64}(undef, N, N)
             map(idcs) do i
-                mul!(C, As[i], Bs[i])
+                A = As[i]
+                B = Bs[i]
+
+                mul!(C, A, B)
                 sum(C)
             end
         end
@@ -226,18 +229,16 @@ using BenchmarkTools
 ````
 
 ````
-nthreads() = 5
-  3.470 s (3 allocations: 2.00 MiB)
-  596.087 ms (1109 allocations: 1.00 GiB)
-  584.142 ms (100 allocations: 20.03 MiB)
-  598.424 ms (126 allocations: 20.02 MiB)
+nthreads() = 10
+  1.462 s (3 allocations: 32.25 MiB)
+  952.502 ms (539 allocations: 6.05 GiB)
+  744.719 ms (200 allocations: 645.04 MiB)
+  743.187 ms (236 allocations: 645.04 MiB)
 
 ````
 
 As we can see, `matmulsums_tlv` (the version using `TaskLocalValue`) isn't only convenient
-but also efficient: It allocates much less memory than `matmulsums_naive`
-- the difference scales with the input, i.e. `length(As)` -
-and essentially the same as the manual implementation.
+but also efficient: It allocates much less memory than `matmulsums_naive` and is about on par with the manual implementation.
 
 ### Tuning the scheduling
 
@@ -256,8 +257,8 @@ using OhMyThreads: DynamicScheduler, StaticScheduler
 ````
 
 ````
-  590.600 ms (70 allocations: 10.02 MiB)
-  595.922 ms (68 allocations: 10.02 MiB)
+  886.151 ms (124 allocations: 322.52 MiB)
+  879.872 ms (122 allocations: 322.52 MiB)
 
 ````
 
@@ -314,9 +315,7 @@ condition because both tasks are mutating the same buffer.
 (Note that, in practice, this - most likely 😉 - doesn't happen for the very simple example
 above, but you can't rely on it!)
 
-````julia
-# Per-thread allocation: the kind of ok way
-````
+## Per-thread allocation: the kind of ok way
 
 A simple solution for the task-migration issue is to opt-out of dynamic scheduling with
 the `StaticScheduler()`. This scheduler statically assigns tasks to threads
@@ -364,8 +363,9 @@ function matmulsums_perthread_channel(As, Bs; nbuffers = nthreads(), kwargs...)
     tmap(As, Bs; kwargs...) do A, B
         C = take!(chnl)
         mul!(C, A, B)
+        result = sum(C)
         put!(chnl, C)
-        sum(C)
+        result
     end
 end
 
@@ -380,8 +380,9 @@ true
 ## Per-thread allocation: benchmark
 
 Let's benchmark the variants above and compare them to the task-local implementation.
-We want to look at both `nchunks = nthreads()` and `nchunks = 4*nthreads()`, the latter
-of which would give us dynamic load balancing (if we had a non-uniform workload).
+We want to look at both `nchunks = nthreads()` and `nchunks = 10 * nthreads()`, the latter
+of which would give us dynamic load balancing. (Note, though, that our
+exemplatory workload is uniform and thus won't benefit from load balancing.)
 
 ````julia
 @btime matmulsums_tlv(
@@ -391,21 +392,21 @@ of which would give us dynamic load balancing (if we had a non-uniform workload)
     $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
 
 @btime matmulsums_tlv(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 4 * nthreads())));
+    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));
 @btime matmulsums_perthread_channel(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 4 * nthreads())));
+    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));
 ````
 
 ````
-  584.191 ms (70 allocations: 10.02 MiB)
-  592.087 ms (61 allocations: 10.02 MiB)
-  586.246 ms (67 allocations: 10.02 MiB)
-  591.710 ms (236 allocations: 40.04 MiB)
-  582.046 ms (173 allocations: 10.03 MiB)
+  874.458 ms (124 allocations: 322.52 MiB)
+  879.347 ms (105 allocations: 322.52 MiB)
+  903.603 ms (112 allocations: 322.52 MiB)
+  901.272 ms (1116 allocations: 3.15 GiB)
+  795.640 ms (744 allocations: 322.58 MiB)
 
 ````
 
-## Per-thread allocation: the another good way (`Channel`)
+## Per-thread allocation: another good way (`Channel`)
 
 Above, we chose to put a limited number of buffers (e.g. `nthreads()`) into the channel
 and then spawn many tasks (one per input element). Sometimes it can make sense to flip
@@ -417,14 +418,16 @@ using OhMyThreads: tmapreduce
 function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
     N = size(first(As), 1)
     chnl = Channel() do chnl
-        for i in 1:N
+        for i in 1:length(As)
             put!(chnl, i)
         end
     end
     tmapreduce(vcat, 1:ntasks; scheduler = DynamicScheduler(; nchunks = 0)) do _ # we turn chunking off
         local C = Matrix{Float64}(undef, N, N)
         map(chnl) do i
-            mul!(C, As[i], Bs[i])
+            A = As[i]
+            B = Bs[i]
+            mul!(C, A, B)
             sum(C)
         end
     end
@@ -437,7 +440,7 @@ matmulsums_perthread_channel_flipped (generic function with 1 method)
 
 Note that one caveat of this approach is that the input → task assignment, and thus the
 order of the output, is non-deterministic. For this reason, we sort the output to check
-for correctness
+for correctness.
 
 ````julia
 res_channel_flipped = matmulsums_perthread_channel_flipped(As, Bs)
@@ -446,6 +449,19 @@ sort(res) ≈ sort(res_channel_flipped)
 
 ````
 true
+````
+
+Quick benchmark:
+
+````julia
+@btime matmulsums_perthread_channel_flipped($As, $Bs);
+@btime matmulsums_perthread_channel_flipped($As, $Bs; ntasks = 10 * nthreads());
+````
+
+````
+  842.831 ms (726 allocations: 322.54 MiB)
+  878.080 ms (1758 allocations: 3.15 GiB)
+
 ````
 
 ---

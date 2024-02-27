@@ -11,17 +11,18 @@
 #
 # ## Sequential
 #
-# Let's say that we are given two arrays of (square) matrices, `As` and `Bs`, and let's
+# Let's say that we are given two arrays of matrices, `As` and `Bs`, and let's
 # further assume that our goal is to compute the total sum of all pairwise matrix products.
 # We can readily implement a (sequential) function that performs the necessary computations.
 using LinearAlgebra: mul!, BLAS
 BLAS.set_num_threads(1) #  for simplicity, we turn off OpenBLAS multithreading
+using ThreadPinning #hide
+pinthreads(:cores) #hide
 
 function matmulsums(As, Bs)
     N = size(first(As), 1)
     C = Matrix{Float64}(undef, N, N)
     map(As, Bs) do A, B
-        # mul!(C, A, B)
         mul!(C, A, B)
         sum(C)
     end
@@ -35,8 +36,8 @@ end
 #
 # For later comparison, we generate some random input data and store the result.
 
-As = [rand(512, 512) for _ in 1:512]
-Bs = [rand(512, 512) for _ in 1:512]
+As = [rand(2056, 32) for _ in 1:192]
+Bs = [rand(32, 2056) for _ in 1:192]
 
 res = matmulsums(As, Bs);
 
@@ -110,6 +111,7 @@ function matmulsums_manual(As, Bs)
             map(idcs) do i
                 A = As[i]
                 B = Bs[i]
+
                 mul!(C, A, B)
                 sum(C)
             end
@@ -169,17 +171,14 @@ using BenchmarkTools
 
 @show nthreads()
 
-using ThreadPinning #hide
-pinthreads(:cores) #hide
 @btime matmulsums($As, $Bs);
 @btime matmulsums_naive($As, $Bs);
 @btime matmulsums_manual($As, $Bs);
 @btime matmulsums_tlv($As, $Bs);
 
 # As we can see, `matmulsums_tlv` (the version using `TaskLocalValue`) isn't only convenient
-# but also efficient: It allocates much less memory than `matmulsums_naive` - the difference
-# scales with the input, i.e. `length(As)` - and essentially the same as the manual
-# implementation.
+# but also efficient: It allocates much less memory than `matmulsums_naive` and is about on
+# par with the manual implementation.
 
 # ### Tuning the scheduling
 #
@@ -284,8 +283,9 @@ function matmulsums_perthread_channel(As, Bs; nbuffers = nthreads(), kwargs...)
     tmap(As, Bs; kwargs...) do A, B
         C = take!(chnl)
         mul!(C, A, B)
+        result = sum(C)
         put!(chnl, C)
-        sum(C)
+        result
     end
 end
 
@@ -296,8 +296,9 @@ res ≈ res_pt_channel
 # ## Per-thread allocation: benchmark
 #
 # Let's benchmark the variants above and compare them to the task-local implementation.
-# We want to look at both `nchunks = nthreads()` and `nchunks = 4*nthreads()`, the latter
-# of which would give us dynamic load balancing (if we had a non-uniform workload).
+# We want to look at both `nchunks = nthreads()` and `nchunks = 10 * nthreads()`, the latter
+# of which would give us dynamic load balancing. (Note, though, that our
+# exemplatory workload is uniform and thus won't benefit from load balancing.)
 #
 @btime matmulsums_tlv(
     $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
@@ -306,9 +307,9 @@ res ≈ res_pt_channel
     $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
 
 @btime matmulsums_tlv(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 4 * nthreads())));
+    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));
 @btime matmulsums_perthread_channel(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 4 * nthreads())));
+    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));
 
 #
 # ## Per-thread allocation: another good way (`Channel`)
@@ -322,7 +323,7 @@ using OhMyThreads: tmapreduce
 function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
     N = size(first(As), 1)
     chnl = Channel() do chnl
-        for i in 1:N
+        for i in 1:length(As)
             put!(chnl, i)
         end
     end
@@ -339,7 +340,12 @@ end
 
 # Note that one caveat of this approach is that the input → task assignment, and thus the
 # order of the output, is non-deterministic. For this reason, we sort the output to check
-# for correctness
+# for correctness.
 
 res_channel_flipped = matmulsums_perthread_channel_flipped(As, Bs)
 sort(res) ≈ sort(res_channel_flipped)
+
+# Quick benchmark:
+
+@btime matmulsums_perthread_channel_flipped($As, $Bs);
+@btime matmulsums_perthread_channel_flipped($As, $Bs; ntasks = 10 * nthreads());

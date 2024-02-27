@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 #=
-julia --project -t 5 $0 $@
+julia --project -t 10 $0 $@
 exit
 # =#
 
