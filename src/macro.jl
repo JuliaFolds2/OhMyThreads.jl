@@ -5,8 +5,8 @@ end
 
 macro tasks(args...)
     forex = last(args)
-    if forex.head != :for
-        throw(ErrorException("Expected for loop after `@tasks`."))
+    if forex.head != :for || length(args) > 1
+        throw(ErrorException("Expected a for loop after `@tasks`."))
     else
         it = forex.args[1]
         itvar = it.args[1]
@@ -16,17 +16,17 @@ macro tasks(args...)
 
     settings = Settings()
 
-    kwexs = args[begin:(end - 1)]
-    for ex in kwexs
-        name, val = _kwarg_to_tuple(ex)
-        if name == :scheduler
-            settings.scheduler = val isa Symbol ? _sym2scheduler(val) : val
-        elseif name == :reducer
-            settings.reducer = val
-        else
-            throw(ArgumentError("Unknown keyword argument: $name"))
-        end
-    end
+    # kwexs = args[begin:(end - 1)]
+    # for ex in kwexs
+    #     name, val = _kwarg_to_tuple(ex)
+    #     if name == :scheduler
+    #         settings.scheduler = val isa Symbol ? _sym2scheduler(val) : val
+    #     elseif name == :reducer
+    #         settings.reducer = val
+    #     else
+    #         throw(ArgumentError("Unknown keyword argument: $name"))
+    #     end
+    # end
 
     inits_before, init_inner = _maybe_handle_init_block!(forbody.args)
     _maybe_handle_set_block!(settings, forbody.args)
