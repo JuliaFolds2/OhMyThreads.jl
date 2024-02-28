@@ -20,7 +20,7 @@ macro tasks(args...)
     for ex in kwexs
         name, val = _kwarg_to_tuple(ex)
         if name == :scheduler
-            settings.scheduler = _handle_kwarg_scheduler(val)
+            settings.scheduler = val isa Symbol ? _sym2scheduler(val) : val
         elseif name == :reducer
             settings.reducer = val
         else
@@ -31,17 +31,21 @@ macro tasks(args...)
     inits_before, init_inner = _maybe_handle_init_block!(forbody.args)
     _maybe_handle_set_block!(settings, forbody.args)
 
-    @show settings
+    forbody = esc(forbody)
+    itrng = esc(itrng)
+    itvar = esc(itvar)
+
+    # @show settings
     q = if isnothing(settings.reducer)
         quote
-            OhMyThreads.tforeach($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
+            tforeach($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
                 $(init_inner)
                 $(forbody)
             end
         end
     else
         quote
-            OhMyThreads.tmapreduce(
+            tmapreduce(
                 $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) do $(itvar)
                 $(init_inner)
                 $(forbody)
@@ -60,7 +64,7 @@ macro tasks(args...)
         end
     end
 
-    esc(result)
+    result
 end
 
 function _kwarg_to_tuple(ex)
@@ -73,15 +77,15 @@ function _kwarg_to_tuple(ex)
     (name, val)
 end
 
-function _handle_kwarg_scheduler(val)
-    if val == :dynamic
+function _sym2scheduler(s)
+    if s == :dynamic
         :(DynamicScheduler())
-    elseif val == :static
+    elseif s == :static
         :(StaticScheduler())
-    elseif val == :greedy
+    elseif s == :greedy
         :(GreedyScheduler())
     else
-        val
+        throw(ArgumentError("Unknown scheduler symbol."))
     end
 end
 
@@ -125,9 +129,9 @@ function _init_assign_to_exprs(ex)
     if left_ex isa Symbol || left_ex.head != :(::)
         throw(ErrorException("Wrong usage of @init. Expected typed assignment, e.g. `A::Matrix{Float} = rand(2,2)`."))
     end
-    tls_sym = left_ex.args[1]
-    tls_type = left_ex.args[2]
-    tls_def = ex.args[2]
+    tls_sym = esc(left_ex.args[1])
+    tls_type = esc(left_ex.args[2])
+    tls_def = esc(ex.args[2])
     @gensym tls_storage
     init_before = :($(tls_storage) = OhMyThreads.TaskLocalValue{$tls_type}(() -> $(tls_def)))
     init_inner = :($(tls_sym) = $(tls_storage)[])
@@ -162,5 +166,10 @@ function _handle_set_single_assign!(settings, ex)
         throw(ErrorException("Unknown setting \"$(sym)\". Must be ∈ $(fieldnames(Settings))."))
     end
     def = ex.args[2]
+    def = if def isa QuoteNode
+        _sym2scheduler(def.value)
+    else
+        esc(def)
+    end
     setfield!(settings, sym, def)
 end
