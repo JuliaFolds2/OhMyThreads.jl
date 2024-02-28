@@ -122,11 +122,30 @@ end
     end) == 55
 
     # TaskLocalValue
-    @test @tasks(for i in 1:10
+    ntd = 2*Threads.nthreads()
+    ptrs = Vector{Ptr{Nothing}}(undef, ntd)
+    tids = Vector{UInt64}(undef, ntd)
+    tid() = OhMyThreads.Tools.taskid()
+    @test @tasks(for i in 1:ntd
         @init C::Vector{Float64} = rand(3)
-        sum(C)
+        @set scheduler=:static
+        ptrs[i] = pointer_from_objref(C)
+        tids[i] = tid()
     end) |> isnothing
-    # TaskLocalValue + @set reducer
+    # check that different iterations of a task
+    # have access to the same C (same pointer)
+    for t in unique(tids)
+        @test allequal(ptrs[findall(==(t), tids)])
+    end
+    # TaskLocalValue (another fundamental check)
+    @test @tasks(for i in 1:ntd
+        @init x::Ref{Int64} = Ref(0)
+        @set reducer = (+)
+        @set scheduler = :static
+        x[] += 1
+        x[]
+    end) == 1.5 * ntd # if a new x would be allocated per iteration, we'd get ntd here.
+    # TaskLocalValue (begin ... end block)
     @test @tasks(for i in 1:10
         @init begin
             C::Matrix{Int64} = fill(4, 3, 3)
