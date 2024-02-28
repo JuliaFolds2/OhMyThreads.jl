@@ -67,15 +67,15 @@ macro tasks(args...)
     result
 end
 
-function _kwarg_to_tuple(ex)
-    ex.head != :(=) &&
-        throw(ArgumentError("Invalid keyword argument. Doesn't contain '='."))
-    name, val = ex.args
-    !(name isa Symbol) &&
-        throw(ArgumentError("First part of keyword argument isn't a symbol."))
-    val isa QuoteNode && (val = val.value)
-    (name, val)
-end
+# function _kwarg_to_tuple(ex)
+#     ex.head != :(=) &&
+#         throw(ArgumentError("Invalid keyword argument. Doesn't contain '='."))
+#     name, val = ex.args
+#     !(name isa Symbol) &&
+#         throw(ArgumentError("First part of keyword argument isn't a symbol."))
+#     val isa QuoteNode && (val = val.value)
+#     (name, val)
+# end
 
 function _sym2scheduler(s)
     if s == :dynamic
