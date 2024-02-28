@@ -448,7 +448,7 @@ function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
     end
     tmapreduce(vcat, 1:ntasks; scheduler = DynamicScheduler(; nchunks = 0)) do _ # we turn chunking off
         local C = Matrix{Float64}(undef, N, N)
-        map(chnl) do i
+        map(chnl) do i # implicitly takes the values from the channel (parallel safe)
             A = As[i]
             B = Bs[i]
             mul!(C, A, B)
@@ -456,10 +456,6 @@ function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
         end
     end
 end
-````
-
-````
-matmulsums_perthread_channel_flipped (generic function with 1 method)
 ````
 
 Note that one caveat of this approach is that the input → task assignment, and thus the
