@@ -8,13 +8,13 @@ function _kwarg_to_tuple(ex)
     (name, val)
 end
 
-function _tasklocal_assign_to_exprs(ex)
+function _init_assign_to_exprs(ex)
     if ex.head != :(=)
-        throw(ErrorException("Wrong usage of @tasklocal. Expected assignment, e.g. `A::Matrix{Float} = rand(2,2)`."))
+        throw(ErrorException("Wrong usage of @init. Expected assignment, e.g. `A::Matrix{Float} = rand(2,2)`."))
     end
     left_ex = ex.args[1]
     if left_ex isa Symbol || left_ex.head != :(::)
-        throw(ErrorException("Wrong usage of @tasklocal. Expected typed assignment, e.g. `A::Matrix{Float} = rand(2,2)`."))
+        throw(ErrorException("Wrong usage of @init. Expected typed assignment, e.g. `A::Matrix{Float} = rand(2,2)`."))
     end
     tls_sym = left_ex.args[1]
     tls_type = left_ex.args[2]
@@ -25,26 +25,26 @@ function _tasklocal_assign_to_exprs(ex)
     return tlsinit, tlsblock
 end
 
-function _unfold_tasklocal_block(ex)
+function _unfold_init_block(ex)
     tlsinits = Expr[]
     if ex.head == :(=)
-        tlsi, tlsblock = _tasklocal_assign_to_exprs(ex)
+        tlsi, tlsblock = _init_assign_to_exprs(ex)
         push!(tlsinits, tlsi)
     elseif ex.head == :block
         tlsexprs = filter(x -> x isa Expr, ex.args) # skip LineNumberNode
         tlsblock = quote end
         for x in tlsexprs
-            tlsi, tlsb = _tasklocal_assign_to_exprs(x)
+            tlsi, tlsb = _init_assign_to_exprs(x)
             push!(tlsinits, tlsi)
             push!(tlsblock.args, tlsb)
         end
     else
-        throw(ErrorException("Wrong usage of @tasklocal. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
+        throw(ErrorException("Wrong usage of @init. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
     end
     return tlsinits, tlsblock
 end
 
-macro threaded(args...)
+macro tasks(args...)
     forex = last(args)
     kwexs = args[begin:(end - 1)]
     scheduler = DynamicScheduler()
@@ -69,7 +69,7 @@ macro threaded(args...)
     end
 
     if forex.head != :for
-        throw(ErrorException("Expected for loop after `@threaded`."))
+        throw(ErrorException("Expected for loop after `@tasks`."))
     else
         it = forex.args[1]
         itvar = it.args[1]
@@ -80,10 +80,10 @@ macro threaded(args...)
     tlsinits = nothing
     tlsblock = nothing
     tlsidx = findfirst(forbody.args) do arg
-        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@tasklocal")
+        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@init")
     end
     if !isnothing(tlsidx)
-        tlsinits, tlsblock = _unfold_tasklocal_block(forbody.args[tlsidx].args[3])
+        tlsinits, tlsblock = _unfold_init_block(forbody.args[tlsidx].args[3])
         deleteat!(forbody.args, tlsidx)
     end
 

@@ -209,7 +209,7 @@ using .Schedulers: Scheduler,
 include("implementation.jl")
 
 include("macro.jl")
-export @threaded
+export @tasks
 export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
 export Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
 
