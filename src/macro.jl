@@ -1,3 +1,68 @@
+Base.@kwdef mutable struct Settings
+    scheduler::Expr = :(DynamicScheduler())
+    reducer::Union{Expr, Symbol, Nothing} = nothing
+end
+
+macro tasks(args...)
+    forex = last(args)
+    if forex.head != :for
+        throw(ErrorException("Expected for loop after `@tasks`."))
+    else
+        it = forex.args[1]
+        itvar = it.args[1]
+        itrng = it.args[2]
+        forbody = forex.args[2]
+    end
+
+    settings = Settings()
+
+    kwexs = args[begin:(end - 1)]
+    for ex in kwexs
+        name, val = _kwarg_to_tuple(ex)
+        if name == :scheduler
+            settings.scheduler = _handle_kwarg_scheduler(val)
+        elseif name == :reducer
+            settings.reducer = val
+        else
+            throw(ArgumentError("Unknown keyword argument: $name"))
+        end
+    end
+
+    inits_before, init_inner = _maybe_handle_init_block!(forbody.args)
+    _maybe_handle_set_block!(settings, forbody.args)
+
+    @show settings
+    q = if isnothing(settings.reducer)
+        quote
+            OhMyThreads.tforeach($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
+                $(init_inner)
+                $(forbody)
+            end
+        end
+    else
+        quote
+            OhMyThreads.tmapreduce(
+                $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) do $(itvar)
+                $(init_inner)
+                $(forbody)
+            end
+        end
+    end
+
+    # wrap everything in a let ... end block
+    # and, potentially, define the `TaskLocalValue`s.
+    result = :(let
+    end)
+    push!(result.args[2].args, q)
+    if !isnothing(inits_before)
+        for x in inits_before
+            push!(result.args[1].args, x)
+        end
+    end
+
+    esc(result)
+end
+
 function _kwarg_to_tuple(ex)
     ex.head != :(=) &&
         throw(ArgumentError("Invalid keyword argument. Doesn't contain '='."))
@@ -6,6 +71,50 @@ function _kwarg_to_tuple(ex)
         throw(ArgumentError("First part of keyword argument isn't a symbol."))
     val isa QuoteNode && (val = val.value)
     (name, val)
+end
+
+function _handle_kwarg_scheduler(val)
+    if val == :dynamic
+        :(DynamicScheduler())
+    elseif val == :static
+        :(StaticScheduler())
+    elseif val == :greedy
+        :(GreedyScheduler())
+    else
+        val
+    end
+end
+
+function _maybe_handle_init_block!(args)
+    inits_before = nothing
+    init_inner = nothing
+    tlsidx = findfirst(args) do arg
+        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@init")
+    end
+    if !isnothing(tlsidx)
+        inits_before, init_inner = _unfold_init_block(args[tlsidx].args[3])
+        deleteat!(args, tlsidx)
+    end
+    return inits_before, init_inner
+end
+
+function _unfold_init_block(ex)
+    inits_before = Expr[]
+    if ex.head == :(=)
+        initb, init_inner = _init_assign_to_exprs(ex)
+        push!(inits_before, initb)
+    elseif ex.head == :block
+        tlsexprs = filter(x -> x isa Expr, ex.args) # skip LineNumberNode
+        init_inner = quote end
+        for x in tlsexprs
+            initb, initi = _init_assign_to_exprs(x)
+            push!(inits_before, initb)
+            push!(init_inner.args, initi)
+        end
+    else
+        throw(ErrorException("Wrong usage of @init. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
+    end
+    return inits_before, init_inner
 end
 
 function _init_assign_to_exprs(ex)
@@ -20,98 +129,38 @@ function _init_assign_to_exprs(ex)
     tls_type = left_ex.args[2]
     tls_def = ex.args[2]
     @gensym tls_storage
-    tlsinit = :($(tls_storage) = OhMyThreads.TaskLocalValue{$tls_type}(() -> $(tls_def)))
-    tlsblock = :($(tls_sym) = $(tls_storage)[])
-    return tlsinit, tlsblock
+    init_before = :($(tls_storage) = OhMyThreads.TaskLocalValue{$tls_type}(() -> $(tls_def)))
+    init_inner = :($(tls_sym) = $(tls_storage)[])
+    return init_before, init_inner
 end
 
-function _unfold_init_block(ex)
-    tlsinits = Expr[]
-    if ex.head == :(=)
-        tlsi, tlsblock = _init_assign_to_exprs(ex)
-        push!(tlsinits, tlsi)
-    elseif ex.head == :block
-        tlsexprs = filter(x -> x isa Expr, ex.args) # skip LineNumberNode
-        tlsblock = quote end
-        for x in tlsexprs
-            tlsi, tlsb = _init_assign_to_exprs(x)
-            push!(tlsinits, tlsi)
-            push!(tlsblock.args, tlsb)
-        end
-    else
-        throw(ErrorException("Wrong usage of @init. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
+function _maybe_handle_set_block!(settings, args)
+    idcs = findall(args) do arg
+        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@set")
     end
-    return tlsinits, tlsblock
-end
-
-macro tasks(args...)
-    forex = last(args)
-    kwexs = args[begin:(end - 1)]
-    scheduler = DynamicScheduler()
-    reducer = nothing
-    for ex in kwexs
-        name, val = _kwarg_to_tuple(ex)
-        if name == :scheduler
-            if val == :dynamic
-                scheduler = DynamicScheduler()
-            elseif val == :static
-                scheduler = StaticScheduler()
-            elseif val == :greedy
-                scheduler = GreedyScheduler()
-            else
-                scheduler = val
-            end
-        elseif name == :reducer
-            reducer = val
+    isnothing(idcs) && return # no set block found
+    for i in idcs
+        ex = args[i].args[3]
+        if ex.head == :(=)
+            _handle_set_single_assign!(settings, ex)
+        elseif ex.head == :block
+            exprs = filter(x -> x isa Expr, ex.args) # skip LineNumberNode
+            _handle_set_single_assign!.(Ref(settings), exprs)
         else
-            throw(ArgumentError("Unknown keyword argument: $name"))
+            throw(ErrorException("Wrong usage of @set. You must either provide an assignment or multiple assignments in a `begin ... end` block."))
         end
     end
+    deleteat!(args, idcs)
+end
 
-    if forex.head != :for
-        throw(ErrorException("Expected for loop after `@tasks`."))
-    else
-        it = forex.args[1]
-        itvar = it.args[1]
-        itrng = it.args[2]
-        forbody = forex.args[2]
+function _handle_set_single_assign!(settings, ex)
+    if ex.head != :(=)
+        throw(ErrorException("Wrong usage of @set. Expected assignment, e.g. `scheduler = StaticScheduler()`."))
     end
-
-    tlsinits = nothing
-    tlsblock = nothing
-    tlsidx = findfirst(forbody.args) do arg
-        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@init")
+    sym = ex.args[1]
+    if !hasfield(Settings, sym)
+        throw(ErrorException("Unknown setting \"$(sym)\". Must be ∈ $(fieldnames(Settings))."))
     end
-    if !isnothing(tlsidx)
-        tlsinits, tlsblock = _unfold_init_block(forbody.args[tlsidx].args[3])
-        deleteat!(forbody.args, tlsidx)
-    end
-
-    q = if isnothing(reducer)
-        quote
-            OhMyThreads.tforeach($(itrng); scheduler = $(scheduler)) do $(itvar)
-                $(tlsblock)
-                $(forbody)
-            end
-        end
-    else
-        quote
-            OhMyThreads.tmapreduce(
-                $(reducer), $(itrng); scheduler = $(scheduler)) do $(itvar)
-                $(tlsblock)
-                $(forbody)
-            end
-        end
-    end
-
-    result = :(let
-    end)
-    push!(result.args[2].args, q)
-    if !isnothing(tlsinits)
-        for x in tlsinits
-            push!(result.args[1].args, x)
-        end
-    end
-
-    esc(result)
+    def = ex.args[2]
+    setfield!(settings, sym, def)
 end
