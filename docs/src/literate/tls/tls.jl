@@ -220,8 +220,13 @@ function matmulsums_perthread_naive(As, Bs)
     end
 end
 
-res_pt_naive = matmulsums_perthread_naive(As, Bs)
-res ≈ res_pt_naive
+## non uniform workload
+As_nu = [rand(2056, isqrt(i)^2) for i in 1:192];
+Bs_nu = [rand(isqrt(i)^2, 2056) for i in 1:192];
+res_nu = matmulsums(As_nu, Bs_nu);
+
+res_pt_naive = matmulsums_perthread_naive(As_nu, Bs_nu)
+res_nu ≈ res_pt_naive
 
 # Unfortunately, this approach is [**generally wrong**](https://julialang.org/blog/2023/07/PSA-dont-use-threadid/). The first issue is that `threadid()`
 # doesn't necessarily start at 1 (and thus might return a value `> nthreads()`), in which
@@ -258,8 +263,8 @@ function matmulsums_perthread_static(As, Bs)
     end
 end
 
-res_pt_static = matmulsums_perthread_static(As, Bs)
-res ≈ res_pt_static
+res_pt_static = matmulsums_perthread_static(As_nu, Bs_nu)
+res_nu ≈ res_pt_static
 
 # However, this approach doesn't solve the offset issue and, even worse, makes the parallel code
 # non-composable: If we call other multithreaded functions within the `tmap` or if
@@ -289,8 +294,8 @@ function matmulsums_perthread_channel(As, Bs; nbuffers = nthreads(), kwargs...)
     end
 end
 
-res_pt_channel = matmulsums_perthread_channel(As, Bs)
-res ≈ res_pt_channel
+res_pt_channel = matmulsums_perthread_channel(As_nu, Bs_nu)
+res_nu ≈ res_pt_channel
 
 #
 # ## Per-thread allocation: benchmark
@@ -300,17 +305,29 @@ res ≈ res_pt_channel
 # of which would give us dynamic load balancing. (Note, though, that our
 # exemplatory workload is uniform and thus won't benefit from load balancing.)
 #
-@btime matmulsums_tlv(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
-@btime matmulsums_perthread_static($As, $Bs);
-@btime matmulsums_perthread_channel(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
 
-@btime matmulsums_tlv(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));
-@btime matmulsums_perthread_channel(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));
+## no load balancing because nchunks == nthreads()
+@btime matmulsums_tlv($As_nu, $Bs_nu;
+    scheduler = $(DynamicScheduler(; nchunks = nthreads())));
+@btime matmulsums_perthread_static($As_nu, $Bs_nu);
+@btime matmulsums_perthread_channel($As_nu, $Bs_nu;
+    scheduler = $(DynamicScheduler(; nchunks = nthreads())));
 
+## load balancing because nchunks > nthreads()
+@btime matmulsums_tlv($As_nu, $Bs_nu;
+    scheduler = $(DynamicScheduler(; nchunks = 2 * nthreads())));
+@btime matmulsums_perthread_channel($As_nu, $Bs_nu;
+    scheduler = $(DynamicScheduler(; nchunks = 2 * nthreads())));
+
+@btime matmulsums_tlv($As_nu, $Bs_nu;
+    scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));
+@btime matmulsums_perthread_channel($As_nu, $Bs_nu;
+    scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));
+
+#
+# Note that the runtime of `matmulsums_perthread_channel` improves with increasing number
+# of chunks/tasks (due to load balancing) while the amount of allocated memory doesn't
+# increase much. Contrast this with the drastic memory increase with `matmulsums_tlv`.
 #
 # ## Per-thread allocation: another good way (`Channel`)
 #
@@ -339,13 +356,14 @@ function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
 end
 
 # Note that one caveat of this approach is that the input → task assignment, and thus the
-# order of the output, is non-deterministic. For this reason, we sort the output to check
+# order of the output, is **non-deterministic**. For this reason, we sort the output to check
 # for correctness.
 
-res_channel_flipped = matmulsums_perthread_channel_flipped(As, Bs)
-sort(res) ≈ sort(res_channel_flipped)
+res_channel_flipped = matmulsums_perthread_channel_flipped(As_nu, Bs_nu)
+sort(res_nu) ≈ sort(res_channel_flipped)
 
 # Quick benchmark:
 
-@btime matmulsums_perthread_channel_flipped($As, $Bs);
-@btime matmulsums_perthread_channel_flipped($As, $Bs; ntasks = 10 * nthreads());
+@btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu);
+@btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu; ntasks = 2 * nthreads());
+@btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu; ntasks = 10 * nthreads());
