@@ -12,11 +12,8 @@ makedocs(;
     doctest = false,
     pages = [
         "OhMyThreads" => "index.md",
-        "Getting Started" => [
-            # "Basics" => "basics.md",
-            "Thread-Safe Storage" => "literate/tls/tls.md",
-            "Translation Guide" => "translation.md"
-        ],
+        "Translation Guide" => "translation.md",
+        "Thread-Safe Storage" => "literate/tls/tls.md",
         "Examples" => [
             "Parallel Monte Carlo" => "literate/mc/mc.md",
             "Julia Set" => "literate/juliaset/juliaset.md",

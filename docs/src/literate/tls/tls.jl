@@ -9,7 +9,7 @@
 # manner.
 #
 #
-# ## Sequential
+# ## Test case (sequential)
 #
 # Let's say that we are given two arrays of matrices, `As` and `Bs`, and let's
 # further assume that our goal is to compute the total sum of all pairwise matrix products.
@@ -41,7 +41,7 @@ Bs = [rand(32, 2056) for _ in 1:192]
 
 res = matmulsums(As, Bs);
 
-# ## The wrong way
+# ## How to not parallelize
 #
 # The key idea for creating a parallel version of `matmulsums` is to replace the `map` by
 # OhMyThreads' parallel [`tmap`](@ref) function. However, because we re-use `C`, this isn't
@@ -68,7 +68,7 @@ res ≈ res_race
 # tasks are trying to use the shared variable `C` simultaneously leading to
 # non-deterministic behavior. Let's see how we can fix this.
 #
-# ## The naive (and inefficient) way
+# ### The naive (and inefficient) fix
 #
 # A simple solution for the race condition issue above is to move the allocation of `C`
 # into the body of the parallel `tmap`:
@@ -83,7 +83,7 @@ function matmulsums_naive(As, Bs)
 end
 
 # In this case, a separate `C` will be allocated for each iteration such that parallel tasks
-# don't modify shared state anymore. Hence, we'll get the desired result.
+# no longer mutate shared state. Hence, we'll get the desired result.
 
 res_naive = matmulsums_naive(As, Bs)
 res ≈ res_naive
@@ -91,8 +91,10 @@ res ≈ res_naive
 # However, this variant is obviously inefficient because it is no better than just writing
 # `C = A*B` and thus leads to one allocation per matrix pair. We need a different way of
 # allocating and re-using `C` for an efficient parallel version.
+
+# ## [Task-local storage](@id TLS)
 #
-# ## The manual (and cumbersome) way
+# ### The manual (and cumbersome) way
 #
 # We've seen that we can't allocate `C` once up-front (→ race condition) and also shouldn't
 # allocate it within the `tmap` (→ one allocation per iteration). Instead, we can assign a
@@ -131,7 +133,7 @@ res ≈ res_manual
 # buffers. Finally, we `fetch` the results of the tasks and combine them. This variant works
 # just fine and the good news is that we can get the same behavior with less manual work.
 #
-# ## [The good way: Task-local storage](@id TLS)
+# ### [The shortcut: `TaskLocalValue`](@id TLV)
 #
 # The desire for task-local storage is quite natural with task-based multithreading. For
 # this reason, Julia supports this out of the box with
@@ -162,7 +164,7 @@ res ≈ res_tlv
 # This solves our issues above and leads to $O(\textrm{parallel tasks})$
 # (instead of $O(\textrm{iterations})$) allocations.
 #
-# ## Benchmark
+# ### Benchmark
 #
 # The whole point of parallelization is increasing performance, so let's benchmark and
 # compare the performance of the variants that we've discussed so far.
@@ -180,7 +182,7 @@ using BenchmarkTools
 # but also efficient: It allocates much less memory than `matmulsums_naive` and is about on
 # par with the manual implementation.
 
-# ### Tuning the scheduling
+# #### Tuning the scheduling
 #
 # Since the workload is uniform, we don't need load balancing. We can thus try to improve
 # the performance and reduce the number of allocations by choosing the number of chunks
@@ -194,8 +196,10 @@ using OhMyThreads: DynamicScheduler, StaticScheduler
     $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
 @btime matmulsums_tlv($As, $Bs; scheduler = $(StaticScheduler()));
 
+# Interestingly, this doesn't always lead to speedups (maybe even a slight slowdown).
+
 #
-# ## Per-thread allocation: the bad way
+# ## Per-thread allocation
 #
 # The task-local solution above has one potential caveat: If we spawn many parallel tasks
 # (e.g. for load-balancing reasons) we need just as many task-local buffers. This can
@@ -205,6 +209,7 @@ using OhMyThreads: DynamicScheduler, StaticScheduler
 # such that each running task always has exclusive (temporary) access to a buffer (we need
 # to make sure to avoid races).
 #
+# ### The naive (and incorrect) approach
 # A naive approach to implementing this idea is to pre-allocate an array of buffers
 # and then to use the `threadid()` to select a buffer for a running task.
 #
@@ -247,7 +252,7 @@ res_nu ≈ res_pt_naive
 # (Note that, in practice, this - most likely 😉 - doesn't happen for the very simple example
 # above, but you can't rely on it!)
 #
-# ## Per-thread allocation: the kind of ok way
+# ### The quick fix (with caveats)
 #
 # A simple solution for the task-migration issue is to opt-out of dynamic scheduling with
 # the `StaticScheduler()`. This scheduler statically assigns tasks to threads
@@ -272,7 +277,7 @@ res_nu ≈ res_pt_static
 # we will likely oversubscribe the Julia threads and get subpar performance. Given these
 # caveats, we should therefore generally take a different approach.
 #
-# ## Per-thread allocation: the good way (`Channel`)
+# ### The safe way: `Channel`
 #
 # Instead of storing the pre-allocated buffers in an array, we can put them into a `Channel`
 # which internally ensures that parallel access is safe. In this scenario, we simply `take!`
@@ -298,7 +303,7 @@ res_pt_channel = matmulsums_perthread_channel(As_nu, Bs_nu)
 res_nu ≈ res_pt_channel
 
 #
-# ## Per-thread allocation: benchmark
+# ### Benchmark
 #
 # Let's benchmark the variants above and compare them to the task-local implementation.
 # We want to look at both `nchunks = nthreads()` and `nchunks = 10 * nthreads()`, the latter
@@ -329,12 +334,12 @@ res_nu ≈ res_pt_channel
 # of chunks/tasks (due to load balancing) while the amount of allocated memory doesn't
 # increase much. Contrast this with the drastic memory increase with `matmulsums_tlv`.
 #
-# ## Per-thread allocation: another good way (`Channel`)
+# ### Another safe way based on `Channel`
 #
 # Above, we chose to put a limited number of buffers (e.g. `nthreads()`) into the channel
 # and then spawn many tasks (one per input element). Sometimes it can make sense to flip
 # things around and put the (many) input elements into a channel and only spawn
-# a limited number of tasks (e.g. `nthreads()`) with a task-local buffer.
+# a limited number of tasks (e.g. `nthreads()`) with task-local buffers.
 #
 using OhMyThreads: tmapreduce
 function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())

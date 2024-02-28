@@ -1,4 +1,4 @@
-# Translation Guide
+# [Translation Guide](@id TG)
 
 This page tries to give a general overview of how to translate patterns written with the built-in tools of [Base.Threads](https://docs.julialang.org/en/v1/base/multi-threading/) using the [OhMyThreads.jl API](@ref API). Note that this should be seen as a rough guide and (intentionally) isn't supposed to replace a systematic introduction into OhMyThreads.jl.
 
