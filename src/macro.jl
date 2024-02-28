@@ -1,6 +1,7 @@
 Base.@kwdef mutable struct Settings
     scheduler::Expr = :(DynamicScheduler())
     reducer::Union{Expr, Symbol, Nothing} = nothing
+    collect::Bool = false
 end
 
 macro tasks(args...)
@@ -36,17 +37,24 @@ macro tasks(args...)
     itvar = esc(itvar)
 
     # @show settings
-    q = if isnothing(settings.reducer)
+    q = if !isnothing(settings.reducer)
         quote
-            tforeach($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
+            tmapreduce(
+                $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) do $(itvar)
+                $(init_inner)
+                $(forbody)
+            end
+        end
+    elseif settings.collect
+        quote
+            tmap($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
                 $(init_inner)
                 $(forbody)
             end
         end
     else
         quote
-            tmapreduce(
-                $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) do $(itvar)
+            tforeach($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
                 $(init_inner)
                 $(forbody)
             end
@@ -122,9 +130,6 @@ function _unfold_init_block(ex)
 end
 
 function _init_assign_to_exprs(ex)
-    if ex.head != :(=)
-        throw(ErrorException("Wrong usage of @init. Expected assignment, e.g. `A::Matrix{Float} = rand(2,2)`."))
-    end
     left_ex = ex.args[1]
     if left_ex isa Symbol || left_ex.head != :(::)
         throw(ErrorException("Wrong usage of @init. Expected typed assignment, e.g. `A::Matrix{Float} = rand(2,2)`."))
@@ -155,6 +160,10 @@ function _maybe_handle_set_block!(settings, args)
         end
     end
     deleteat!(args, idcs)
+    # check incompatible settings
+    if settings.collect && !isnothing(settings.reducer)
+        throw(ArgumentError("Specifying both collect and reducer isn't supported."))
+    end
 end
 
 function _handle_set_single_assign!(settings, ex)
@@ -163,11 +172,17 @@ function _handle_set_single_assign!(settings, ex)
     end
     sym = ex.args[1]
     if !hasfield(Settings, sym)
-        throw(ErrorException("Unknown setting \"$(sym)\". Must be ∈ $(fieldnames(Settings))."))
+        throw(ArgumentError("Unknown setting \"$(sym)\". Must be ∈ $(fieldnames(Settings))."))
     end
     def = ex.args[2]
+    if sym == :collect && !(def isa Bool)
+        throw(ArgumentError("Setting collect can only be true or false."))
+        #TODO support specifying the OutputElementType
+    end
     def = if def isa QuoteNode
         _sym2scheduler(def.value)
+    elseif def isa Bool
+        def
     else
         esc(def)
     end
