@@ -391,9 +391,8 @@ true
 ### Benchmark
 
 Let's benchmark the variants above and compare them to the task-local implementation.
-We want to look at both `nchunks = nthreads()` and `nchunks = 10 * nthreads()`, the latter
-of which would give us dynamic load balancing. (Note, though, that our
-exemplatory workload is uniform and thus won't benefit from load balancing.)
+We want to look at `nchunks = nthreads()` as well as `nchunks > nthreads()`, the latter
+of which gives us dynamic load balancing.
 
 ````julia
 # no load balancing because nchunks == nthreads()
