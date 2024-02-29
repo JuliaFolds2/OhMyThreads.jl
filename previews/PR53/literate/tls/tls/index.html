@@ -64,24 +64,39 @@ function matmulsums_tlv(As, Bs; kwargs...)
 end
 
 res_tlv = matmulsums_tlv(As, Bs)
-res ≈ res_tlv</code></pre><pre><code class="nohighlight hljs">true</code></pre><p>Here, <code>TaskLocalValue{Matrix{Float64}}(() -&gt; Matrix{Float64}(undef, N, N))</code> creates a task-local value - essentially a reference to a value in the task-local storage - that behaves like this: The first time the task-local value is accessed from a task (<code>tls[]</code>) it is initialized according to the provided anonymous function. Afterwards, every following query (from the same task!) will simply lookup and return the task-local value. This solves our issues above and leads to <span>$O(\textrm{parallel tasks})$</span> (instead of <span>$O(\textrm{iterations})$</span>) allocations.</p><h3 id="Benchmark"><a class="docs-heading-anchor" href="#Benchmark">Benchmark</a><a id="Benchmark-1"></a><a class="docs-heading-anchor-permalink" href="#Benchmark" title="Permalink"></a></h3><p>The whole point of parallelization is increasing performance, so let&#39;s benchmark and compare the performance of the variants that we&#39;ve discussed so far.</p><pre><code class="language-julia hljs">using BenchmarkTools
+res ≈ res_tlv</code></pre><pre><code class="nohighlight hljs">true</code></pre><p>Here, <code>TaskLocalValue{Matrix{Float64}}(() -&gt; Matrix{Float64}(undef, N, N))</code> creates a task-local value - essentially a reference to a value in the task-local storage - that behaves like this: The first time the task-local value is accessed from a task (<code>tls[]</code>) it is initialized according to the provided anonymous function. Afterwards, every following query (from the same task!) will simply lookup and return the task-local value. This solves our issues above and leads to <span>$O(\textrm{parallel tasks})$</span> (instead of <span>$O(\textrm{iterations})$</span>) allocations.</p><p>Note that if you use our <code>@tasks</code> macro API, there is built-in support for task-local values via <code>@init</code>.</p><pre><code class="language-julia hljs">using OhMyThreads: @tasks
+
+function matmulsums_tlv_macro(As, Bs; kwargs...)
+    N = size(first(As), 1)
+    @tasks for i in eachindex(As,Bs)
+        @set collect=true
+        @init C::Matrix{Float64} = Matrix{Float64}(undef, N, N)
+        mul!(C, As[i], Bs[i])
+        sum(C)
+    end
+end
+
+res_tlv_macro = matmulsums_tlv_macro(As, Bs)
+res ≈ res_tlv_macro</code></pre><pre><code class="nohighlight hljs">true</code></pre><p>Here, <code>@init</code> simply expands to the explicit pattern around <code>TaskLocalValue</code> above.</p><h3 id="Benchmark"><a class="docs-heading-anchor" href="#Benchmark">Benchmark</a><a id="Benchmark-1"></a><a class="docs-heading-anchor-permalink" href="#Benchmark" title="Permalink"></a></h3><p>The whole point of parallelization is increasing performance, so let&#39;s benchmark and compare the performance of the variants that we&#39;ve discussed so far.</p><pre><code class="language-julia hljs">using BenchmarkTools
 
 @show nthreads()
 
 @btime matmulsums($As, $Bs);
 @btime matmulsums_naive($As, $Bs);
 @btime matmulsums_manual($As, $Bs);
-@btime matmulsums_tlv($As, $Bs);</code></pre><pre><code class="nohighlight hljs">nthreads() = 10
-  1.458 s (3 allocations: 32.25 MiB)
-  948.128 ms (539 allocations: 6.05 GiB)
-  745.839 ms (200 allocations: 645.04 MiB)
-  745.406 ms (236 allocations: 645.04 MiB)
-</code></pre><p>As we can see, <code>matmulsums_tlv</code> (the version using <code>TaskLocalValue</code>) isn&#39;t only convenient but also efficient: It allocates much less memory than <code>matmulsums_naive</code> and is about on par with the manual implementation.</p><h4 id="Tuning-the-scheduling"><a class="docs-heading-anchor" href="#Tuning-the-scheduling">Tuning the scheduling</a><a id="Tuning-the-scheduling-1"></a><a class="docs-heading-anchor-permalink" href="#Tuning-the-scheduling" title="Permalink"></a></h4><p>Since the workload is uniform, we don&#39;t need load balancing. We can thus try to improve the performance and reduce the number of allocations by choosing the number of chunks (i.e. tasks) to match the number of Julia threads. Concretely, this amounts to passing in <code>DynamicScheduler(; nchunks=nthreads())</code>. If we further want to opt-out of dynamic scheduling alltogether, we can choose the <code>StaticScheduler()</code>.</p><pre><code class="language-julia hljs">using OhMyThreads: DynamicScheduler, StaticScheduler
+@btime matmulsums_tlv($As, $Bs);
+@btime matmulsums_tlv_macro($As, $Bs);</code></pre><pre><code class="nohighlight hljs">nthreads() = 10
+  1.461 s (3 allocations: 32.25 MiB)
+  956.497 ms (539 allocations: 6.05 GiB)
+  749.799 ms (200 allocations: 645.04 MiB)
+  743.885 ms (236 allocations: 645.04 MiB)
+  746.067 ms (237 allocations: 645.04 MiB)
+</code></pre><p>As we can see, <code>matmulsums_tlv</code> (and <code>matmulsums_tlv_macro</code>) isn&#39;t only convenient but also efficient: It allocates much less memory than <code>matmulsums_naive</code> and is about on par with the manual implementation.</p><h4 id="Tuning-the-scheduling"><a class="docs-heading-anchor" href="#Tuning-the-scheduling">Tuning the scheduling</a><a id="Tuning-the-scheduling-1"></a><a class="docs-heading-anchor-permalink" href="#Tuning-the-scheduling" title="Permalink"></a></h4><p>Since the workload is uniform, we don&#39;t need load balancing. We can thus try to improve the performance and reduce the number of allocations by choosing the number of chunks (i.e. tasks) to match the number of Julia threads. Concretely, this amounts to passing in <code>DynamicScheduler(; nchunks=nthreads())</code>. If we further want to opt-out of dynamic scheduling alltogether, we can choose the <code>StaticScheduler()</code>.</p><pre><code class="language-julia hljs">using OhMyThreads: DynamicScheduler, StaticScheduler
 
 @btime matmulsums_tlv(
     $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
-@btime matmulsums_tlv($As, $Bs; scheduler = $(StaticScheduler()));</code></pre><pre><code class="nohighlight hljs">  877.250 ms (124 allocations: 322.52 MiB)
-  884.383 ms (122 allocations: 322.52 MiB)
+@btime matmulsums_tlv($As, $Bs; scheduler = $(StaticScheduler()));</code></pre><pre><code class="nohighlight hljs">  878.870 ms (124 allocations: 322.52 MiB)
+  888.337 ms (122 allocations: 322.52 MiB)
 </code></pre><p>Interestingly, this doesn&#39;t always lead to speedups (maybe even a slight slowdown).</p><h2 id="Per-thread-allocation"><a class="docs-heading-anchor" href="#Per-thread-allocation">Per-thread allocation</a><a id="Per-thread-allocation-1"></a><a class="docs-heading-anchor-permalink" href="#Per-thread-allocation" title="Permalink"></a></h2><p>The task-local solution above has one potential caveat: If we spawn many parallel tasks (e.g. for load-balancing reasons) we need just as many task-local buffers. This can clearly be suboptimal because only <code>nthreads()</code> tasks can run simultaneously. Hence, one buffer per thread should actually suffice. Of course, this raises the question of how to organize a pool of &quot;per-thread&quot; buffers such that each running task always has exclusive (temporary) access to a buffer (we need to make sure to avoid races).</p><h3 id="The-naive-(and-incorrect)-approach"><a class="docs-heading-anchor" href="#The-naive-(and-incorrect)-approach">The naive (and incorrect) approach</a><a id="The-naive-(and-incorrect)-approach-1"></a><a class="docs-heading-anchor-permalink" href="#The-naive-(and-incorrect)-approach" title="Permalink"></a></h3><p>A naive approach to implementing this idea is to pre-allocate an array of buffers and then to use the <code>threadid()</code> to select a buffer for a running task.</p><pre><code class="language-julia hljs">using Base.Threads: threadid
 
 function matmulsums_perthread_naive(As, Bs)
@@ -127,7 +142,7 @@ res_nu ≈ res_pt_static</code></pre><pre><code class="nohighlight hljs">true</c
 end
 
 res_pt_channel = matmulsums_perthread_channel(As_nu, Bs_nu)
-res_nu ≈ res_pt_channel</code></pre><pre><code class="nohighlight hljs">true</code></pre><h3 id="Benchmark-2"><a class="docs-heading-anchor" href="#Benchmark-2">Benchmark</a><a class="docs-heading-anchor-permalink" href="#Benchmark-2" title="Permalink"></a></h3><p>Let&#39;s benchmark the variants above and compare them to the task-local implementation. We want to look at <code>nchunks = nthreads()</code> as well as <code>nchunks &gt; nthreads()</code>, the latter of which gives us dynamic load balancing.</p><pre><code class="language-julia hljs"># no load balancing because nchunks == nthreads()
+res_nu ≈ res_pt_channel</code></pre><pre><code class="nohighlight hljs">true</code></pre><h3 id="Benchmark-2"><a class="docs-heading-anchor" href="#Benchmark-2">Benchmark</a><a class="docs-heading-anchor-permalink" href="#Benchmark-2" title="Permalink"></a></h3><p>Let&#39;s benchmark the variants above and compare them to the task-local implementation. We want to look at both <code>nchunks = nthreads()</code> and <code>nchunks &gt; nthreads()</code>, the latter of which gives us dynamic load balancing.</p><pre><code class="language-julia hljs"># no load balancing because nchunks == nthreads()
 @btime matmulsums_tlv($As_nu, $Bs_nu;
     scheduler = $(DynamicScheduler(; nchunks = nthreads())));
 @btime matmulsums_perthread_static($As_nu, $Bs_nu);
@@ -143,13 +158,13 @@ res_nu ≈ res_pt_channel</code></pre><pre><code class="nohighlight hljs">true</
 @btime matmulsums_tlv($As_nu, $Bs_nu;
     scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));
 @btime matmulsums_perthread_channel($As_nu, $Bs_nu;
-    scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));</code></pre><pre><code class="nohighlight hljs">  1.002 s (124 allocations: 322.52 MiB)
-  995.388 ms (105 allocations: 322.52 MiB)
-  999.854 ms (112 allocations: 322.52 MiB)
-  898.101 ms (235 allocations: 645.04 MiB)
-  897.607 ms (183 allocations: 322.53 MiB)
-  917.194 ms (1116 allocations: 3.15 GiB)
-  837.091 ms (744 allocations: 322.58 MiB)
+    scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));</code></pre><pre><code class="nohighlight hljs">  1.012 s (124 allocations: 322.52 MiB)
+  990.424 ms (105 allocations: 322.52 MiB)
+  998.003 ms (112 allocations: 322.52 MiB)
+  876.152 ms (235 allocations: 645.04 MiB)
+  913.288 ms (183 allocations: 322.53 MiB)
+  930.444 ms (1116 allocations: 3.15 GiB)
+  832.168 ms (744 allocations: 322.58 MiB)
 </code></pre><p>Note that the runtime of <code>matmulsums_perthread_channel</code> improves with increasing number of chunks/tasks (due to load balancing) while the amount of allocated memory doesn&#39;t increase much. Contrast this with the drastic memory increase with <code>matmulsums_tlv</code>.</p><h3 id="Another-safe-way-based-on-Channel"><a class="docs-heading-anchor" href="#Another-safe-way-based-on-Channel">Another safe way based on <code>Channel</code></a><a id="Another-safe-way-based-on-Channel-1"></a><a class="docs-heading-anchor-permalink" href="#Another-safe-way-based-on-Channel" title="Permalink"></a></h3><p>Above, we chose to put a limited number of buffers (e.g. <code>nthreads()</code>) into the channel and then spawn many tasks (one per input element). Sometimes it can make sense to flip things around and put the (many) input elements into a channel and only spawn a limited number of tasks (e.g. <code>nthreads()</code>) with task-local buffers.</p><pre><code class="language-julia hljs">using OhMyThreads: tmapreduce
 function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
     N = size(first(As), 1)
@@ -167,10 +182,10 @@ function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
             sum(C)
         end
     end
-end</code></pre><p>Note that one caveat of this approach is that the input → task assignment, and thus the order of the output, is <strong>non-deterministic</strong>. For this reason, we sort the output to check for correctness.</p><pre><code class="language-julia hljs">res_channel_flipped = matmulsums_perthread_channel_flipped(As_nu, Bs_nu)
+end;</code></pre><p>Note that one caveat of this approach is that the input → task assignment, and thus the order of the output, is <strong>non-deterministic</strong>. For this reason, we sort the output to check for correctness.</p><pre><code class="language-julia hljs">res_channel_flipped = matmulsums_perthread_channel_flipped(As_nu, Bs_nu)
 sort(res_nu) ≈ sort(res_channel_flipped)</code></pre><pre><code class="nohighlight hljs">true</code></pre><p>Quick benchmark:</p><pre><code class="language-julia hljs">@btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu);
 @btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu; ntasks = 2 * nthreads());
-@btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu; ntasks = 10 * nthreads());</code></pre><pre><code class="nohighlight hljs">  946.786 ms (725 allocations: 322.54 MiB)
-  920.833 ms (861 allocations: 645.06 MiB)
-  924.940 ms (1776 allocations: 3.15 GiB)
-</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../../translation/">« Translation Guide</a><a class="docs-footer-nextpage" href="../../mc/mc/">Parallel Monte Carlo »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="auto">Automatic (OS)</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.2.1 on <span class="colophon-date" title="Thursday 29 February 2024 12:49">Thursday 29 February 2024</span>. Using Julia version 1.10.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+@btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu; ntasks = 10 * nthreads());</code></pre><pre><code class="nohighlight hljs">  954.269 ms (726 allocations: 322.54 MiB)
+  927.246 ms (860 allocations: 645.06 MiB)
+  929.689 ms (1746 allocations: 3.15 GiB)
+</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../../translation/">« Translation Guide</a><a class="docs-footer-nextpage" href="../../mc/mc/">Parallel Monte Carlo »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="auto">Automatic (OS)</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.2.1 on <span class="colophon-date" title="Thursday 29 February 2024 13:06">Thursday 29 February 2024</span>. Using Julia version 1.10.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

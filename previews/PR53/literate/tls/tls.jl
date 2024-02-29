@@ -164,6 +164,28 @@ res ≈ res_tlv
 # This solves our issues above and leads to $O(\textrm{parallel tasks})$
 # (instead of $O(\textrm{iterations})$) allocations.
 #
+# Note that if you use our `@tasks` macro API, there is built-in support for task-local
+# values via `@init`.
+#
+
+using OhMyThreads: @tasks
+
+function matmulsums_tlv_macro(As, Bs; kwargs...)
+    N = size(first(As), 1)
+    @tasks for i in eachindex(As,Bs)
+        @set collect=true
+        @init C::Matrix{Float64} = Matrix{Float64}(undef, N, N)
+        mul!(C, As[i], Bs[i])
+        sum(C)
+    end
+end
+
+res_tlv_macro = matmulsums_tlv_macro(As, Bs)
+res ≈ res_tlv_macro
+
+# Here, `@init` simply expands to the explicit pattern around `TaskLocalValue` above.
+#
+#
 # ### Benchmark
 #
 # The whole point of parallelization is increasing performance, so let's benchmark and
@@ -177,8 +199,9 @@ using BenchmarkTools
 @btime matmulsums_naive($As, $Bs);
 @btime matmulsums_manual($As, $Bs);
 @btime matmulsums_tlv($As, $Bs);
+@btime matmulsums_tlv_macro($As, $Bs);
 
-# As we can see, `matmulsums_tlv` (the version using `TaskLocalValue`) isn't only convenient
+# As we can see, `matmulsums_tlv` (and `matmulsums_tlv_macro`) isn't only convenient
 # but also efficient: It allocates much less memory than `matmulsums_naive` and is about on
 # par with the manual implementation.
 
