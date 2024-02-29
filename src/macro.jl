@@ -126,7 +126,7 @@ The policy of how many tasks to spawn and how to distribute the iteration space 
 tasks (and more) can be configured via `@set` statements in the loop body.
 
 Supports reductions (`@set reducer=<reducer function>`) and collecting the results
-(`@set collect=true`) similar to `map`.
+(`@set collect=true`).
 
 Under the hood, the `for` loop is translated into corresponding parallel
 [`tforeach`](@ref), [`tmapreduce`](@ref), or [`tmap`](@ref) calls.
@@ -164,7 +164,7 @@ end
 ```julia
 @tasks for i in 1:100
     @set scheduler=DynamicScheduler(; nchunks=4*nthreads())
-
+    # non-uniform work...
 end
 ```
 """
