@@ -4,6 +4,7 @@ OhMyThreads.jl Changelog
 Version 0.4.5
 -------------
 
+- ![Feature][badge-feature] Provide alternative `@threaded [kwargs...] for ...` API that transforms into corresponding `tforeach` and `tmapreduce` calls.
 - ![Enhancement][badge-enhancement] Improved the thread-safe storage section of the documentation.
 
 Version 0.4.4
