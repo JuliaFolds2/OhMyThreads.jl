@@ -214,6 +214,33 @@ following query (from the same task!) will simply lookup and return the task-loc
 This solves our issues above and leads to $O(\textrm{parallel tasks})$
 (instead of $O(\textrm{iterations})$) allocations.
 
+Note that if you use our `@tasks` macro API, there is built-in support for task-local
+values via `@init`.
+
+````julia
+using OhMyThreads: @tasks
+
+function matmulsums_tlv_macro(As, Bs; kwargs...)
+    N = size(first(As), 1)
+    @tasks for i in eachindex(As,Bs)
+        @set collect=true
+        @init C::Matrix{Float64} = Matrix{Float64}(undef, N, N)
+        mul!(C, As[i], Bs[i])
+        sum(C)
+    end
+end
+
+res_tlv_macro = matmulsums_tlv_macro(As, Bs)
+res ≈ res_tlv_macro
+````
+
+````
+true
+````
+
+Here, `@init` simply expands to the explicit pattern around `TaskLocalValue` above.
+
+
 ### Benchmark
 
 The whole point of parallelization is increasing performance, so let's benchmark and
@@ -228,18 +255,20 @@ using BenchmarkTools
 @btime matmulsums_naive($As, $Bs);
 @btime matmulsums_manual($As, $Bs);
 @btime matmulsums_tlv($As, $Bs);
+@btime matmulsums_tlv_macro($As, $Bs);
 ````
 
 ````
 nthreads() = 10
-  1.458 s (3 allocations: 32.25 MiB)
-  948.128 ms (539 allocations: 6.05 GiB)
-  745.839 ms (200 allocations: 645.04 MiB)
-  745.406 ms (236 allocations: 645.04 MiB)
+  1.461 s (3 allocations: 32.25 MiB)
+  956.497 ms (539 allocations: 6.05 GiB)
+  749.799 ms (200 allocations: 645.04 MiB)
+  743.885 ms (236 allocations: 645.04 MiB)
+  746.067 ms (237 allocations: 645.04 MiB)
 
 ````
 
-As we can see, `matmulsums_tlv` (the version using `TaskLocalValue`) isn't only convenient
+As we can see, `matmulsums_tlv` (and `matmulsums_tlv_macro`) isn't only convenient
 but also efficient: It allocates much less memory than `matmulsums_naive` and is about on
 par with the manual implementation.
 
@@ -260,8 +289,8 @@ using OhMyThreads: DynamicScheduler, StaticScheduler
 ````
 
 ````
-  877.250 ms (124 allocations: 322.52 MiB)
-  884.383 ms (122 allocations: 322.52 MiB)
+  878.870 ms (124 allocations: 322.52 MiB)
+  888.337 ms (122 allocations: 322.52 MiB)
 
 ````
 
@@ -391,7 +420,7 @@ true
 ### Benchmark
 
 Let's benchmark the variants above and compare them to the task-local implementation.
-We want to look at `nchunks = nthreads()` as well as `nchunks > nthreads()`, the latter
+We want to look at both `nchunks = nthreads()` and `nchunks > nthreads()`, the latter
 of which gives us dynamic load balancing.
 
 ````julia
@@ -415,13 +444,13 @@ of which gives us dynamic load balancing.
 ````
 
 ````
-  1.002 s (124 allocations: 322.52 MiB)
-  995.388 ms (105 allocations: 322.52 MiB)
-  999.854 ms (112 allocations: 322.52 MiB)
-  898.101 ms (235 allocations: 645.04 MiB)
-  897.607 ms (183 allocations: 322.53 MiB)
-  917.194 ms (1116 allocations: 3.15 GiB)
-  837.091 ms (744 allocations: 322.58 MiB)
+  1.012 s (124 allocations: 322.52 MiB)
+  990.424 ms (105 allocations: 322.52 MiB)
+  998.003 ms (112 allocations: 322.52 MiB)
+  876.152 ms (235 allocations: 645.04 MiB)
+  913.288 ms (183 allocations: 322.53 MiB)
+  930.444 ms (1116 allocations: 3.15 GiB)
+  832.168 ms (744 allocations: 322.58 MiB)
 
 ````
 
@@ -454,7 +483,7 @@ function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
             sum(C)
         end
     end
-end
+end;
 ````
 
 Note that one caveat of this approach is that the input → task assignment, and thus the
@@ -479,9 +508,9 @@ Quick benchmark:
 ````
 
 ````
-  946.786 ms (725 allocations: 322.54 MiB)
-  920.833 ms (861 allocations: 645.06 MiB)
-  924.940 ms (1776 allocations: 3.15 GiB)
+  954.269 ms (726 allocations: 322.54 MiB)
+  927.246 ms (860 allocations: 645.06 MiB)
+  929.689 ms (1746 allocations: 3.15 GiB)
 
 ````
 
