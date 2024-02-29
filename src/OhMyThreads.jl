@@ -207,8 +207,8 @@ include("schedulers.jl")
 using .Schedulers: Scheduler,
     DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
 include("implementation.jl")
-
 include("macro.jl")
+
 export @tasks
 export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
 export Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
