@@ -553,7 +553,7 @@ res ≈ res_bumper
 
 ````
 
-Compare this, especially the total allocated memory, to the variants above.
+Note that the benchmark is lying here about the total memory allocation, because it doesn't show the allocation of the task-local bump allocators themselves (the reason is that `SlabBuffer` uses `malloc` directly).
 
 ---
 
