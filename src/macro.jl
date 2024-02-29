@@ -4,87 +4,6 @@ Base.@kwdef mutable struct Settings
     collect::Bool = false
 end
 
-macro tasks(args...)
-    forex = last(args)
-    if forex.head != :for || length(args) > 1
-        throw(ErrorException("Expected a for loop after `@tasks`."))
-    else
-        it = forex.args[1]
-        itvar = it.args[1]
-        itrng = it.args[2]
-        forbody = forex.args[2]
-    end
-
-    settings = Settings()
-
-    # kwexs = args[begin:(end - 1)]
-    # for ex in kwexs
-    #     name, val = _kwarg_to_tuple(ex)
-    #     if name == :scheduler
-    #         settings.scheduler = val isa Symbol ? _sym2scheduler(val) : val
-    #     elseif name == :reducer
-    #         settings.reducer = val
-    #     else
-    #         throw(ArgumentError("Unknown keyword argument: $name"))
-    #     end
-    # end
-
-    inits_before, init_inner = _maybe_handle_init_block!(forbody.args)
-    _maybe_handle_set_block!(settings, forbody.args)
-
-    forbody = esc(forbody)
-    itrng = esc(itrng)
-    itvar = esc(itvar)
-
-    # @show settings
-    q = if !isnothing(settings.reducer)
-        quote
-            tmapreduce(
-                $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) do $(itvar)
-                $(init_inner)
-                $(forbody)
-            end
-        end
-    elseif settings.collect
-        quote
-            tmap($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
-                $(init_inner)
-                $(forbody)
-            end
-        end
-    else
-        quote
-            tforeach($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
-                $(init_inner)
-                $(forbody)
-            end
-        end
-    end
-
-    # wrap everything in a let ... end block
-    # and, potentially, define the `TaskLocalValue`s.
-    result = :(let
-    end)
-    push!(result.args[2].args, q)
-    if !isnothing(inits_before)
-        for x in inits_before
-            push!(result.args[1].args, x)
-        end
-    end
-
-    result
-end
-
-# function _kwarg_to_tuple(ex)
-#     ex.head != :(=) &&
-#         throw(ArgumentError("Invalid keyword argument. Doesn't contain '='."))
-#     name, val = ex.args
-#     !(name isa Symbol) &&
-#         throw(ArgumentError("First part of keyword argument isn't a symbol."))
-#     val isa QuoteNode && (val = val.value)
-#     (name, val)
-# end
-
 function _sym2scheduler(s)
     if s == :dynamic
         :(DynamicScheduler())
@@ -187,4 +106,135 @@ function _handle_set_single_assign!(settings, ex)
         esc(def)
     end
     setfield!(settings, sym, def)
+end
+
+# function _kwarg_to_tuple(ex)
+#     ex.head != :(=) &&
+#         throw(ArgumentError("Invalid keyword argument. Doesn't contain '='."))
+#     name, val = ex.args
+#     !(name isa Symbol) &&
+#         throw(ArgumentError("First part of keyword argument isn't a symbol."))
+#     val isa QuoteNode && (val = val.value)
+#     (name, val)
+# end
+
+"""
+    @tasks for ... end
+
+A macro to parallelize a `for` loop by spawning a set of tasks that can be run in parallel.
+The policy of how many tasks to spawn and how to distribute the iteration space among the
+tasks (and more) can be configured via `@set` statements in the loop body.
+
+Supports reductions (`@set reducer=<reducer function>`) and collecting the results
+(`@set collect=true`) similar to `map`.
+
+Under the hood, the `for` loop is translated into corresponding parallel
+[`tforeach`](@ref), [`tmapreduce`](@ref), or [`tmap`](@ref) calls.
+
+# Examples
+---------
+
+```julia
+@tasks for i in 1:3
+    println(i)
+end
+```
+
+```julia
+@tasks for x in rand(10)
+    @set reducer=+
+    sin(x)
+end
+```
+
+```julia
+@tasks for i in 1:5
+    @set collect=true
+    i^2
+end
+```
+
+```julia
+@tasks for i in 1:5
+    @set scheduler=:static
+    println("i=", i, " → ", threadid())
+end
+
+```
+```julia
+@tasks for i in 1:100
+    @set scheduler=DynamicScheduler(; nchunks=4*nthreads())
+
+end
+```
+"""
+macro tasks(args...)
+    forex = last(args)
+    if forex.head != :for || length(args) > 1
+        throw(ErrorException("Expected a for loop after `@tasks`."))
+    else
+        it = forex.args[1]
+        itvar = it.args[1]
+        itrng = it.args[2]
+        forbody = forex.args[2]
+    end
+
+    settings = Settings()
+
+    # kwexs = args[begin:(end - 1)]
+    # for ex in kwexs
+    #     name, val = _kwarg_to_tuple(ex)
+    #     if name == :scheduler
+    #         settings.scheduler = val isa Symbol ? _sym2scheduler(val) : val
+    #     elseif name == :reducer
+    #         settings.reducer = val
+    #     else
+    #         throw(ArgumentError("Unknown keyword argument: $name"))
+    #     end
+    # end
+
+    inits_before, init_inner = _maybe_handle_init_block!(forbody.args)
+    _maybe_handle_set_block!(settings, forbody.args)
+
+    forbody = esc(forbody)
+    itrng = esc(itrng)
+    itvar = esc(itvar)
+
+    # @show settings
+    q = if !isnothing(settings.reducer)
+        quote
+            tmapreduce(
+                $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) do $(itvar)
+                $(init_inner)
+                $(forbody)
+            end
+        end
+    elseif settings.collect
+        quote
+            tmap($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
+                $(init_inner)
+                $(forbody)
+            end
+        end
+    else
+        quote
+            tforeach($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
+                $(init_inner)
+                $(forbody)
+            end
+        end
+    end
+
+    # wrap everything in a let ... end block
+    # and, potentially, define the `TaskLocalValue`s.
+    result = :(let
+    end)
+    push!(result.args[2].args, q)
+    if !isnothing(inits_before)
+        for x in inits_before
+            push!(result.args[1].args, x)
+        end
+    end
+
+    result
 end
