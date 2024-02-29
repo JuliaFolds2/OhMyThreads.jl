@@ -514,6 +514,47 @@ Quick benchmark:
 
 ````
 
+## Bumper.jl (only for the brave)
+
+If you are bold and want to cut down temporary allocations even more you can
+give [Bumper.jl](https://github.com/MasonProtter/Bumper.jl) a try. Essentially, it
+allows you to *bring your own stacks*, that is, task-local bump allocators which you can
+dynamically allocate memory to, and reset them at the end of a code block, just like
+Julia's stack.
+Be warned though that Bumper.jl is (1) a rather young package with (likely) some bugs
+and (2) can easily lead to segfaults when used incorrectly. It can make sense to use it
+though if you can live with the risk and really can't avoid allocating many (many) times
+on each parallel task. For our example, this isn't the case but let's nonetheless how one
+would use Bumper.jl here.
+
+````julia
+using Bumper
+using StrideArrays # makes things a little bit faster
+
+function matmulsums_bumper(As, Bs)
+    N = size(first(As), 1)
+    tmap(As, Bs) do A, B
+        @no_escape begin # promising that no memory will escape
+            C = @alloc(Float64, N, N) # from bump allocater (fake "stack")
+            mul!(C, A, B)
+            sum(C)
+        end
+    end
+end
+
+res_bumper = matmulsums_bumper(As, Bs);
+res ≈ res_bumper
+
+@btime matmulsums_bumper($As, $Bs);
+````
+
+````
+  786.991 ms (275 allocations: 34.50 KiB)
+
+````
+
+Compare this, especially the total allocated memory, to the variants above.
+
 ---
 
 *This page was generated using [Literate.jl](https://github.com/fredrikekre/Literate.jl).*
