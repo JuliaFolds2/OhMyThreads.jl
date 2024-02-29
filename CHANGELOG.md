@@ -4,7 +4,7 @@ OhMyThreads.jl Changelog
 Version 0.4.5
 -------------
 
-- ![Feature][badge-feature] Provide alternative `@threaded [kwargs...] for ...` API that transforms into corresponding `tforeach` and `tmapreduce` calls.
+- ![Feature][badge-feature] Provide alternative macro API (`@tasks`) that transforms for loops into corresponding `tforeach`, `tmapreduce`, and `tmap` calls. This new API enables us to facilitate certain patterns, like defining task local values.
 - ![Enhancement][badge-enhancement] Improved the thread-safe storage section of the documentation.
 
 Version 0.4.4
