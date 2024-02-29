@@ -86,10 +86,19 @@ function trapezoidal_parallel(a, b, N)
         trapezoidal(α, β, n; h)
     end
 end
-````
 
-````
-trapezoidal_parallel (generic function with 1 method)
+# or equivalently
+#
+# function trapezoidal_parallel(a, b, N)
+#     n = N ÷ nthreads()
+#     h = (b - a) / N
+#     @tasks for i in 1:nthreads()
+#         @set reducer=+
+#         local α = a + (i - 1) * n * h
+#         local β = α + n * h
+#         trapezoidal(α, β, n; h)
+#     end
+# end
 ````
 
 First, we check the correctness of our parallel implementation.

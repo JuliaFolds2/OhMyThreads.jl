@@ -43,6 +43,17 @@ function mc_parallel(N; kwargs...)
     return pi
 end
 
+## or alternatively
+##
+## function mc_parallel(N)
+##     M = @tasks for _ in 1:N
+##         @set reducer = +
+##         rand()^2 + rand()^2 < 1.0
+##     end
+##     pi = 4 * M / N
+##     return pi
+## end
+
 mc_parallel(N)
 
 # Let's run a quick benchmark.
@@ -64,7 +75,7 @@ using Base.Threads: nthreads
 using OhMyThreads: StaticScheduler
 
 @btime mc_parallel($N) samples=10 evals=3;
-@btime mc_parallel($N; scheduler=StaticScheduler()) samples=10 evals=3;
+@btime mc_parallel($N; scheduler = StaticScheduler()) samples=10 evals=3;
 
 # ## Manual parallelization
 #
@@ -76,7 +87,7 @@ using OhMyThreads: StaticScheduler
 using OhMyThreads: @spawn, chunks
 
 function mc_parallel_manual(N; nchunks = nthreads())
-    tasks = map(chunks(1:N; n = nchunks)) do idcs # TODO: replace by `tmap` once ready
+    tasks = map(chunks(1:N; n = nchunks)) do idcs
         @spawn mc(length(idcs))
     end
     pi = sum(fetch, tasks) / nchunks

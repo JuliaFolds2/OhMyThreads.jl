@@ -70,6 +70,18 @@ function compute_juliaset_parallel!(img; kwargs...)
     return img
 end
 
+## or alternatively
+##
+## function compute_juliaset_parallel!(img; kwargs...)
+##     N = size(img, 1)
+##     cart = CartesianIndices(img)
+##     @tasks for idx in eachindex(img)
+##         c = cart[idx]
+##         img[idx] = _compute_pixel(c[1], c[2], N)
+##     end
+##     return img
+## end
+
 N = 2000
 img = zeros(Int, N, N)
 compute_juliaset_parallel!(img);

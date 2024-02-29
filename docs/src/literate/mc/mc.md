@@ -54,6 +54,17 @@ function mc_parallel(N; kwargs...)
     return pi
 end
 
+# or alternatively
+#
+# function mc_parallel(N)
+#     M = @tasks for _ in 1:N
+#         @set reducer = +
+#         rand()^2 + rand()^2 < 1.0
+#     end
+#     pi = 4 * M / N
+#     return pi
+# end
+
 mc_parallel(N)
 ````
 
