@@ -1,6 +1,11 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.4.5
+-------------
+
+- ![Enhancement][badge-enhancement] Improved the thread-safe storage section of the documentation.
+
 Version 0.4.4
 -------------
 

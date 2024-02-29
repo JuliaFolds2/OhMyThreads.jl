@@ -1,4 +1,4 @@
-# Translation Guide
+# [Translation Guide](@id TG)
 
 This page tries to give a general overview of how to translate patterns written with the built-in tools of [Base.Threads](https://docs.julialang.org/en/v1/base/multi-threading/) using the [OhMyThreads.jl API](@ref API). Note that this should be seen as a rough guide and (intentionally) isn't supposed to replace a systematic introduction into OhMyThreads.jl.
 
@@ -75,7 +75,7 @@ treduce(+, data)
 ## Mutation
 
 !!! warning
-    Parallel mutation of non-local state, like writing to a shared array, can be the source of correctness errors (e.g. race conditions) and big performance issues (e.g. [false sharing](https://en.wikipedia.org/wiki/False_sharing#:~:text=False%20sharing%20is%20an%20inherent,is%20limited%20to%20RAM%20caches.)). You should carefully consider whether this is necessary or whether the use of [task-local storage](@ref TLS) is the better option.
+    Parallel mutation of non-local state, like writing to a shared array, can be the source of correctness errors (e.g. race conditions) and big performance issues (e.g. [false sharing](https://en.wikipedia.org/wiki/False_sharing#:~:text=False%20sharing%20is%20an%20inherent,is%20limited%20to%20RAM%20caches.)). You should carefully consider whether this is necessary or whether the use of [thread-safe storage](@ref TSS) is the better option.
 
 ```julia
 # Base.Threads

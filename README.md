@@ -66,7 +66,7 @@ Timings might be something like this:
 89.401 ms (66 allocations: 5.72 KiB)
 ```
 
-(Check out the full [Parallel Monte Carlo](https://juliafolds2.github.io/OhMyThreads.jl/stable/examples/mc/mc/) example if you like.)
+(Check out the full [Parallel Monte Carlo](https://juliafolds2.github.io/OhMyThreads.jl/stable/literate/mc/mc/) example if you like.)
 
 ## Documentation
 
