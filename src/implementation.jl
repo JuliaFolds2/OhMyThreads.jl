@@ -51,6 +51,8 @@ function _tmapreduce(f,
     if chunking_enabled(scheduler)
         tasks = map(chunks(first(Arrs); n = nchunks, split)) do inds
             args = map(A -> view(A, inds), Arrs)
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us... 
             @spawn threadpool mapreduce(promise_task_local(f), promise_task_local(op), args...; $mapreduce_kwargs...)
         end
         mapreduce(fetch, promise_task_local(op), tasks)
@@ -92,8 +94,12 @@ function _tmapreduce(f,
         tasks = map(enumerate(chunks(first(Arrs); n, split))) do (c, inds)
             tid = @inbounds nthtid(c)
             args = map(A -> view(A, inds), Arrs)
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us... 
             @spawnat tid mapreduce(promise_task_local(f), promise_task_local(op), args...; mapreduce_kwargs...)
         end
+        # Note, calling `promise_task_local` here is only safe because we're assuming that
+        # Base.mapreduce isn't going to magically try to do multithreading on us... 
         mapreduce(fetch, promise_task_local(op), tasks)
     else
         if length(first(Arrs)) > nthreads()
@@ -106,6 +112,8 @@ function _tmapreduce(f,
             args = map(A -> @inbounds(A[i]), Arrs)
             @spawnat tid promise_task_local(f)(args...)
         end
+        # Note, calling `promise_task_local` here is only safe because we're assuming that
+        # Base.mapreduce isn't going to magically try to do multithreading on us... 
         mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
     end
 end
@@ -126,8 +134,12 @@ function _tmapreduce(f,
     end
     tasks = map(enumerate(chnks)) do (c, idcs)
         tid = @inbounds nthtid(c)
+        # Note, calling `promise_task_local` here is only safe because we're assuming that
+        # Base.mapreduce isn't going to magically try to do multithreading on us... 
         @spawnat tid promise_task_local(f)(idcs)
     end
+    # Note, calling `promise_task_local` here is only safe because we're assuming that
+    # Base.mapreduce isn't going to magically try to do multithreading on us... 
     mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
 end
 
@@ -153,10 +165,14 @@ function _tmapreduce(f,
         end
     end
     tasks = map(1:ntasks) do _
+        # Note, calling `promise_task_local` here is only safe because we're assuming that
+        # Base.mapreduce isn't going to magically try to do multithreading on us... 
         @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
             promise_task_local(f)(args...)
         end
     end
+    # Note, calling `promise_task_local` here is only safe because we're assuming that
+    # Base.mapreduce isn't going to magically try to do multithreading on us... 
     mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
 end
 
@@ -185,6 +201,15 @@ end
 function maybe_rewrap(g::G, f::F) where {G, F}
     g(f)
 end
+
+"""
+   maybe_rewrap(g, f)
+
+takes a closure `g(f)` and if `f` is a `WithTaskLocalValues`, we're going
+to unwrap `f` and delegate its `TaskLocalValues` to `g`.
+
+This should always be equivalent to just calling `g(f)`.
+"""
 function maybe_rewrap(g::G, f::WithTaskLocalValues{F}) where {G, F}
     (;inner_func, tasklocalvalues) = f
     WithTaskLocalValues(f.tasklocalvalues) do vals
