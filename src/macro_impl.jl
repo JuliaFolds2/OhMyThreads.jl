@@ -4,12 +4,13 @@ Base.@kwdef mutable struct Settings
     collect::Bool = false
 end
 
-function tasks_macro(args...)
-    length(args) 
-    forex = last(args)
-    if forex.head != :for || length(args) > 1
+function tasks_macro(forex)
+    if forex.head != :for
         throw(ErrorException("Expected a for loop after `@tasks`."))
     else
+        if forex.args[1].head != :(=)
+            throw(ErrorException("`@tasks` currently only supports a single threaded loop, got $(forex.args[1])"))
+        end
         it = forex.args[1]
         itvar = it.args[1]
         itrng = it.args[2]
