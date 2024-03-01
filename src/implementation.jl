@@ -13,6 +13,8 @@ using BangBang: append!!
 
 using ChunkSplitters: ChunkSplitters
 
+include("macro_impl.jl")
+
 function auto_disable_chunking_warning()
     @warn("You passed in a `ChunkSplitters.Chunk` but also a scheduler that has "*
           "chunking enabled. Will turn off internal chunking to proceed.\n"*
