@@ -23,18 +23,6 @@ function tasks_macro(forex)
 
     settings = Settings()
 
-    # kwexs = args[begin:(end - 1)]
-    # for ex in kwexs
-    #     name, val = _kwarg_to_tuple(ex)
-    #     if name == :scheduler
-    #         settings.scheduler = val isa Symbol ? _sym2scheduler(val) : val
-    #     elseif name == :reducer
-    #         settings.reducer = val
-    #     else
-    #         throw(ArgumentError("Unknown keyword argument: $name"))
-    #     end
-    # end
-
     inits_before, init_inner = _maybe_handle_init_block!(forbody.args)
     _maybe_handle_set_block!(settings, forbody.args)
 
@@ -184,13 +172,3 @@ function _handle_set_single_assign!(settings, ex)
     end
     setfield!(settings, sym, def)
 end
-
-# function _kwarg_to_tuple(ex)
-#     ex.head != :(=) &&
-#         throw(ArgumentError("Invalid keyword argument. Doesn't contain '='."))
-#     name, val = ex.args
-#     !(name isa Symbol) &&
-#         throw(ArgumentError("First part of keyword argument isn't a symbol."))
-#     val isa QuoteNode && (val = val.value)
-#     (name, val)
-# end
