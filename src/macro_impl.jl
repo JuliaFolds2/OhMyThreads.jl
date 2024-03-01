@@ -18,7 +18,7 @@ function tasks_macro(forex)
     settings = Settings()
 
     inits_before, inits_names = _maybe_handle_init_block!(forbody.args)
-    tls_names = map(x -> x.args[1], inits_before)
+    tls_names = isnothing(inits_before) ? [] : map(x -> x.args[1], inits_before)
     
     _maybe_handle_set_block!(settings, forbody.args)
 
