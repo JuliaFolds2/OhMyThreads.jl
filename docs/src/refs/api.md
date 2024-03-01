@@ -12,6 +12,8 @@ Order   = [:function, :macro, :type]
 ### Macros
 ```@docs
 @tasks
+@set
+@init
 ```
 
 ### Functions

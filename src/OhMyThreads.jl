@@ -12,7 +12,7 @@ using TaskLocalValues: TaskLocalValues
 const TaskLocalValue = TaskLocalValues.TaskLocalValue
 
 include("functions.jl")
-include("macro.jl")
+include("macros.jl")
 
 include("tools.jl")
 include("schedulers.jl")
@@ -20,7 +20,7 @@ using .Schedulers: Scheduler,
     DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
 include("implementation.jl")
 
-export @tasks
+export @tasks, @set, @init
 export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
 export Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
 
