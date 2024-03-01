@@ -32,7 +32,7 @@ function tasks_macro(forex)
           end)
 
     else
-        :(local mapping_function = WithTaskLocalValues($(tls_names...),) do $(inits_names...)
+        :(local mapping_function = WithTaskLocalValues(($(tls_names...),)) do ($(inits_names...),)
               function mapping_function_local($itvar,)
                   $(forbody)
               end

@@ -6,7 +6,7 @@ This callable function-like object is meant to represent a function which closes
 
 ```
 TLV{T} = TaskLocalValue{T}
-f = WithTaskLocalValues(TLV{Int}(() -> 1), TLV{Int}(() -> 2)) do x, y
+f = WithTaskLocalValues((TLV{Int}(() -> 1), TLV{Int}(() -> 2))) do (x, y)
     z -> (x + y)/z
 end
 ```
@@ -31,9 +31,9 @@ the function is called.
 struct WithTaskLocalValues{F, TLVs <: Tuple{Vararg{TaskLocalValue}}} <: Function
     inner_func::F
     tasklocalvalues::TLVs
-    function WithTaskLocalValues(f::F, args...) where {F}
-        new{F, typeof(args)}(f, args)
-    end
+    # function WithTaskLocalValues(f::F, args...) where {F}
+    #     new{F, typeof(args)}(f, args)
+    # end
 end
 
 """
@@ -59,9 +59,11 @@ let x = TLV{Int}(() -> 1), y = TLV{Int}(() -> 2)
 end
 ```
 """
-promise_task_local(f::WithTaskLocalValues) = f.inner_func(map(x -> x[], f.tasklocalvalues)...)
+function promise_task_local(f::WithTaskLocalValues{F}) where {F}
+    f.inner_func(map(x -> x[], f.tasklocalvalues))
+end
 promise_task_local(f::Any) = f
 
-function (f::WithTaskLocalValues{F, TLVs})(args...; kwargs...) where {F, TLVs}
+function (f::WithTaskLocalValues{F})(args...; kwargs...) where {F}
     promise_task_local(f)(args...; kwargs...)
 end

@@ -182,6 +182,19 @@ end
 
 #-------------------------------------------------------------
 
+function maybe_rewrap(g::G, f::F) where {G, F}
+    g(f)
+end
+function maybe_rewrap(g::G, f::WithTaskLocalValues{F}) where {G, F}
+    (;inner_func, tasklocalvalues) = f
+    WithTaskLocalValues(f.tasklocalvalues) do vals
+        f = inner_func(vals)
+        g(f)
+    end
+end
+
+#------------------------------------------------------------
+
 function tmap(f, ::Type{T}, A::AbstractArray, _Arrs::AbstractArray...; kwargs...) where {T}
     Arrs = (A, _Arrs...)
     tmap!(f, similar(A, T), Arrs...; kwargs...)
@@ -227,12 +240,13 @@ function _tmap(scheduler::DynamicScheduler{false},
     tasks = map(eachindex(A)) do i
         @spawn threadpool begin
             args = map(A -> A[i], Arrs)
-            f(args...)
+            promise_task_local(f)(args...)
         end
     end
     v = map(fetch, tasks)
     reshape(v, size(A)...)
 end
+
 
 # w/o chunking (DynamicScheduler{false}): ChunkSplitters.Chunk
 function _tmap(scheduler::DynamicScheduler{false},
@@ -242,7 +256,7 @@ function _tmap(scheduler::DynamicScheduler{false},
         kwargs...)
     (; threadpool) = scheduler
     tasks = map(A) do idcs
-        @spawn threadpool f(idcs)
+        @spawn threadpool promise_task_local(f)(idcs)
     end
     map(fetch, tasks)
 end
@@ -259,7 +273,7 @@ function _tmap(scheduler::StaticScheduler{false},
     end
     tasks = map(enumerate(A)) do (c, idcs)
         tid = @inbounds nthtid(c)
-        @spawnat tid f(idcs)
+        @spawnat tid promise_task_local(f)(idcs)
     end
     map(fetch, tasks)
 end
@@ -273,10 +287,13 @@ function _tmap(scheduler::Scheduler,
     Arrs = (A, _Arrs...)
     idcs = collect(chunks(A; n = scheduler.nchunks))
     reduction_f = append!!
-    v = tmapreduce(reduction_f, idcs; scheduler, kwargs...) do inds
-        args = map(A -> @view(A[inds]), Arrs)
-        map(f, args...)
+    mapping_f = maybe_rewrap(f) do f
+        function mapping_function(inds)
+            args = map(A -> @view(A[inds]), Arrs)
+            map(f, args...)
+        end
     end
+    v = tmapreduce(mapping_f, reduction_f, idcs; scheduler, kwargs...)
     reshape(v, size(A)...)
 end
 
@@ -291,11 +308,14 @@ end
     end
     Arrs = (A, _Arrs...)
     @boundscheck check_all_have_same_indices((out, Arrs...))
-    tforeach(eachindex(out); scheduler, kwargs...) do i
-        args = map(A -> @inbounds(A[i]), Arrs)
-        res = f(args...)
-        out[i] = res
+    mapping_f = maybe_rewrap(f) do f
+        function mapping_function(i)
+            args = map(A -> @inbounds(A[i]), Arrs)
+            res = f(args...)
+            out[i] = res
+        end
     end
+    tforeach(mapping_f, eachindex(out); scheduler, kwargs...)
     out
 end
 
