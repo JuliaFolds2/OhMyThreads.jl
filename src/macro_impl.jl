@@ -1,9 +1,3 @@
-Base.@kwdef mutable struct Settings
-    scheduler::Expr = :(DynamicScheduler())
-    reducer::Union{Expr, Symbol, Nothing} = nothing
-    collect::Bool = false
-end
-
 function tasks_macro(forex)
     if forex.head != :for
         throw(ErrorException("Expected a for loop after `@tasks`."))
@@ -67,6 +61,12 @@ function tasks_macro(forex)
     end
 
     result
+end
+
+Base.@kwdef mutable struct Settings
+    scheduler::Expr = :(DynamicScheduler())
+    reducer::Union{Expr, Symbol, Nothing} = nothing
+    collect::Bool = false
 end
 
 function _sym2scheduler(s)
