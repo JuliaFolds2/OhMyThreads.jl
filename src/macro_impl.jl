@@ -9,6 +9,10 @@ function tasks_macro(forex)
         throw(ErrorException("Expected a for loop after `@tasks`."))
     else
         if forex.args[1].head != :(=)
+            # this'll catch cases like
+            # @tasks for _ ∈ 1:10, _ ∈ 1:10
+            #     body
+            # end
             throw(ErrorException("`@tasks` currently only supports a single threaded loop, got $(forex.args[1])"))
         end
         it = forex.args[1]
@@ -130,7 +134,7 @@ function _init_assign_to_exprs(ex)
     tls_type = esc(left_ex.args[2])
     tls_def = esc(ex.args[2])
     @gensym tls_storage
-    init_before = :($(tls_storage) = OhMyThreads.TaskLocalValue{$tls_type}(() -> $(tls_def)))
+    init_before = :($(tls_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
     init_inner = :($(tls_sym) = $(tls_storage)[])
     return init_before, init_inner
 end
