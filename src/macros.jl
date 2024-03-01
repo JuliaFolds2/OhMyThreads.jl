@@ -77,7 +77,7 @@ end
 
 Can be used inside a `@tasks for ... end` block to specify
 [task-local values](@ref TLS) (TLV) via explicitly typed assignments.
-These values will be allocated once per task
+These values will be allocated and de-referenced once per task
 (rather than once per iteration) and can be re-used between different task-local iterations.
 
 There can only be a single `@init` block in a `@tasks for ... end` block. To specify
