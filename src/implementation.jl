@@ -2,7 +2,7 @@ module Implementation
 
 import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
 
-using OhMyThreads: chunks, @spawn, @spawnat
+using OhMyThreads: chunks, @spawn, @spawnat, WithTaskLocalValues, promise_task_local
 using OhMyThreads.Tools: nthtid
 using OhMyThreads: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
 using OhMyThreads.Schedulers: chunking_enabled
@@ -51,15 +51,15 @@ function _tmapreduce(f,
     if chunking_enabled(scheduler)
         tasks = map(chunks(first(Arrs); n = nchunks, split)) do inds
             args = map(A -> view(A, inds), Arrs)
-            @spawn threadpool mapreduce(f, op, args...; $mapreduce_kwargs...)
+            @spawn threadpool mapreduce(promise_task_local(f), promise_task_local(op), args...; $mapreduce_kwargs...)
         end
-        mapreduce(fetch, op, tasks)
+        mapreduce(fetch, promise_task_local(op), tasks)
     else
         tasks = map(eachindex(first(Arrs))) do i
             args = map(A -> @inbounds(A[i]), Arrs)
-            @spawn threadpool f(args...)
+            @spawn threadpool promise_task_local(f)(args...)
         end
-        mapreduce(fetch, op, tasks; mapreduce_kwargs...)
+        mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
     end
 end
 
@@ -73,9 +73,9 @@ function _tmapreduce(f,
     (; nchunks, split, threadpool) = scheduler
     chunking_enabled(scheduler) && auto_disable_chunking_warning()
     tasks = map(only(Arrs)) do idcs
-        @spawn threadpool f(idcs)
+        @spawn threadpool promise_task_local(f)(idcs)
     end
-    mapreduce(fetch, op, tasks; mapreduce_kwargs...)
+    mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
 end
 
 # StaticScheduler: AbstractArray/Generic
@@ -92,9 +92,9 @@ function _tmapreduce(f,
         tasks = map(enumerate(chunks(first(Arrs); n, split))) do (c, inds)
             tid = @inbounds nthtid(c)
             args = map(A -> view(A, inds), Arrs)
-            @spawnat tid mapreduce(f, op, args...; mapreduce_kwargs...)
+            @spawnat tid mapreduce(promise_task_local(f), promise_task_local(op), args...; mapreduce_kwargs...)
         end
-        mapreduce(fetch, op, tasks)
+        mapreduce(fetch, promise_task_local(op), tasks)
     else
         if length(first(Arrs)) > nthreads()
             error("You have disabled chunking but provided an input with more then " *
@@ -104,9 +104,9 @@ function _tmapreduce(f,
         tasks = map(enumerate(eachindex(first(Arrs)))) do (c, i)
             tid = @inbounds nthtid(c)
             args = map(A -> @inbounds(A[i]), Arrs)
-            @spawnat tid f(args...)
+            @spawnat tid promise_task_local(f)(args...)
         end
-        mapreduce(fetch, op, tasks; mapreduce_kwargs...)
+        mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
     end
 end
 
@@ -126,9 +126,9 @@ function _tmapreduce(f,
     end
     tasks = map(enumerate(chnks)) do (c, idcs)
         tid = @inbounds nthtid(c)
-        @spawnat tid f(idcs)
+        @spawnat tid promise_task_local(f)(idcs)
     end
-    mapreduce(fetch, op, tasks; mapreduce_kwargs...)
+    mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
 end
 
 # GreedyScheduler
@@ -153,11 +153,11 @@ function _tmapreduce(f,
         end
     end
     tasks = map(1:ntasks) do _
-        @spawn mapreduce(op, ch; mapreduce_kwargs...) do args
-            f(args...)
+        @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
+            promise_task_local(f)(args...)
         end
     end
-    mapreduce(fetch, op, tasks; mapreduce_kwargs...)
+    mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
 end
 
 function check_all_have_same_indices(Arrs)

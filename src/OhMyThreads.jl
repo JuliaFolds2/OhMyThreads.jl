@@ -10,7 +10,7 @@ const chunks = ChunkSplitters.chunks
 
 using TaskLocalValues: TaskLocalValues
 const TaskLocalValue = TaskLocalValues.TaskLocalValue
-
+include("types.jl")
 include("functions.jl")
 include("macros.jl")
 

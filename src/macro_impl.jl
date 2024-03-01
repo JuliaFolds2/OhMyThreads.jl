@@ -17,35 +17,41 @@ function tasks_macro(forex)
 
     settings = Settings()
 
-    inits_before, init_inner = _maybe_handle_init_block!(forbody.args)
+    inits_before, inits_names = _maybe_handle_init_block!(forbody.args)
+    tls_names = map(x -> x.args[1], inits_before)
+    
     _maybe_handle_set_block!(settings, forbody.args)
 
     forbody = esc(forbody)
     itrng = esc(itrng)
     itvar = esc(itvar)
 
-    # @show settings
+    make_mapping_function = if isempty(tls_names)
+        :(local function mapping_function($itvar,)
+              $(forbody)
+          end)
+
+    else
+        :(local mapping_function = WithTaskLocalValues($(tls_names...),) do $(inits_names...)
+              function mapping_function_local($itvar,)
+                  $(forbody)
+              end
+          end)
+    end
     q = if !isnothing(settings.reducer)
         quote
-            tmapreduce(
-                $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) do $(itvar)
-                $(init_inner)
-                $(forbody)
-            end
+            $make_mapping_function
+            tmapreduce(mapping_function, $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) 
         end
     elseif settings.collect
         quote
-            tmap($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
-                $(init_inner)
-                $(forbody)
-            end
+            $make_mapping_function
+            tmap(mapping_function, $(itrng); scheduler = $(settings.scheduler))
         end
     else
         quote
-            tforeach($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
-                $(init_inner)
-                $(forbody)
-            end
+            $make_mapping_function
+            tforeach(mapping_function, $(itrng); scheduler = $(settings.scheduler))
         end
     end
 
@@ -96,21 +102,22 @@ end
 
 function _unfold_init_block(ex)
     inits_before = Expr[]
+    inits_names = Expr[]
     if ex.head == :(=)
-        initb, init_inner = _init_assign_to_exprs(ex)
+        initb, init_name = _init_assign_to_exprs(ex)
         push!(inits_before, initb)
+        push!(inits_names, init_name)
     elseif ex.head == :block
         tlsexprs = filter(x -> x isa Expr, ex.args) # skip LineNumberNode
-        init_inner = quote end
         for x in tlsexprs
-            initb, initi = _init_assign_to_exprs(x)
+            initb, initn = _init_assign_to_exprs(x)
             push!(inits_before, initb)
-            push!(init_inner.args, initi)
+            push!(inits_names,  initn)
         end
     else
         throw(ErrorException("Wrong usage of @init. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
     end
-    return inits_before, init_inner
+    return inits_before, inits_names
 end
 
 function _init_assign_to_exprs(ex)
@@ -121,10 +128,10 @@ function _init_assign_to_exprs(ex)
     tls_sym = esc(left_ex.args[1])
     tls_type = esc(left_ex.args[2])
     tls_def = esc(ex.args[2])
-    @gensym tls_storage
-    init_before = :($(tls_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
-    init_inner = :($(tls_sym) = $(tls_storage)[])
-    return init_before, init_inner
+    @gensym tl_storage
+    init_before = :($(tl_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
+    init_name = :($(tls_sym))
+    return init_before, init_name
 end
 
 function _maybe_handle_set_block!(settings, args)
