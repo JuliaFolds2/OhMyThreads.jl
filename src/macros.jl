@@ -131,6 +131,8 @@ Supports reductions (`@set reducer=<reducer function>`) and collecting the resul
 Under the hood, the `for` loop is translated into corresponding parallel
 [`tforeach`](@ref), [`tmapreduce`](@ref), or [`tmap`](@ref) calls.
 
+See also: [`@set`](@ref), [`@init`](@ref)
+
 ## Examples
 
 ```julia
