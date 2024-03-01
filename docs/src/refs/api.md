@@ -9,6 +9,13 @@ Order   = [:function, :macro, :type]
 
 ## Exported
 
+### Macros
+```@docs
+@tasks
+@set
+@init
+```
+
 ### Functions
 
 ```@docs

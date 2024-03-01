@@ -40,8 +40,19 @@ focus on [data parallelism](https://en.wikipedia.org/wiki/Data_parallelism), tha
 ```julia
 using OhMyThreads
 
+# Variant 1: function API
 function mc_parallel(N; kw...)
     M = tmapreduce(+, 1:N; kw...) do i
+        rand()^2 + rand()^2 < 1.0
+    end
+    pi = 4 * M / N
+    return pi
+end
+
+# Variant 2: macro API
+function mc_parallel_macro(N)
+    M = @tasks for i in 1:N
+        @set reducer=+
         rand()^2 + rand()^2 < 1.0
     end
     pi = 4 * M / N

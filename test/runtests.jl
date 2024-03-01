@@ -1,23 +1,25 @@
 using Test, OhMyThreads
 
-sets_to_test = [
-    (~=isapprox, f=sin∘*, op=+, itrs = (rand(ComplexF64, 10, 10), rand(-10:10, 10, 10)), init=complex(0.0))
-    (~=isapprox, f=cos, op=max, itrs = (1:100000,), init=0.0)
-    (~=(==), f=round, op=vcat, itrs = (randn(1000),), init=Float64[])
-    (~=(==), f=last, op=*, itrs = ([1=>"a", 2=>"b", 3=>"c", 4=>"d", 5=>"e"],), init="")
-]
-
+sets_to_test = [(~ = isapprox, f = sin ∘ *, op = +,
+                    itrs = (rand(ComplexF64, 10, 10), rand(-10:10, 10, 10)),
+                    init = complex(0.0))
+                (~ = isapprox, f = cos, op = max, itrs = (1:100000,), init = 0.0)
+                (~ = (==), f = round, op = vcat, itrs = (randn(1000),), init = Float64[])
+                (~ = (==), f = last, op = *,
+                    itrs = ([1 => "a", 2 => "b", 3 => "c", 4 => "d", 5 => "e"],),
+                    init = "")]
 
 @testset "Basics" begin
-    for (; ~, f, op, itrs, init) ∈ sets_to_test
+    for (; ~, f, op, itrs, init) in sets_to_test
         @testset "f=$f, op=$op, itrs::$(typeof(itrs))" begin
-            @testset for sched ∈ (StaticScheduler, DynamicScheduler, GreedyScheduler, DynamicScheduler{false})
-                @testset for split ∈ (:batch, :scatter)
-                    for nchunks ∈ (1, 2, 6)
+            @testset for sched in (
+                StaticScheduler, DynamicScheduler, GreedyScheduler, DynamicScheduler{false})
+                @testset for split in (:batch, :scatter)
+                    for nchunks in (1, 2, 6)
                         if sched == GreedyScheduler
-                            scheduler = sched(; ntasks=nchunks)
+                            scheduler = sched(; ntasks = nchunks)
                         elseif sched == DynamicScheduler{false}
-                            scheduler = DynamicScheduler(; nchunks=0)
+                            scheduler = DynamicScheduler(; nchunks = 0)
                         else
                             scheduler = sched(; nchunks, split)
                         end
@@ -58,16 +60,120 @@ end
 
 @testset "ChunkSplitters.Chunk" begin
     x = rand(100)
-    chnks = OhMyThreads.chunks(x; n=Threads.nthreads())
-    for scheduler in (DynamicScheduler(; nchunks=0), StaticScheduler(; nchunks=0))
+    chnks = OhMyThreads.chunks(x; n = Threads.nthreads())
+    for scheduler in (DynamicScheduler(; nchunks = 0), StaticScheduler(; nchunks = 0))
         @testset "$scheduler" begin
             @test tmap(x -> sin.(x), chnks; scheduler) ≈ map(x -> sin.(x), chnks)
-            @test tmapreduce(x -> sin.(x), vcat, chnks; scheduler) ≈ mapreduce(x -> sin.(x), vcat, chnks)
+            @test tmapreduce(x -> sin.(x), vcat, chnks; scheduler) ≈
+                  mapreduce(x -> sin.(x), vcat, chnks)
             @test tcollect(chnks; scheduler) == collect(chnks)
             @test treduce(vcat, chnks; scheduler) == reduce(vcat, chnks)
             @test isnothing(tforeach(x -> sin.(x), chnks; scheduler))
         end
     end
+end
+
+@testset "macro API" begin
+    # basic
+    @test @tasks(for i in 1:3
+        i
+    end) |> isnothing
+
+    # reduction
+    @test @tasks(for i in 1:3
+        @set reducer=(+)
+        i
+    end) == 6
+
+    # scheduler settings
+    for sched in (StaticScheduler(), DynamicScheduler(), GreedyScheduler())
+        @test @tasks(for i in 1:3
+            @set scheduler=sched
+            i
+        end) |> isnothing
+    end
+    # scheduler settings as symbols
+    @test @tasks(for i in 1:3
+        @set scheduler=:static
+        i
+    end) |> isnothing
+    @test @tasks(for i in 1:3
+        @set scheduler=:dynamic
+        i
+    end) |> isnothing
+    @test @tasks(for i in 1:3
+        @set scheduler=:greedy
+        i
+    end) |> isnothing
+
+    # @set begin ... end
+    @test @tasks(for i in 1:10
+        @set begin
+            scheduler=StaticScheduler()
+            reducer=(+)
+        end
+        i
+    end) == 55
+    # multiple @set
+    @test @tasks(for i in 1:10
+        @set scheduler=StaticScheduler()
+        i
+        @set reducer=(+)
+    end) == 55
+
+    # TaskLocalValue
+    ntd = 2*Threads.nthreads()
+    ptrs = Vector{Ptr{Nothing}}(undef, ntd)
+    tids = Vector{UInt64}(undef, ntd)
+    tid() = OhMyThreads.Tools.taskid()
+    @test @tasks(for i in 1:ntd
+        @init C::Vector{Float64} = rand(3)
+        @set scheduler=:static
+        ptrs[i] = pointer_from_objref(C)
+        tids[i] = tid()
+    end) |> isnothing
+    # check that different iterations of a task
+    # have access to the same C (same pointer)
+    for t in unique(tids)
+        @test allequal(ptrs[findall(==(t), tids)])
+    end
+    # TaskLocalValue (another fundamental check)
+    @test @tasks(for i in 1:ntd
+        @init x::Ref{Int64} = Ref(0)
+        @set reducer = (+)
+        @set scheduler = :static
+        x[] += 1
+        x[]
+    end) == 1.5 * ntd # if a new x would be allocated per iteration, we'd get ntd here.
+    # TaskLocalValue (begin ... end block)
+    @test @tasks(for i in 1:10
+        @init begin
+            C::Matrix{Int64} = fill(4, 3, 3)
+            x::Vector{Float64} = fill(5.0, 3)
+        end
+        @set reducer = (+)
+        sum(C * x)
+    end) == 1800
+
+    # hygiene / escaping
+    var = 3
+    sched = StaticScheduler()
+    data = rand(10)
+    red = (a,b) -> a+b
+    @test @tasks(for d in data
+        @set scheduler=sched
+        @set reducer=red
+        var * d
+    end) ≈ var * sum(data)
+
+    struct SingleInt
+        x::Int
+    end
+    @test @tasks(for _ in 1:10
+        @init C::SingleInt = SingleInt(var)
+        @set reducer=+
+        C.x
+    end) == 10*var
 end
 
 # Todo way more testing, and easier tests to deal with

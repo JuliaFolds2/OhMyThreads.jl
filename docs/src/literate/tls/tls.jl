@@ -164,6 +164,28 @@ res ≈ res_tlv
 # This solves our issues above and leads to $O(\textrm{parallel tasks})$
 # (instead of $O(\textrm{iterations})$) allocations.
 #
+# Note that if you use our `@tasks` macro API, there is built-in support for task-local
+# values via `@init`.
+#
+
+using OhMyThreads: @tasks
+
+function matmulsums_tlv_macro(As, Bs; kwargs...)
+    N = size(first(As), 1)
+    @tasks for i in eachindex(As,Bs)
+        @set collect=true
+        @init C::Matrix{Float64} = Matrix{Float64}(undef, N, N)
+        mul!(C, As[i], Bs[i])
+        sum(C)
+    end
+end
+
+res_tlv_macro = matmulsums_tlv_macro(As, Bs)
+res ≈ res_tlv_macro
+
+# Here, `@init` simply expands to the explicit pattern around `TaskLocalValue` above.
+#
+#
 # ### Benchmark
 #
 # The whole point of parallelization is increasing performance, so let's benchmark and
@@ -177,8 +199,9 @@ using BenchmarkTools
 @btime matmulsums_naive($As, $Bs);
 @btime matmulsums_manual($As, $Bs);
 @btime matmulsums_tlv($As, $Bs);
+@btime matmulsums_tlv_macro($As, $Bs);
 
-# As we can see, `matmulsums_tlv` (the version using `TaskLocalValue`) isn't only convenient
+# As we can see, `matmulsums_tlv` (and `matmulsums_tlv_macro`) isn't only convenient
 # but also efficient: It allocates much less memory than `matmulsums_naive` and is about on
 # par with the manual implementation.
 
@@ -371,3 +394,39 @@ sort(res_nu) ≈ sort(res_channel_flipped)
 @btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu);
 @btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu; ntasks = 2 * nthreads());
 @btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu; ntasks = 10 * nthreads());
+
+# ## Bumper.jl (only for the brave)
+#
+# If you are bold and want to cut down temporary allocations even more you can
+# give [Bumper.jl](https://github.com/MasonProtter/Bumper.jl) a try. Essentially, it
+# allows you to *bring your own stacks*, that is, task-local bump allocators which you can
+# dynamically allocate memory to, and reset them at the end of a code block, just like
+# Julia's stack.
+# Be warned though that Bumper.jl is (1) a rather young package with (likely) some bugs
+# and (2) can easily lead to segfaults when used incorrectly. It can make sense to use it
+# though if you can live with the risk and really can't avoid allocating many (many) times
+# on each parallel task. For our example, this isn't the case but let's nonetheless how one
+# would use Bumper.jl here.
+
+using Bumper
+using StrideArrays # makes things a little bit faster
+
+function matmulsums_bumper(As, Bs)
+    N = size(first(As), 1)
+    tmap(As, Bs) do A, B
+        @no_escape begin # promising that no memory will escape
+            C = @alloc(Float64, N, N) # from bump allocater (fake "stack")
+            mul!(C, A, B)
+            sum(C)
+        end
+    end
+end
+
+res_bumper = matmulsums_bumper(As, Bs);
+res ≈ res_bumper
+
+@btime matmulsums_bumper($As, $Bs);
+
+# Note that the benchmark is lying here about the total memory allocation,
+# because it doesn't show the allocation of the task-local bump allocators themselves
+# (the reason is that `SlabBuffer` uses `malloc` directly).

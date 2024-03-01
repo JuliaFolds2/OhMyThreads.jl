@@ -1,6 +1,11 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.4.6
+-------------
+
+- ![Feature][badge-feature] Introduction of macro API (`@tasks`) that transforms for loops into corresponding `tforeach`, `tmapreduce`, and `tmap` calls. This new API enables us to facilitate certain patterns, like defining task local values.
+
 Version 0.4.5
 -------------
 
