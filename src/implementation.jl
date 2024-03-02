@@ -211,7 +211,7 @@ to unwrap `f` and delegate its `TaskLocalValues` to `g`.
 This should always be equivalent to just calling `g(f)`.
 """
 function maybe_rewrap(g::G, f::WithTaskLocals{F}) where {G, F}
-    (;inner_func, tasklocalvalues) = f
+    (;inner_func, tasklocals) = f
     WithTaskLocals(f.tasklocals) do vals
         f = inner_func(vals)
         g(f)
