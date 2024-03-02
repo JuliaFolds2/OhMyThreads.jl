@@ -1,6 +1,12 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.4.7
+-------------
+
+- ![feature][badge-feature] Added `OhMyThreads.WithTaskLocals` that represents a closure over `TaskLocalValues`, but can have those values materialized as an optimization (using `OhMyThreads.promise_task_local`)
+- ![Enhancement][badge-enhancement] Made `@tasks` use `OhMyThreads.WithTaskLocals` automatically as an optimization.
+
 Version 0.4.6
 -------------
 
