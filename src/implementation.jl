@@ -2,7 +2,7 @@ module Implementation
 
 import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
 
-using OhMyThreads: chunks, @spawn, @spawnat, WithTaskLocalValues, promise_task_local
+using OhMyThreads: chunks, @spawn, @spawnat, WithTaskLocals, promise_task_local
 using OhMyThreads.Tools: nthtid
 using OhMyThreads: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
 using OhMyThreads.Schedulers: chunking_enabled
@@ -205,14 +205,14 @@ end
 """
    maybe_rewrap(g, f)
 
-takes a closure `g(f)` and if `f` is a `WithTaskLocalValues`, we're going
+takes a closure `g(f)` and if `f` is a `WithTaskLocals`, we're going
 to unwrap `f` and delegate its `TaskLocalValues` to `g`.
 
 This should always be equivalent to just calling `g(f)`.
 """
-function maybe_rewrap(g::G, f::WithTaskLocalValues{F}) where {G, F}
+function maybe_rewrap(g::G, f::WithTaskLocals{F}) where {G, F}
     (;inner_func, tasklocalvalues) = f
-    WithTaskLocalValues(f.tasklocalvalues) do vals
+    WithTaskLocals(f.tasklocals) do vals
         f = inner_func(vals)
         g(f)
     end

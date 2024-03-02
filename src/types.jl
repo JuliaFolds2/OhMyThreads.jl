@@ -1,12 +1,12 @@
 """
-    struct WithTaskLocalValues{F, TLVs <: Tuple{Vararg{TaskLocalValue}}} <: Function
+    struct WithTaskLocals{F, TLVs <: Tuple{Vararg{TaskLocalValue}}} <: Function
 
 This callable function-like object is meant to represent a function which closes over some
 [`TaskLocalValues`](@ref). This is, if you do
 
 ```
 TLV{T} = TaskLocalValue{T}
-f = WithTaskLocalValues((TLV{Int}(() -> 1), TLV{Int}(() -> 2))) do (x, y)
+f = WithTaskLocals((TLV{Int}(() -> 1), TLV{Int}(() -> 2))) do (x, y)
     z -> (x + y)/z
 end
 ```
@@ -19,7 +19,7 @@ g = let x = TLV{Int}(() -> 1), y = TLV{Int}(() -> 2)
 end
 ```
 however, the main difference is that you can call [`promise_task_local`](@ref) on a
-`WithTaskLocalValues` closure in order to turn it into something equivalent to
+`WithTaskLocals` closure in order to turn it into something equivalent to
 ```
 let x=x[], y=y[]
     z -> (x + y)/z
@@ -28,22 +28,19 @@ end
 which doesn't have the overhead of accessing the `task_local_storage` each time the closure is called.
 This of course will lose the safety advantages of `TaskLocalValue`, so you should never do
 `f_local = promise_task_local(f)` and then pass `f_local` to some unknown function, because if that
-unknown function calls `f_local` on a new task, you'll hit a race condition. 
+unknown function calls `f_local` on a new task, you'll hit a race condition.
 """
-struct WithTaskLocalValues{F, TLVs <: Tuple{Vararg{TaskLocalValue}}} <: Function
+struct WithTaskLocals{F, TLVs <: Tuple{Vararg{TaskLocalValue}}} <: Function
     inner_func::F
-    tasklocalvalues::TLVs
-    # function WithTaskLocalValues(f::F, args...) where {F}
-    #     new{F, typeof(args)}(f, args)
-    # end
+    tasklocals::TLVs
 end
 
 """
     promise_task_local(f) = f
-    promise_task_local(f::WithTaskLocalValues) = f.inner_func(map(x -> x[], f.tasklocalvalues)...)
+    promise_task_local(f::WithTaskLocals) = f.inner_func(map(x -> x[], f.tasklocals))
 
-Take a `WithTaskLocalValues` closure, grab the `TaskLocalValue`s, and passs them to the closure. That is,
-it turns a `WithTaskLocalValues` closure from the equivalent of
+Take a `WithTaskLocals` closure, grab the `TaskLocalValue`s, and passs them to the closure. That is,
+it turns a `WithTaskLocals` closure from the equivalent of
 ```
 TLV{T} = TaskLocalValue{T}
 let x = TLV{Int}(() -> 1), y = TLV{Int}(() -> 2)
@@ -65,11 +62,11 @@ This of course will lose the safety advantages of `TaskLocalValue`, so you shoul
 unknown function calls `f_local` on a new task, you'll hit a race condition. 
 ```
 """
-function promise_task_local(f::WithTaskLocalValues{F}) where {F}
-    f.inner_func(map(x -> x[], f.tasklocalvalues))
+function promise_task_local(f::WithTaskLocals{F}) where {F}
+    f.inner_func(map(x -> x[], f.tasklocals))
 end
 promise_task_local(f::Any) = f
 
-function (f::WithTaskLocalValues{F})(args...; kwargs...) where {F}
+function (f::WithTaskLocals{F})(args...; kwargs...) where {F}
     promise_task_local(f)(args...; kwargs...)
 end
