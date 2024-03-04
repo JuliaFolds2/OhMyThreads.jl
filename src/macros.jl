@@ -73,41 +73,43 @@ macro set(args...)
     error("The @set macro may only be used inside of a @tasks block.")
 end
 
-"""
-    @local name::T = value
-
-Can be used inside a `@tasks for ... end` block to specify
-[task-local values](@ref TLS) (TLV) via explicitly typed assignments.
-These values will be allocated once per task
-(rather than once per iteration) and can be re-used between different task-local iterations.
-
-There can only be a single `@local` block in a `@tasks for ... end` block. To specify
-multiple TLVs, use `@local begin ... end`. Compared to regular assignments, there are some
-limitations though, e.g. TLVs can't reference each other.
-
-## Examples
-
-```julia
-using OhMyThreads.Tools: taskid
-@tasks for i in 1:10
-    @set scheduler=DynamicScheduler(; nchunks=2)
-    @local x::Vector{Float64} = zeros(3) # TLV
-
-    x .+= 1
-    println(taskid(), " -> ", x)
-end
-```
-
-```julia
-@tasks for i in 1:10
-    @local begin
-        x::Vector{Int64} = rand(Int, 3)
-        M::Matrix{Float64} = rand(3, 3)
+@eval begin
+    """
+        @local name::T = value
+    
+    Can be used inside a `@tasks for ... end` block to specify
+    [task-local values](@ref TLS) (TLV) via explicitly typed assignments.
+    These values will be allocated once per task
+    (rather than once per iteration) and can be re-used between different task-local iterations.
+    
+    There can only be a single `@local` block in a `@tasks for ... end` block. To specify
+    multiple TLVs, use `@local begin ... end`. Compared to regular assignments, there are some
+    limitations though, e.g. TLVs can't reference each other.
+    
+    ## Examples
+    
+    ```julia
+    using OhMyThreads.Tools: taskid
+    @tasks for i in 1:10
+        @set scheduler=DynamicScheduler(; nchunks=2)
+        @local x::Vector{Float64} = zeros(3) # TLV
+    
+        x .+= 1
+        println(taskid(), " -> ", x)
     end
-    # ...
-end
-```
-"""
-macro var"local"(args...)
-    error("The @local macro may only be used inside of a @tasks block.")
+    ```
+    
+    ```julia
+    @tasks for i in 1:10
+        @local begin
+            x::Vector{Int64} = rand(Int, 3)
+            M::Matrix{Float64} = rand(3, 3)
+        end
+        # ...
+    end
+    ```
+    """
+    macro $(Symbol("local"))(args...)
+        error("The @local macro may only be used inside of a @tasks block.")
+    end
 end
