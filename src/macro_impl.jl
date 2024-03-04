@@ -112,7 +112,7 @@ function _unfold_atlocal_block(ex)
     locals_names = Expr[]
     if ex.head == :(=)
         localb, localn = _atlocal_assign_to_exprs(ex)
-        push!(locals_before, initb)
+        push!(locals_before, localb)
         push!(locals_names, localn)
     elseif ex.head == :block
         tlsexprs = filter(x -> x isa Expr, ex.args) # skip LineNumberNode
