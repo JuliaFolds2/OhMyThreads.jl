@@ -17,7 +17,7 @@ function tasks_macro(forex)
 
     settings = Settings()
 
-    locals_before, local_inner = _maybe_handle_atlocal_block!(forbody.args)
+    locals_before, locals_names = _maybe_handle_atlocal_block!(forbody.args)
     tls_names = isnothing(locals_before) ? [] : map(x -> x.args[1], locals_before)
     _maybe_handle_atset_block!(settings, forbody.args)
 
@@ -31,7 +31,7 @@ function tasks_macro(forex)
           end)
 
     else
-        :(local mapping_function = WithTaskLocals(($(tls_names...),)) do ($(inits_names...),)
+        :(local mapping_function = WithTaskLocals(($(tls_names...),)) do ($(locals_names...),)
               function mapping_function_local($itvar,)
                   $(forbody)
               end
