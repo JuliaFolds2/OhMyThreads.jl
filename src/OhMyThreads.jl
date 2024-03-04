@@ -1,7 +1,7 @@
 module OhMyThreads
 
 using StableTasks: StableTasks
-for mac ∈ Symbol.(["@spawn", "@spawnat", "@fetch", "@fetchfrom"])
+for mac in Symbol.(["@spawn", "@spawnat", "@fetch", "@fetchfrom"])
     @eval const $mac = getproperty(StableTasks, $(QuoteNode(mac)))
 end
 
@@ -16,12 +16,11 @@ include("macros.jl")
 
 include("tools.jl")
 include("schedulers.jl")
-using .Schedulers: Scheduler,
-    DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
+using .Schedulers: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
 include("implementation.jl")
 
 export @tasks, @set, @local
 export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
-export Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
+export Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
 
 end # module OhMyThreads

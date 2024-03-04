@@ -1,6 +1,13 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.5.0
+-------------
+
+- ![Feature][badge-feature] `@set init = ...` may now be used to specify an initial value for a reduction (only has an effect in conjuction with `@set reducer=...` and triggers a warning otherwise).
+- ![BREAKING][badge-breaking] Within a `@tasks` block, task-local values must from now on be defined via `@local` instead of `@init` (renamed).
+- ![BREAKING][badge-breaking] The (already deprecated) `SpawnAllScheduler` has been dropped.
+
 Version 0.4.6
 -------------
 
