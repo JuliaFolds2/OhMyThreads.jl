@@ -120,6 +120,22 @@ end
         i
         @set reducer=(+)
     end) == 55
+    # @set init
+    @test @tasks(for i in 1:10
+        @set begin
+            reducer=(+)
+            init=0.0
+        end
+        i
+    end) == 55.0
+    @test @tasks(for i in 1:10
+        @set begin
+            reducer=(+)
+            init=0.0*im
+        end
+        i
+    end) == (55.0 + 0.0im)
+
 
     # TaskLocalValue
     ntd = 2*Threads.nthreads()

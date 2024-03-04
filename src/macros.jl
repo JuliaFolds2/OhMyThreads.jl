@@ -67,6 +67,7 @@ Multiple settings are supported, either as separate `@set` statements or via
 * `scheduler` (e.g. `scheduler=:static`): Can be either a [`Scheduler`](@ref) or a `Symbol` (e.g. `:dynamic` or `:static`)
 * `reducer` (e.g. `reducer=+`): Indicates that a reduction should be performed with the provided binary function. See [`tmapreduce`](@ref) for more information.
 * `collect` (e.g. `collect=true`): Indicates that results should be collected (similar to `map`).
+* `init` (e.g. `init=0.0`): Initial value to be used in a reduction (requires `reducer=...`).
 """
 macro set(args...)
     error("The @set macro may only be used inside of a @tasks block.")

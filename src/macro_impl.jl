@@ -18,7 +18,7 @@ function tasks_macro(forex)
     settings = Settings()
 
     locals_before, local_inner = _maybe_handle_atlocal_block!(forbody.args)
-    _maybe_handle_set_block!(settings, forbody.args)
+    _maybe_handle_atset_block!(settings, forbody.args)
 
     forbody = esc(forbody)
     itrng = esc(itrng)
@@ -26,14 +26,26 @@ function tasks_macro(forex)
 
     # @show settings
     q = if !isnothing(settings.reducer)
-        quote
-            tmapreduce(
-                $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) do $(itvar)
-                $(local_inner)
-                $(forbody)
+        if !isnothing(settings.init)
+            quote
+                tmapreduce(
+                    $(settings.reducer), $(itrng); scheduler = $(settings.scheduler),
+                    init = $(settings.init)) do $(itvar)
+                    $(local_inner)
+                    $(forbody)
+                end
+            end
+        else
+            quote
+                tmapreduce(
+                    $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) do $(itvar)
+                    $(local_inner)
+                    $(forbody)
+                end
             end
         end
     elseif settings.collect
+        maybe_warn_useless_init(settings)
         quote
             tmap($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
                 $(local_inner)
@@ -41,6 +53,7 @@ function tasks_macro(forex)
             end
         end
     else
+        maybe_warn_useless_init(settings)
         quote
             tforeach($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
                 $(local_inner)
@@ -63,10 +76,16 @@ function tasks_macro(forex)
     result
 end
 
+function maybe_warn_useless_init(settings)
+    !isnothing(settings.init) &&
+        @warn("The @set init = ... settings won't have any effect because no reduction is performed.")
+end
+
 Base.@kwdef mutable struct Settings
     scheduler::Expr = :(DynamicScheduler())
     reducer::Union{Expr, Symbol, Nothing} = nothing
     collect::Bool = false
+    init::Union{Expr, Symbol, Nothing} = nothing
 end
 
 function _sym2scheduler(s)
@@ -127,18 +146,18 @@ function _atlocal_assign_to_exprs(ex)
     return local_before, local_inner
 end
 
-function _maybe_handle_set_block!(settings, args)
+function _maybe_handle_atset_block!(settings, args)
     idcs = findall(args) do arg
         arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@set")
     end
-    isnothing(idcs) && return # no set block found
+    isnothing(idcs) && return # no @set block found
     for i in idcs
         ex = args[i].args[3]
         if ex.head == :(=)
-            _handle_set_single_assign!(settings, ex)
+            _handle_atset_single_assign!(settings, ex)
         elseif ex.head == :block
             exprs = filter(x -> x isa Expr, ex.args) # skip LineNumberNode
-            _handle_set_single_assign!.(Ref(settings), exprs)
+            _handle_atset_single_assign!.(Ref(settings), exprs)
         else
             throw(ErrorException("Wrong usage of @set. You must either provide an assignment or multiple assignments in a `begin ... end` block."))
         end
@@ -150,7 +169,7 @@ function _maybe_handle_set_block!(settings, args)
     end
 end
 
-function _handle_set_single_assign!(settings, ex)
+function _handle_atset_single_assign!(settings, ex)
     if ex.head != :(=)
         throw(ErrorException("Wrong usage of @set. Expected assignment, e.g. `scheduler = StaticScheduler()`."))
     end
