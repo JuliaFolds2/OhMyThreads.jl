@@ -29,8 +29,9 @@ with other multithreaded code.
     * Setting `nchunks = 0` turns off the internal chunking entirely (a task is spawned for each element). Note that, depending on the input, this scheduler **might spawn many(!) tasks** and can be
     very costly!
 - `split::Symbol` (default `:batch`):
-    * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements.
-    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
+* Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements and order is maintained.
+* See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
+* Beware that for `split=:scatter` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 - `threadpool::Symbol` (default `:default`):
     * Possible options are `:default` and `:interactive`.
     * The high-priority pool `:interactive` should be used very carefully since tasks on this threadpool should not be allowed to run for a long time without `yield`ing as it can interfere with [heartbeat](https://en.wikipedia.org/wiki/Heartbeat_(computing)) processes.
@@ -67,8 +68,9 @@ Isn't well composable with other multithreaded code though.
     * Setting `nchunks < nthreads()` is an effective way to use only a subset of the available threads.
     * Currently, `nchunks > nthreads()` **isn't officialy supported** but, for now, will fall back to `nchunks = nthreads()`.
 - `split::Symbol` (default `:batch`):
-    * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements.
+    * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements and order is maintained.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
+    * Beware that for `split=:scatter` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 """
 Base.@kwdef struct StaticScheduler{C} <: Scheduler
     nchunks::Int = nthreads()
