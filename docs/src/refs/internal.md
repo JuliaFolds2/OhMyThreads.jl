@@ -1,13 +1,11 @@
+```@meta
+CollapsedDocStrings = true
+```
+
 # Internal
 
-**The following is internal, i.e. not public API, and might change at any point.**
-
-## Index
-
-```@index
-Pages   = ["internal.md"]
-Order   = [:function, :macro]
-```
+!!! warning
+    **Everything on this page is internal and might change at any point!**
 
 ## References
 

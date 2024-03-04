@@ -1,11 +1,8 @@
-# [Public API](@id API)
-
-## Index
-
-```@index
-Pages   = ["api.md"]
-Order   = [:function, :macro, :type]
+```@meta
+CollapsedDocStrings = true
 ```
+
+# [Public API](@id API)
 
 ## Exported
 
