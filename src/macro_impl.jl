@@ -124,7 +124,7 @@ function _unfold_atlocal_block(ex)
     else
         throw(ErrorException("Wrong usage of @local. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
     end
-    return locals_before, local_inner
+    return locals_before, locals_names
 end
 
 function _atlocal_assign_to_exprs(ex)
