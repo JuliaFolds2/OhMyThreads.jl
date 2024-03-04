@@ -108,10 +108,6 @@ Base.@kwdef struct GreedyScheduler <: Scheduler
     end
 end
 
-@deprecate SpawnAllScheduler(args...; kwargs...) DynamicScheduler(args...;
-    nchunks = 0,
-    kwargs...)
-
 chunking_enabled(s::Scheduler) = chunking_enabled(typeof(s))
 chunking_enabled(::Type{DynamicScheduler{C}}) where {C} = C
 chunking_enabled(::Type{StaticScheduler{C}}) where {C} = C
