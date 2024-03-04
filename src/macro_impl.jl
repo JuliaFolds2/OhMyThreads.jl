@@ -17,7 +17,7 @@ function tasks_macro(forex)
 
     settings = Settings()
 
-    inits_before, init_inner = _maybe_handle_init_block!(forbody.args)
+    locals_before, local_inner = _maybe_handle_atlocal_block!(forbody.args)
     _maybe_handle_set_block!(settings, forbody.args)
 
     forbody = esc(forbody)
@@ -29,21 +29,21 @@ function tasks_macro(forex)
         quote
             tmapreduce(
                 $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) do $(itvar)
-                $(init_inner)
+                $(local_inner)
                 $(forbody)
             end
         end
     elseif settings.collect
         quote
             tmap($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
-                $(init_inner)
+                $(local_inner)
                 $(forbody)
             end
         end
     else
         quote
             tforeach($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
-                $(init_inner)
+                $(local_inner)
                 $(forbody)
             end
         end
@@ -54,8 +54,8 @@ function tasks_macro(forex)
     result = :(let
     end)
     push!(result.args[2].args, q)
-    if !isnothing(inits_before)
-        for x in inits_before
+    if !isnothing(locals_before)
+        for x in locals_before
             push!(result.args[1].args, x)
         end
     end
@@ -81,39 +81,39 @@ function _sym2scheduler(s)
     end
 end
 
-function _maybe_handle_init_block!(args)
-    inits_before = nothing
-    init_inner = nothing
+function _maybe_handle_atlocal_block!(args)
+    locals_before = nothing
+    local_inner = nothing
     tlsidx = findfirst(args) do arg
         arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@local")
     end
     if !isnothing(tlsidx)
-        inits_before, init_inner = _unfold_init_block(args[tlsidx].args[3])
+        locals_before, local_inner = _unfold_atlocal_block(args[tlsidx].args[3])
         deleteat!(args, tlsidx)
     end
-    return inits_before, init_inner
+    return locals_before, local_inner
 end
 
-function _unfold_init_block(ex)
-    inits_before = Expr[]
+function _unfold_atlocal_block(ex)
+    locals_before = Expr[]
     if ex.head == :(=)
-        initb, init_inner = _init_assign_to_exprs(ex)
-        push!(inits_before, initb)
+        localb, local_inner = _atlocal_assign_to_exprs(ex)
+        push!(locals_before, localb)
     elseif ex.head == :block
         tlsexprs = filter(x -> x isa Expr, ex.args) # skip LineNumberNode
-        init_inner = quote end
+        local_inner = quote end
         for x in tlsexprs
-            initb, initi = _init_assign_to_exprs(x)
-            push!(inits_before, initb)
-            push!(init_inner.args, initi)
+            localb, locali = _atlocal_assign_to_exprs(x)
+            push!(locals_before, localb)
+            push!(local_inner.args, locali)
         end
     else
         throw(ErrorException("Wrong usage of @local. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
     end
-    return inits_before, init_inner
+    return locals_before, local_inner
 end
 
-function _init_assign_to_exprs(ex)
+function _atlocal_assign_to_exprs(ex)
     left_ex = ex.args[1]
     if left_ex isa Symbol || left_ex.head != :(::)
         throw(ErrorException("Wrong usage of @local. Expected typed assignment, e.g. `A::Matrix{Float} = rand(2,2)`."))
@@ -122,9 +122,9 @@ function _init_assign_to_exprs(ex)
     tls_type = esc(left_ex.args[2])
     tls_def = esc(ex.args[2])
     @gensym tls_storage
-    init_before = :($(tls_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
-    init_inner = :($(tls_sym) = $(tls_storage)[])
-    return init_before, init_inner
+    local_before = :($(tls_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
+    local_inner = :($(tls_sym) = $(tls_storage)[])
+    return local_before, local_inner
 end
 
 function _maybe_handle_set_block!(settings, args)
