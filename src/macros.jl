@@ -108,6 +108,6 @@ end
 end
 ```
 """
-macro local(args...)
+macro var"local"(args...)
     error("The @local macro may only be used inside of a @tasks block.")
 end
