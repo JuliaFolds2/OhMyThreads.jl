@@ -13,7 +13,7 @@ Order   = [:function, :macro, :type]
 ```@docs
 @tasks
 @set
-@init
+@local
 ```
 
 ### Functions

@@ -215,7 +215,7 @@ This solves our issues above and leads to $O(\textrm{parallel tasks})$
 (instead of $O(\textrm{iterations})$) allocations.
 
 Note that if you use our `@tasks` macro API, there is built-in support for task-local
-values via `@init`.
+values via `@local`.
 
 ````julia
 using OhMyThreads: @tasks
@@ -224,7 +224,7 @@ function matmulsums_tlv_macro(As, Bs; kwargs...)
     N = size(first(As), 1)
     @tasks for i in eachindex(As,Bs)
         @set collect=true
-        @init C::Matrix{Float64} = Matrix{Float64}(undef, N, N)
+        @local C::Matrix{Float64} = Matrix{Float64}(undef, N, N)
         mul!(C, As[i], Bs[i])
         sum(C)
     end
@@ -238,7 +238,7 @@ res ≈ res_tlv_macro
 true
 ````
 
-Here, `@init` simply expands to the explicit pattern around `TaskLocalValue` above.
+Here, `@local` simply expands to the explicit pattern around `TaskLocalValue` above.
 
 
 ### Benchmark

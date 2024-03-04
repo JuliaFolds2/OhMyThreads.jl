@@ -85,7 +85,7 @@ function _maybe_handle_init_block!(args)
     inits_before = nothing
     init_inner = nothing
     tlsidx = findfirst(args) do arg
-        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@init")
+        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@local")
     end
     if !isnothing(tlsidx)
         inits_before, init_inner = _unfold_init_block(args[tlsidx].args[3])
@@ -108,7 +108,7 @@ function _unfold_init_block(ex)
             push!(init_inner.args, initi)
         end
     else
-        throw(ErrorException("Wrong usage of @init. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
+        throw(ErrorException("Wrong usage of @local. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
     end
     return inits_before, init_inner
 end
@@ -116,7 +116,7 @@ end
 function _init_assign_to_exprs(ex)
     left_ex = ex.args[1]
     if left_ex isa Symbol || left_ex.head != :(::)
-        throw(ErrorException("Wrong usage of @init. Expected typed assignment, e.g. `A::Matrix{Float} = rand(2,2)`."))
+        throw(ErrorException("Wrong usage of @local. Expected typed assignment, e.g. `A::Matrix{Float} = rand(2,2)`."))
     end
     tls_sym = esc(left_ex.args[1])
     tls_type = esc(left_ex.args[2])

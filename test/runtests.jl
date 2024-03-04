@@ -127,7 +127,7 @@ end
     tids = Vector{UInt64}(undef, ntd)
     tid() = OhMyThreads.Tools.taskid()
     @test @tasks(for i in 1:ntd
-        @init C::Vector{Float64} = rand(3)
+        @local C::Vector{Float64} = rand(3)
         @set scheduler=:static
         ptrs[i] = pointer_from_objref(C)
         tids[i] = tid()
@@ -139,7 +139,7 @@ end
     end
     # TaskLocalValue (another fundamental check)
     @test @tasks(for i in 1:ntd
-        @init x::Ref{Int64} = Ref(0)
+        @local x::Ref{Int64} = Ref(0)
         @set reducer = (+)
         @set scheduler = :static
         x[] += 1
@@ -147,7 +147,7 @@ end
     end) == 1.5 * ntd # if a new x would be allocated per iteration, we'd get ntd here.
     # TaskLocalValue (begin ... end block)
     @test @tasks(for i in 1:10
-        @init begin
+        @local begin
             C::Matrix{Int64} = fill(4, 3, 3)
             x::Vector{Float64} = fill(5.0, 3)
         end
@@ -170,7 +170,7 @@ end
         x::Int
     end
     @test @tasks(for _ in 1:10
-        @init C::SingleInt = SingleInt(var)
+        @local C::SingleInt = SingleInt(var)
         @set reducer=+
         C.x
     end) == 10*var

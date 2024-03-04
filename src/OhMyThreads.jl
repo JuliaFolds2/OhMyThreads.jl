@@ -20,7 +20,7 @@ using .Schedulers: Scheduler,
     DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
 include("implementation.jl")
 
-export @tasks, @set, @init
+export @tasks, @set, @local
 export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
 export Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler, SpawnAllScheduler
 
