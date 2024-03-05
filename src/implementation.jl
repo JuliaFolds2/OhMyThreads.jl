@@ -212,10 +212,7 @@ This should always be equivalent to just calling `g(f)`.
 """
 function maybe_rewrap(g::G, f::WithTaskLocals{F}) where {G, F}
     (;inner_func, tasklocals) = f
-    WithTaskLocals(f.tasklocals) do vals
-        f = inner_func(vals)
-        g(f)
-    end
+    WithTaskLocals(vals -> g(inner_func(vals)), tasklocals)
 end
 
 #------------------------------------------------------------
@@ -313,7 +310,7 @@ function _tmap(scheduler::Scheduler,
     idcs = collect(chunks(A; n = scheduler.nchunks))
     reduction_f = append!!
     mapping_f = maybe_rewrap(f) do f
-        function mapping_function(inds)
+        (inds) -> begin
             args = map(A -> @view(A[inds]), Arrs)
             map(f, args...)
         end

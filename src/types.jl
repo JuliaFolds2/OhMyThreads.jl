@@ -2,7 +2,7 @@
     struct WithTaskLocals{F, TLVs <: Tuple{Vararg{TaskLocalValue}}} <: Function
 
 This callable function-like object is meant to represent a function which closes over some
-[`TaskLocalValues`](@ref). This is, if you do
+[`TaskLocalValues`](https://github.com/vchuravy/TaskLocalValues.jl). This is, if you do
 
 ```
 TLV{T} = TaskLocalValue{T}

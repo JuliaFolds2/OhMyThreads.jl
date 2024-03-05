@@ -36,8 +36,8 @@ end
 #
 # For later comparison, we generate some random input data and store the result.
 
-As = [rand(2056, 32) for _ in 1:192]
-Bs = [rand(32, 2056) for _ in 1:192]
+As = [rand(256, 16) for _ in 1:768]
+Bs = [rand(16, 256) for _ in 1:768]
 
 res = matmulsums(As, Bs);
 
@@ -183,7 +183,9 @@ end
 res_tlv_macro = matmulsums_tlv_macro(As, Bs)
 res ≈ res_tlv_macro
 
-# Here, `@local` simply expands to the explicit pattern around `TaskLocalValue` above.
+# Here, `@local` expands to a pattern similar to the `TaskLocalValue` one above, although it
+# carries some optimizations (see [`OhMyThreads.WithTaskLocals`](@ref)) which can make accessing task
+# local values more efficient in loops which take on the order of 100ns to complete.
 #
 #
 # ### Benchmark
@@ -196,9 +198,13 @@ using BenchmarkTools
 @show nthreads()
 
 @btime matmulsums($As, $Bs);
+sleep(2) #hide
 @btime matmulsums_naive($As, $Bs);
+sleep(2) #hide
 @btime matmulsums_manual($As, $Bs);
+sleep(2) #hide
 @btime matmulsums_tlv($As, $Bs);
+sleep(2) #hide
 @btime matmulsums_tlv_macro($As, $Bs);
 
 # As we can see, `matmulsums_tlv` (and `matmulsums_tlv_macro`) isn't only convenient
@@ -249,8 +255,8 @@ function matmulsums_perthread_naive(As, Bs)
 end
 
 ## non uniform workload
-As_nu = [rand(2056, isqrt(i)^2) for i in 1:192];
-Bs_nu = [rand(isqrt(i)^2, 2056) for i in 1:192];
+As_nu = [rand(256, isqrt(i)^2) for i in 1:768];
+Bs_nu = [rand(isqrt(i)^2, 256) for i in 1:768];
 res_nu = matmulsums(As_nu, Bs_nu);
 
 res_pt_naive = matmulsums_perthread_naive(As_nu, Bs_nu)
@@ -366,7 +372,7 @@ res_nu ≈ res_pt_channel
 using OhMyThreads: tmapreduce
 function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
     N = size(first(As), 1)
-    chnl = Channel() do chnl
+    chnl = Channel{Int}(length(As); spawn=true) do chnl
         for i in 1:length(As)
             put!(chnl, i)
         end
@@ -401,20 +407,20 @@ sort(res_nu) ≈ sort(res_channel_flipped)
 # give [Bumper.jl](https://github.com/MasonProtter/Bumper.jl) a try. Essentially, it
 # allows you to *bring your own stacks*, that is, task-local bump allocators which you can
 # dynamically allocate memory to, and reset them at the end of a code block, just like
-# Julia's stack.
+# Julia's stack. 
 # Be warned though that Bumper.jl is (1) a rather young package with (likely) some bugs
-# and (2) can easily lead to segfaults when used incorrectly. It can make sense to use it
-# though if you can live with the risk and really can't avoid allocating many (many) times
-# on each parallel task. For our example, this isn't the case but let's nonetheless how one
-# would use Bumper.jl here.
+# and (2) can easily lead to segfaults when used incorrectly. If you can live with the
+# risk, Bumper.jl is especially useful for causes  we don't know ahead of time how large
+# a matrix to pre-allocate, and even more useful if we want to do many intermediate
+# allocations on the task, not just one. For our example, this isn't the case but let's
+# nonetheless how one would use Bumper.jl here.
 
 using Bumper
-using StrideArrays # makes things a little bit faster
 
 function matmulsums_bumper(As, Bs)
-    N = size(first(As), 1)
     tmap(As, Bs) do A, B
         @no_escape begin # promising that no memory will escape
+            N = size(A, 1)
             C = @alloc(Float64, N, N) # from bump allocater (fake "stack")
             mul!(C, A, B)
             sum(C)
@@ -423,7 +429,7 @@ function matmulsums_bumper(As, Bs)
 end
 
 res_bumper = matmulsums_bumper(As, Bs);
-res ≈ res_bumper
+sort(res_nu) ≈ sort(res_bumper)
 
 @btime matmulsums_bumper($As, $Bs);
 
