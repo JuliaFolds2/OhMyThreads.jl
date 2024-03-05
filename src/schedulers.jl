@@ -153,9 +153,12 @@ Base.@kwdef struct GreedyScheduler <: Scheduler
     end
 end
 
+chunking_mode(s::Scheduler) = chunking_mode(typeof(s))
+chunking_mode(::Type{DynamicScheduler{C}}) where {C} = C
+chunking_mode(::Type{StaticScheduler{C}}) where {C} = C
+chunking_mode(::Type{GreedyScheduler}) = NoChunking
+
 chunking_enabled(s::Scheduler) = chunking_enabled(typeof(s))
-chunking_enabled(::Type{DynamicScheduler{C}}) where {C} = C != NoChunking
-chunking_enabled(::Type{StaticScheduler{C}}) where {C} = C != NoChunking
-chunking_enabled(::Type{GreedyScheduler}) = false
+chunking_enabled(::Type{S}) where {S<:Scheduler} = chunking_mode(S) != NoChunking
 
 end # module
