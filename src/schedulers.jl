@@ -106,7 +106,6 @@ function DynamicScheduler(;
 end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::DynamicScheduler)
-    C = chunking_mode(s)
     print("DynamicScheduler", "\n")
     cstr = _chunkingstr(s)
     println(io, "├ Chunking: ", cstr)
@@ -147,7 +146,6 @@ Base.@kwdef struct StaticScheduler{C <: ChunkingMode} <: Scheduler
 end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::StaticScheduler)
-    C = chunking_mode(s)
     print("StaticScheduler", "\n")
     cstr = _chunkingstr(s)
     println(io, "├ Chunking: ", cstr)
