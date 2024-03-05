@@ -133,16 +133,48 @@ Isn't well composable with other multithreaded code though.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
     * Beware that for `split=:scatter` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 """
-Base.@kwdef struct StaticScheduler{C <: ChunkingMode} <: Scheduler
-    nchunks::Int = nthreads()
-    split::Symbol = :batch
+struct StaticScheduler{C <: ChunkingMode} <: Scheduler
+    nchunks::Int
+    chunksize::Int
+    split::Symbol
 
-    function StaticScheduler(nchunks::Integer, split::Symbol)
-        nchunks >= 0 ||
+    function StaticScheduler(nchunks::Integer, chunksize::Integer, split::Symbol)
+        if nchunks < 0
             throw(ArgumentError("nchunks must be a positive integer (or zero)."))
-        C = nchunks == 0 ? NoChunking : FixedCount
-        new{C}(nchunks, split)
+        end
+        if chunksize < 0
+            throw(ArgumentError("chunksize must be a positive integer (or zero)."))
+        end
+        if nchunks != 0 && chunksize != 0
+            throw(ArgumentError("nchunks and chunksize are mutually exclusive and only one of them may be non-zero"))
+        end
+        if nchunks == 0 && chunksize == 0
+            C = NoChunking
+        elseif chunksize != 0
+            C = FixedSize
+        else
+            C = FixedCount
+        end
+        new{C}(nchunks, chunksize, split)
     end
+end
+
+function StaticScheduler(;
+        nchunks::Union{Integer, Nothing} = nothing,
+        chunksize::Union{Integer, Nothing} = nothing,
+        split::Symbol = :batch)
+    if isnothing(nchunks)
+        # only choose nchunks default if chunksize hasn't been specified
+        if isnothing(chunksize)
+            nchunks = nthreads(:default)
+        else
+            nchunks = 0
+        end
+    end
+    if isnothing(chunksize)
+        chunksize = 0
+    end
+    StaticScheduler(nchunks, chunksize, split)
 end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::StaticScheduler)
