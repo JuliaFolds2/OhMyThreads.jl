@@ -5,8 +5,8 @@ import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcol
 using OhMyThreads: chunks, @spawn, @spawnat
 using OhMyThreads.Tools: nthtid
 using OhMyThreads: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
-using OhMyThreads.Schedulers: chunking_enabled, ChunkingMode, NoChunking, FixedSize,
-                              FixedCount
+using OhMyThreads.Schedulers: chunking_enabled, chunking_mode, ChunkingMode, NoChunking,
+                              FixedSize, FixedCount
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 
@@ -19,8 +19,18 @@ include("macro_impl.jl")
 function auto_disable_chunking_warning()
     @warn("You passed in a `ChunkSplitters.Chunk` but also a scheduler that has "*
           "chunking enabled. Will turn off internal chunking to proceed.\n"*
-          "To avoid this warning, try to turn off chunking (`nchunks=0`) "*
+          "To avoid this warning, try to turn off chunking (`nchunks=0` and `chunksize=0`) "*
           "or pass in `collect(chunks(...))`.")
+end
+
+function _chunks(sched, arg; kwargs...)
+    C = chunking_mode(sched)
+    @assert C != NoChunking
+    if C == FixedCount
+        chunks(arg; n = sched.nchunks, split = sched.split, kwargs...)
+    elseif C == FixedSize
+        chunks(arg; size = sched.chunksize, split = sched.split, kwargs...)
+    end
 end
 
 function tmapreduce(f, op, Arrs...;
@@ -47,10 +57,10 @@ function _tmapreduce(f,
         ::Type{OutputType},
         scheduler::DynamicScheduler,
         mapreduce_kwargs)::OutputType where {OutputType}
-    (; nchunks, split, threadpool) = scheduler
+    (; threadpool) = scheduler
     check_all_have_same_indices(Arrs)
     if chunking_enabled(scheduler)
-        tasks = map(chunks(first(Arrs); n = nchunks, split)) do inds
+        tasks = map(_chunks(scheduler, first(Arrs))) do inds
             args = map(A -> view(A, inds), Arrs)
             @spawn threadpool mapreduce(f, op, args...; $mapreduce_kwargs...)
         end
@@ -86,11 +96,11 @@ function _tmapreduce(f,
         ::Type{OutputType},
         scheduler::StaticScheduler,
         mapreduce_kwargs) where {OutputType}
-    (; nchunks, split) = scheduler
     check_all_have_same_indices(Arrs)
     if chunking_enabled(scheduler)
-        n = min(nthreads(), nchunks) # We could implement strategies, like round-robin, in the future
-        tasks = map(enumerate(chunks(first(Arrs); n, split))) do (c, inds)
+        n = min(nthreads(), scheduler.nchunks) # We could implement strategies, like round-robin, in the future
+        # tasks = map(enumerate(chunks(first(Arrs); n, split))) do (c, inds)
+        tasks = map(enumerate(_chunks(scheduler, first(Arrs); n))) do (c, inds)
             tid = @inbounds nthtid(c)
             args = map(A -> view(A, inds), Arrs)
             @spawnat tid mapreduce(f, op, args...; mapreduce_kwargs...)
@@ -272,7 +282,7 @@ function _tmap(scheduler::Scheduler,
         _Arrs::AbstractArray...;
         kwargs...)
     Arrs = (A, _Arrs...)
-    idcs = collect(chunks(A; n = scheduler.nchunks))
+    idcs = collect(_chunks(scheduler, A))
     reduction_f = append!!
     v = tmapreduce(reduction_f, idcs; scheduler, kwargs...) do inds
         args = map(A -> @view(A[inds]), Arrs)
