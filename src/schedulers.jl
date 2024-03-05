@@ -16,6 +16,17 @@ struct NoChunking <: ChunkingMode end
 struct FixedCount <: ChunkingMode end
 struct FixedSize <: ChunkingMode end
 
+function _chunkingstr(s::Scheduler)
+    C = chunking_mode(s)
+    if C == FixedCount
+        cstr = "fixed count ($(s.nchunks)), :$(s.split)"
+    elseif C == FixedSize
+        cstr = "fixed size ($(s.chunksize)), :$(s.split)"
+    elseif C == NoChunking
+        cstr = "none"
+    end
+end
+
 """
 The default dynamic scheduler. Divides the given collection into chunks and
 then spawns a task per chunk to perform the requested operation in parallel.
@@ -94,6 +105,14 @@ function DynamicScheduler(;
     DynamicScheduler(threadpool, nchunks, chunksize, split)
 end
 
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::DynamicScheduler)
+    C = chunking_mode(s)
+    print("DynamicScheduler", "\n")
+    cstr = _chunkingstr(s)
+    println(io, "├ Chunking: ", cstr)
+    print(io, "└ Threadpool: ", s.threadpool)
+end
+
 """
 A static low-overhead scheduler. Divides the given collection into chunks and
 then spawns a task per chunk to perform the requested operation in parallel.
@@ -127,6 +146,14 @@ Base.@kwdef struct StaticScheduler{C <: ChunkingMode} <: Scheduler
     end
 end
 
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::StaticScheduler)
+    C = chunking_mode(s)
+    print("StaticScheduler", "\n")
+    cstr = _chunkingstr(s)
+    println(io, "├ Chunking: ", cstr)
+    print(io, "└ Threadpool: default")
+end
+
 """
 A greedy dynamic scheduler. The elements of the collection are first put into a `Channel`
 and then dynamic, non-sticky tasks are spawned to process channel content in parallel.
@@ -153,12 +180,18 @@ Base.@kwdef struct GreedyScheduler <: Scheduler
     end
 end
 
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::GreedyScheduler)
+    print("GreedyScheduler", "\n")
+    println(io, "├ Num. tasks: ", s.ntasks)
+    print(io, "└ Threadpool: default")
+end
+
 chunking_mode(s::Scheduler) = chunking_mode(typeof(s))
 chunking_mode(::Type{DynamicScheduler{C}}) where {C} = C
 chunking_mode(::Type{StaticScheduler{C}}) where {C} = C
 chunking_mode(::Type{GreedyScheduler}) = NoChunking
 
 chunking_enabled(s::Scheduler) = chunking_enabled(typeof(s))
-chunking_enabled(::Type{S}) where {S<:Scheduler} = chunking_mode(S) != NoChunking
+chunking_enabled(::Type{S}) where {S <: Scheduler} = chunking_mode(S) != NoChunking
 
 end # module
