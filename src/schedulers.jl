@@ -48,7 +48,7 @@ with other multithreaded code.
     * Specifies the desired chunk size (instead of the number of chunks).
     * The options `chunksize` and `nchunks` are **mutually exclusive** (only one may be non-zero).
 - `split::Symbol` (default `:batch`):
-    * Determines how the collection is divided into chunks. By default, each chunk consists of contigu ous elements and order is maintained.
+    * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements and order is maintained.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
     * Beware that for `split=:scatter` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 - `threadpool::Symbol` (default `:default`):
