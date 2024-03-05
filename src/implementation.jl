@@ -96,24 +96,18 @@ function _tmapreduce(f,
         ::Type{OutputType},
         scheduler::StaticScheduler,
         mapreduce_kwargs) where {OutputType}
+    nt = nthreads()
     check_all_have_same_indices(Arrs)
     if chunking_enabled(scheduler)
-        n = min(nthreads(), scheduler.nchunks) # We could implement strategies, like round-robin, in the future
-        # tasks = map(enumerate(chunks(first(Arrs); n, split))) do (c, inds)
-        tasks = map(enumerate(_chunks(scheduler, first(Arrs); n))) do (c, inds)
-            tid = @inbounds nthtid(c)
+        tasks = map(enumerate(_chunks(scheduler, first(Arrs)))) do (c, inds)
+            tid = @inbounds nthtid(mod1(c, nt))
             args = map(A -> view(A, inds), Arrs)
             @spawnat tid mapreduce(f, op, args...; mapreduce_kwargs...)
         end
         mapreduce(fetch, op, tasks)
     else
-        if length(first(Arrs)) > nthreads()
-            error("You have disabled chunking but provided an input with more then " *
-                  "`nthreads()` elements. This is not supported for `StaticScheduler`.")
-        end
-        n = min(nthreads(), nchunks) # We could implement strategies, like round-robin, in the future
         tasks = map(enumerate(eachindex(first(Arrs)))) do (c, i)
-            tid = @inbounds nthtid(c)
+            tid = @inbounds nthtid(mod1(c, nt))
             args = map(A -> @inbounds(A[i]), Arrs)
             @spawnat tid f(args...)
         end
@@ -131,12 +125,9 @@ function _tmapreduce(f,
     chunking_enabled(scheduler) && auto_disable_chunking_warning()
     check_all_have_same_indices(Arrs)
     chnks = only(Arrs)
-    if length(chnks) > nthreads()
-        error("You provided a `ChunkSplitters.Chunk` with more than `nthreads()` chunks " *
-              "as input, which is not supported by the `StaticScheduler`.")
-    end
+    nt = nthreads()
     tasks = map(enumerate(chnks)) do (c, idcs)
-        tid = @inbounds nthtid(c)
+        tid = @inbounds nthtid(mod1(c, nt))
         @spawnat tid f(idcs)
     end
     mapreduce(fetch, op, tasks; mapreduce_kwargs...)
@@ -264,12 +255,9 @@ function _tmap(scheduler::StaticScheduler{NoChunking},
         A::ChunkSplitters.Chunk,
         _Arrs::AbstractArray...;
         kwargs...)
-    if length(A) > nthreads()
-        error("You provided a `ChunkSplitters.Chunk` with more than `nthreads()` chunks " *
-              "as input, which is not supported by the `StaticScheduler`.")
-    end
+    nt = nthreads()
     tasks = map(enumerate(A)) do (c, idcs)
-        tid = @inbounds nthtid(c)
+        tid = @inbounds nthtid(mod1(c, nt))
         @spawnat tid f(idcs)
     end
     map(fetch, tasks)
