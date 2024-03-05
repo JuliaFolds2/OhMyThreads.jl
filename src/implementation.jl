@@ -5,7 +5,8 @@ import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcol
 using OhMyThreads: chunks, @spawn, @spawnat
 using OhMyThreads.Tools: nthtid
 using OhMyThreads: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
-using OhMyThreads.Schedulers: chunking_enabled
+using OhMyThreads.Schedulers: chunking_enabled, ChunkingMode, NoChunking, FixedSize,
+                              FixedCount
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 
@@ -216,8 +217,8 @@ function tmap(f,
     _tmap(scheduler, f, A, _Arrs...; kwargs...)
 end
 
-# w/o chunking (DynamicScheduler{false}): AbstractArray
-function _tmap(scheduler::DynamicScheduler{false},
+# w/o chunking (DynamicScheduler{NoChunking}): AbstractArray
+function _tmap(scheduler::DynamicScheduler{NoChunking},
         f,
         A::AbstractArray,
         _Arrs::AbstractArray...;
@@ -234,8 +235,8 @@ function _tmap(scheduler::DynamicScheduler{false},
     reshape(v, size(A)...)
 end
 
-# w/o chunking (DynamicScheduler{false}): ChunkSplitters.Chunk
-function _tmap(scheduler::DynamicScheduler{false},
+# w/o chunking (DynamicScheduler{NoChunking}): ChunkSplitters.Chunk
+function _tmap(scheduler::DynamicScheduler{NoChunking},
         f,
         A::ChunkSplitters.Chunk,
         _Arrs::AbstractArray...;
@@ -247,8 +248,8 @@ function _tmap(scheduler::DynamicScheduler{false},
     map(fetch, tasks)
 end
 
-# w/o chunking (StaticScheduler{false}): ChunkSplitters.Chunk
-function _tmap(scheduler::StaticScheduler{false},
+# w/o chunking (StaticScheduler{NoChunking}): ChunkSplitters.Chunk
+function _tmap(scheduler::StaticScheduler{NoChunking},
         f,
         A::ChunkSplitters.Chunk,
         _Arrs::AbstractArray...;

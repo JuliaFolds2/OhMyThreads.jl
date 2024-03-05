@@ -11,6 +11,11 @@ Supertype for all available schedulers:
 """
 abstract type Scheduler end
 
+abstract type ChunkingMode end
+struct NoChunking <: ChunkingMode end
+struct FixedCount <: ChunkingMode end
+struct FixedSize <: ChunkingMode end
+
 """
 The default dynamic scheduler. Divides the given collection into chunks and
 then spawns a task per chunk to perform the requested operation in parallel.
@@ -26,8 +31,11 @@ with other multithreaded code.
     * Determines the number of chunks (and thus also the number of parallel tasks).
     * Increasing `nchunks` can help with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead. For `nchunks <= nthreads()` there are not enough chunks for any load balancing.
     * Setting `nchunks < nthreads()` is an effective way to use only a subset of the available threads.
-    * Setting `nchunks = 0` turns off the internal chunking entirely (a task is spawned for each element). Note that, depending on the input, this scheduler **might spawn many(!) tasks** and can be
+    * Setting `nchunks = 0` (and `chunksize = 0`) turns off the internal chunking entirely (a task is spawned for each element). Note that, depending on the input, this scheduler **might spawn many(!) tasks** and can be
     very costly!
+- `chunksize::Integer` (default `0`)
+    * Specifies the desired chunk size (instead of the number of chunks).
+    * The options `chunksize` and `nchunks` are **mutually exclusive** (only one may be non-zero).
 - `split::Symbol` (default `:batch`):
 * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements and order is maintained.
 * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
@@ -36,19 +44,54 @@ with other multithreaded code.
     * Possible options are `:default` and `:interactive`.
     * The high-priority pool `:interactive` should be used very carefully since tasks on this threadpool should not be allowed to run for a long time without `yield`ing as it can interfere with [heartbeat](https://en.wikipedia.org/wiki/Heartbeat_(computing)) processes.
 """
-Base.@kwdef struct DynamicScheduler{C} <: Scheduler
-    threadpool::Symbol = :default
-    nchunks::Int = 2 * nthreads(threadpool) # a multiple of nthreads to enable load balancing
-    split::Symbol = :batch
+struct DynamicScheduler{C <: ChunkingMode} <: Scheduler
+    threadpool::Symbol
+    nchunks::Int
+    chunksize::Int
+    split::Symbol
 
-    function DynamicScheduler(threadpool::Symbol, nchunks::Integer, split::Symbol)
-        threadpool in (:default, :interactive) ||
+    function DynamicScheduler(
+            threadpool::Symbol, nchunks::Integer, chunksize::Integer, split::Symbol)
+        if !(threadpool in (:default, :interactive))
             throw(ArgumentError("threadpool must be either :default or :interactive"))
-        nchunks >= 0 ||
+        end
+        if nchunks < 0
             throw(ArgumentError("nchunks must be a positive integer (or zero)."))
-        C = !(nchunks == 0) # type parameter indicates whether chunking is enabled
-        new{C}(threadpool, nchunks, split)
+        end
+        if chunksize < 0
+            throw(ArgumentError("chunksize must be a positive integer (or zero)."))
+        end
+        if nchunks != 0 && chunksize != 0
+            throw(ArgumentError("nchunks and chunksize are mutually exclusive and only one of them may be non-zero"))
+        end
+        if nchunks == 0 && chunksize == 0
+            C = NoChunking
+        elseif chunksize != 0
+            C = FixedSize
+        else
+            C = FixedCount
+        end
+        new{C}(threadpool, nchunks, chunksize, split)
     end
+end
+
+function DynamicScheduler(;
+        threadpool::Symbol = :default,
+        nchunks::Union{Integer, Nothing} = nothing,
+        chunksize::Union{Integer, Nothing} = nothing,
+        split::Symbol = :batch)
+    if isnothing(nchunks)
+        # only choose nchunks default if chunksize hasn't been specified
+        if isnothing(chunksize)
+            nchunks = 2 * nthreads(threadpool)
+        else
+            nchunks = 0
+        end
+    end
+    if isnothing(chunksize)
+        chunksize = 0
+    end
+    DynamicScheduler(threadpool, nchunks, chunksize, split)
 end
 
 """
@@ -72,14 +115,14 @@ Isn't well composable with other multithreaded code though.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
     * Beware that for `split=:scatter` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 """
-Base.@kwdef struct StaticScheduler{C} <: Scheduler
+Base.@kwdef struct StaticScheduler{C <: ChunkingMode} <: Scheduler
     nchunks::Int = nthreads()
     split::Symbol = :batch
 
     function StaticScheduler(nchunks::Integer, split::Symbol)
         nchunks >= 0 ||
             throw(ArgumentError("nchunks must be a positive integer (or zero)."))
-        C = !(nchunks == 0) # type parameter indicates whether chunking is enabled
+        C = nchunks == 0 ? NoChunking : FixedCount
         new{C}(nchunks, split)
     end
 end
@@ -111,8 +154,8 @@ Base.@kwdef struct GreedyScheduler <: Scheduler
 end
 
 chunking_enabled(s::Scheduler) = chunking_enabled(typeof(s))
-chunking_enabled(::Type{DynamicScheduler{C}}) where {C} = C
-chunking_enabled(::Type{StaticScheduler{C}}) where {C} = C
+chunking_enabled(::Type{DynamicScheduler{C}}) where {C} = C != NoChunking
+chunking_enabled(::Type{StaticScheduler{C}}) where {C} = C != NoChunking
 chunking_enabled(::Type{GreedyScheduler}) = false
 
 end # module
