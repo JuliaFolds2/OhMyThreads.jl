@@ -48,9 +48,9 @@ with other multithreaded code.
     * Specifies the desired chunk size (instead of the number of chunks).
     * The options `chunksize` and `nchunks` are **mutually exclusive** (only one may be non-zero).
 - `split::Symbol` (default `:batch`):
-* Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements and order is maintained.
-* See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
-* Beware that for `split=:scatter` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
+    * Determines how the collection is divided into chunks. By default, each chunk consists of contigu ous elements and order is maintained.
+    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
+    * Beware that for `split=:scatter` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 - `threadpool::Symbol` (default `:default`):
     * Possible options are `:default` and `:interactive`.
     * The high-priority pool `:interactive` should be used very carefully since tasks on this threadpool should not be allowed to run for a long time without `yield`ing as it can interfere with [heartbeat](https://en.wikipedia.org/wiki/Heartbeat_(computing)) processes.
@@ -127,7 +127,12 @@ Isn't well composable with other multithreaded code though.
 - `nchunks::Integer` (default `nthreads()`):
     * Determines the number of chunks (and thus also the number of parallel tasks).
     * Setting `nchunks < nthreads()` is an effective way to use only a subset of the available threads.
-    * Currently, `nchunks > nthreads()` **isn't officialy supported** but, for now, will fall back to `nchunks = nthreads()`.
+    * For `nchunks > nthreads()` the chunks will be distributed to the available threads in a round-robin fashion.
+    * Setting `nchunks = 0` (and `chunksize = 0`) turns off the internal chunking entirely (a task is spawned for each element). Note that, depending on the input, this scheduler **might spawn many(!) tasks** and can be
+    very costly!
+- `chunksize::Integer` (default `0`)
+    * Specifies the desired chunk size (instead of the number of chunks).
+    * The options `chunksize` and `nchunks` are **mutually exclusive** (only one may be non-zero).
 - `split::Symbol` (default `:batch`):
     * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements and order is maintained.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
