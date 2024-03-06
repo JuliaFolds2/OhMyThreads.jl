@@ -16,12 +16,12 @@ sets_to_test = [(~ = isapprox, f = sin ∘ *, op = +,
     for (; ~, f, op, itrs, init) in sets_to_test
         @testset "f=$f, op=$op, itrs::$(typeof(itrs))" begin
             @testset for sched in (
-                StaticScheduler, DynamicScheduler, GreedyScheduler, DynamicScheduler{false})
+                StaticScheduler, DynamicScheduler, GreedyScheduler, DynamicScheduler{OhMyThreads.Schedulers.NoChunking})
                 @testset for split in (:batch, :scatter)
                     for nchunks in (1, 2, 6)
                         if sched == GreedyScheduler
                             scheduler = sched(; ntasks = nchunks)
-                        elseif sched == DynamicScheduler{false}
+                        elseif sched == DynamicScheduler{OhMyThreads.Schedulers.NoChunking}
                             scheduler = DynamicScheduler(; nchunks = 0)
                         else
                             scheduler = sched(; nchunks, split)
@@ -234,6 +234,43 @@ end
     end
 end
 
+@testset "chunking mode + chunksize option" begin
+    @test DynamicScheduler(; chunksize=2) isa DynamicScheduler
+    @test StaticScheduler(; chunksize=2) isa StaticScheduler
 
+    @test OhMyThreads.Schedulers.chunking_mode(DynamicScheduler(; chunksize=2)) == OhMyThreads.Schedulers.FixedSize
+    @test OhMyThreads.Schedulers.chunking_mode(DynamicScheduler(; nchunks=2)) == OhMyThreads.Schedulers.FixedCount
+    @test OhMyThreads.Schedulers.chunking_mode(DynamicScheduler(; nchunks=0, chunksize=0)) == OhMyThreads.Schedulers.NoChunking
+    @test OhMyThreads.Schedulers.chunking_mode(DynamicScheduler(; nchunks=0)) == OhMyThreads.Schedulers.NoChunking
+    @test OhMyThreads.Schedulers.chunking_enabled(DynamicScheduler(; chunksize=2)) == true
+    @test OhMyThreads.Schedulers.chunking_enabled(DynamicScheduler(; nchunks=2)) == true
+    @test OhMyThreads.Schedulers.chunking_enabled(DynamicScheduler(; nchunks=0, chunksize=0)) == false
+    @test OhMyThreads.Schedulers.chunking_enabled(DynamicScheduler(; nchunks=0)) == false
+
+    @test OhMyThreads.Schedulers.chunking_mode(StaticScheduler(; chunksize=2)) == OhMyThreads.Schedulers.FixedSize
+    @test OhMyThreads.Schedulers.chunking_mode(StaticScheduler(; nchunks=2)) == OhMyThreads.Schedulers.FixedCount
+    @test OhMyThreads.Schedulers.chunking_mode(StaticScheduler(; nchunks=0, chunksize=0)) == OhMyThreads.Schedulers.NoChunking
+    @test OhMyThreads.Schedulers.chunking_mode(StaticScheduler(; nchunks=0)) == OhMyThreads.Schedulers.NoChunking
+    @test OhMyThreads.Schedulers.chunking_enabled(StaticScheduler(; chunksize=2)) == true
+    @test OhMyThreads.Schedulers.chunking_enabled(StaticScheduler(; nchunks=2)) == true
+    @test OhMyThreads.Schedulers.chunking_enabled(StaticScheduler(; nchunks=0, chunksize=0)) == false
+    @test OhMyThreads.Schedulers.chunking_enabled(StaticScheduler(; nchunks=0)) == false
+
+    @test_throws ArgumentError DynamicScheduler(; nchunks=2, chunksize=3)
+    @test_throws ArgumentError StaticScheduler(; nchunks=2, chunksize=3)
+
+    let scheduler = DynamicScheduler(; chunksize=2)
+        @test tmapreduce(sin, +, 1:10; scheduler) ≈ mapreduce(sin, +, 1:10)
+        @test tmap(sin, 1:10; scheduler) ≈ map(sin, 1:10)
+        @test isnothing(tforeach(sin, 1:10; scheduler))
+        @test treduce(+, 1:10; scheduler) ≈ reduce(+, 1:10)
+    end
+    let scheduler = StaticScheduler(; chunksize=2)
+        @test tmapreduce(sin, +, 1:10; scheduler) ≈ mapreduce(sin, +, 1:10)
+        @test tmap(sin, 1:10; scheduler) ≈ map(sin, 1:10)
+        @test isnothing(tforeach(sin, 1:10; scheduler))
+        @test treduce(+, 1:10; scheduler) ≈ reduce(+, 1:10)
+    end
+end
 
 # Todo way more testing, and easier tests to deal with
