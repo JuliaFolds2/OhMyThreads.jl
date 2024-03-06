@@ -17,48 +17,42 @@ function tasks_macro(forex)
 
     settings = Settings()
 
-    locals_before, local_inner = _maybe_handle_atlocal_block!(forbody.args)
+    locals_before, locals_names = _maybe_handle_atlocal_block!(forbody.args)
+    tls_names = isnothing(locals_before) ? [] : map(x -> x.args[1], locals_before)
     _maybe_handle_atset_block!(settings, forbody.args)
 
     forbody = esc(forbody)
     itrng = esc(itrng)
     itvar = esc(itvar)
 
-    # @show settings
+    make_mapping_function = if isempty(tls_names)
+        :(local function mapping_function($itvar,)
+              $(forbody)
+          end)
+
+    else
+        :(local mapping_function = WithTaskLocals(($(tls_names...),)) do ($(locals_names...),)
+              function mapping_function_local($itvar,)
+                  $(forbody)
+              end
+          end)
+    end
     q = if !isnothing(settings.reducer)
-        if !isnothing(settings.init)
-            quote
-                tmapreduce(
-                    $(settings.reducer), $(itrng); scheduler = $(settings.scheduler),
-                    init = $(settings.init)) do $(itvar)
-                    $(local_inner)
-                    $(forbody)
-                end
-            end
-        else
-            quote
-                tmapreduce(
-                    $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) do $(itvar)
-                    $(local_inner)
-                    $(forbody)
-                end
-            end
+        quote
+            $make_mapping_function
+            tmapreduce(mapping_function, $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) 
         end
     elseif settings.collect
         maybe_warn_useless_init(settings)
         quote
-            tmap($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
-                $(local_inner)
-                $(forbody)
-            end
+            $make_mapping_function
+            tmap(mapping_function, $(itrng); scheduler = $(settings.scheduler))
         end
     else
         maybe_warn_useless_init(settings)
         quote
-            tforeach($(itrng); scheduler = $(settings.scheduler)) do $(itvar)
-                $(local_inner)
-                $(forbody)
-            end
+            $make_mapping_function
+            tforeach(mapping_function, $(itrng); scheduler = $(settings.scheduler))
         end
     end
 
@@ -115,21 +109,22 @@ end
 
 function _unfold_atlocal_block(ex)
     locals_before = Expr[]
+    locals_names = Expr[]
     if ex.head == :(=)
-        localb, local_inner = _atlocal_assign_to_exprs(ex)
+        localb, localn = _atlocal_assign_to_exprs(ex)
         push!(locals_before, localb)
+        push!(locals_names, localn)
     elseif ex.head == :block
         tlsexprs = filter(x -> x isa Expr, ex.args) # skip LineNumberNode
-        local_inner = quote end
         for x in tlsexprs
-            localb, locali = _atlocal_assign_to_exprs(x)
+            localb, localn = _atlocal_assign_to_exprs(x)
             push!(locals_before, localb)
-            push!(local_inner.args, locali)
+            push!(locals_names,  localn)
         end
     else
         throw(ErrorException("Wrong usage of @local. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
     end
-    return locals_before, local_inner
+    return locals_before, locals_names
 end
 
 function _atlocal_assign_to_exprs(ex)
@@ -140,10 +135,10 @@ function _atlocal_assign_to_exprs(ex)
     tls_sym = esc(left_ex.args[1])
     tls_type = esc(left_ex.args[2])
     tls_def = esc(ex.args[2])
-    @gensym tls_storage
-    local_before = :($(tls_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
-    local_inner = :($(tls_sym) = $(tls_storage)[])
-    return local_before, local_inner
+    @gensym tl_storage
+    local_before = :($(tl_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
+    local_name = :($(tls_sym))
+    return local_before, local_name
 end
 
 function _maybe_handle_atset_block!(settings, args)

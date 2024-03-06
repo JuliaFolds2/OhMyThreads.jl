@@ -46,8 +46,8 @@ temporary buffer, the output matrix `C`. This is to avoid the temporary allocati
 For later comparison, we generate some random input data and store the result.
 
 ````julia
-As = [rand(2056, 32) for _ in 1:192]
-Bs = [rand(32, 2056) for _ in 1:192]
+As = [rand(256, 16) for _ in 1:768]
+Bs = [rand(16, 256) for _ in 1:768]
 
 res = matmulsums(As, Bs);
 ````
@@ -238,7 +238,9 @@ res ≈ res_tlv_macro
 true
 ````
 
-Here, `@local` simply expands to the explicit pattern around `TaskLocalValue` above.
+Here, `@local` expands to a pattern similar to the `TaskLocalValue` one above, although it
+carries some optimizations (see [`OhMyThreads.WithTaskLocals`](@ref)) which can make accessing task
+local values more efficient in loops which take on the order of 100ns to complete.
 
 
 ### Benchmark
@@ -260,11 +262,11 @@ using BenchmarkTools
 
 ````
 nthreads() = 10
-  1.461 s (3 allocations: 32.25 MiB)
-  956.497 ms (539 allocations: 6.05 GiB)
-  749.799 ms (200 allocations: 645.04 MiB)
-  743.885 ms (236 allocations: 645.04 MiB)
-  746.067 ms (237 allocations: 645.04 MiB)
+  49.077 ms (3 allocations: 518.17 KiB)
+  32.658 ms (1691 allocations: 384.08 MiB)
+  9.513 ms (200 allocations: 10.08 MiB)
+  9.588 ms (236 allocations: 10.05 MiB)
+  9.650 ms (239 allocations: 10.05 MiB)
 
 ````
 
@@ -289,8 +291,8 @@ using OhMyThreads: DynamicScheduler, StaticScheduler
 ````
 
 ````
-  878.870 ms (124 allocations: 322.52 MiB)
-  888.337 ms (122 allocations: 322.52 MiB)
+  9.561 ms (124 allocations: 5.03 MiB)
+  9.618 ms (124 allocations: 5.03 MiB)
 
 ````
 
@@ -324,8 +326,8 @@ function matmulsums_perthread_naive(As, Bs)
 end
 
 # non uniform workload
-As_nu = [rand(2056, isqrt(i)^2) for i in 1:192];
-Bs_nu = [rand(isqrt(i)^2, 2056) for i in 1:192];
+As_nu = [rand(256, isqrt(i)^2) for i in 1:768];
+Bs_nu = [rand(isqrt(i)^2, 256) for i in 1:768];
 res_nu = matmulsums(As_nu, Bs_nu);
 
 res_pt_naive = matmulsums_perthread_naive(As_nu, Bs_nu)
@@ -444,13 +446,13 @@ of which gives us dynamic load balancing.
 ````
 
 ````
-  1.012 s (124 allocations: 322.52 MiB)
-  990.424 ms (105 allocations: 322.52 MiB)
-  998.003 ms (112 allocations: 322.52 MiB)
-  876.152 ms (235 allocations: 645.04 MiB)
-  913.288 ms (183 allocations: 322.53 MiB)
-  930.444 ms (1116 allocations: 3.15 GiB)
-  832.168 ms (744 allocations: 322.58 MiB)
+  149.095 ms (124 allocations: 5.03 MiB)
+  175.355 ms (107 allocations: 5.02 MiB)
+  148.470 ms (112 allocations: 5.02 MiB)
+  137.638 ms (235 allocations: 10.05 MiB)
+  135.293 ms (183 allocations: 5.04 MiB)
+  124.591 ms (1116 allocations: 50.13 MiB)
+  124.716 ms (744 allocations: 5.10 MiB)
 
 ````
 
@@ -469,7 +471,7 @@ a limited number of tasks (e.g. `nthreads()`) with task-local buffers.
 using OhMyThreads: tmapreduce
 function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
     N = size(first(As), 1)
-    chnl = Channel() do chnl
+    chnl = Channel{Int}(length(As); spawn=true) do chnl
         for i in 1:length(As)
             put!(chnl, i)
         end
@@ -508,9 +510,9 @@ Quick benchmark:
 ````
 
 ````
-  954.269 ms (726 allocations: 322.54 MiB)
-  927.246 ms (860 allocations: 645.06 MiB)
-  929.689 ms (1746 allocations: 3.15 GiB)
+  121.715 ms (163 allocations: 5.07 MiB)
+  122.457 ms (267 allocations: 10.11 MiB)
+  122.374 ms (1068 allocations: 50.37 MiB)
 
 ````
 
@@ -522,19 +524,19 @@ allows you to *bring your own stacks*, that is, task-local bump allocators which
 dynamically allocate memory to, and reset them at the end of a code block, just like
 Julia's stack.
 Be warned though that Bumper.jl is (1) a rather young package with (likely) some bugs
-and (2) can easily lead to segfaults when used incorrectly. It can make sense to use it
-though if you can live with the risk and really can't avoid allocating many (many) times
-on each parallel task. For our example, this isn't the case but let's nonetheless how one
-would use Bumper.jl here.
+and (2) can easily lead to segfaults when used incorrectly. If you can live with the
+risk, Bumper.jl is especially useful for causes  we don't know ahead of time how large
+a matrix to pre-allocate, and even more useful if we want to do many intermediate
+allocations on the task, not just one. For our example, this isn't the case but let's
+nonetheless how one would use Bumper.jl here.
 
 ````julia
 using Bumper
-using StrideArrays # makes things a little bit faster
 
 function matmulsums_bumper(As, Bs)
-    N = size(first(As), 1)
     tmap(As, Bs) do A, B
         @no_escape begin # promising that no memory will escape
+            N = size(A, 1)
             C = @alloc(Float64, N, N) # from bump allocater (fake "stack")
             mul!(C, A, B)
             sum(C)
@@ -543,17 +545,19 @@ function matmulsums_bumper(As, Bs)
 end
 
 res_bumper = matmulsums_bumper(As, Bs);
-res ≈ res_bumper
+sort(res_nu) ≈ sort(res_bumper)
 
 @btime matmulsums_bumper($As, $Bs);
 ````
 
 ````
-  786.991 ms (275 allocations: 34.50 KiB)
+  9.865 ms (254 allocations: 50.92 KiB)
 
 ````
 
-Note that the benchmark is lying here about the total memory allocation, because it doesn't show the allocation of the task-local bump allocators themselves (the reason is that `SlabBuffer` uses `malloc` directly).
+Note that the benchmark is lying here about the total memory allocation,
+because it doesn't show the allocation of the task-local bump allocators themselves
+(the reason is that `SlabBuffer` uses `malloc` directly).
 
 ---
 
