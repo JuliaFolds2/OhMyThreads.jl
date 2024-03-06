@@ -56,6 +56,7 @@ let x = TLV{Int}(() -> 1), y = TLV{Int}(() -> 2)
         z -> (x + y)/z
     end
 end
+```
 which doesn't have the overhead of accessing the `task_local_storage` each time the closure is called.
 This of course will lose the safety advantages of `TaskLocalValue`, so you should never do
 `f_local = promise_task_local(f)` and then pass `f_local` to some unknown function, because if that
