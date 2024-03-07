@@ -40,7 +40,7 @@ function tasks_macro(forex)
     q = if !isnothing(settings.reducer)
         quote
             $make_mapping_function
-            tmapreduce(mapping_function, $(settings.reducer), $(itrng); scheduler = $(settings.scheduler)) 
+            tmapreduce(mapping_function, $(settings.reducer), $(itrng); scheduler = $(settings.scheduler))
         end
     elseif settings.collect
         maybe_warn_useless_init(settings)
