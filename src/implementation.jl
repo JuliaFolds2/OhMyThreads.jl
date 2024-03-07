@@ -309,6 +309,25 @@ function _tmap(scheduler::StaticScheduler{NoChunking},
     map(fetch, tasks)
 end
 
+# w/o chunking (StaticScheduler{NoChunking}): AbstractArray
+function _tmap(scheduler::StaticScheduler{NoChunking},
+        f,
+        A::AbstractArray,
+        _Arrs::AbstractArray...;
+        kwargs...)
+    Arrs = (A, _Arrs...)
+    nt = nthreads()
+    tasks = map(enumerate(A)) do (c, i)
+        tid = @inbounds nthtid(mod1(c, nt))
+        @spawnat tid begin
+            args = map(A -> A[i], Arrs)
+            promise_task_local(f)(args...)
+        end
+    end
+    v = map(fetch, tasks)
+    reshape(v, size(A)...)
+end
+
 # w/ chunking
 function _tmap(scheduler::Scheduler,
         f,

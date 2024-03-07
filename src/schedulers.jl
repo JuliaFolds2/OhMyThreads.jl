@@ -43,15 +43,16 @@ with other multithreaded code.
     * Determines the number of chunks (and thus also the number of parallel tasks).
     * Increasing `nchunks` can help with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead. For `nchunks <= nthreads()` there are not enough chunks for any load balancing.
     * Setting `nchunks < nthreads()` is an effective way to use only a subset of the available threads.
-    * Setting `nchunks = 0` (and `chunksize = 0`) turns off the internal chunking entirely (a task is spawned for each element). Note that, depending on the input, this scheduler **might spawn many(!) tasks** and can be
-    very costly!
-- `chunksize::Integer` (default `0`)
+- `chunksize::Integer` (default not set)
     * Specifies the desired chunk size (instead of the number of chunks).
-    * The options `chunksize` and `nchunks` are **mutually exclusive** (only one may be non-zero).
+    * The options `chunksize` and `nchunks` are **mutually exclusive** (only one may be a positive integer).
 - `split::Symbol` (default `:batch`):
-    * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements and order is maintained.
+    * Determines how the collection is divided into chunks (if chunking=true). By default, each chunk consists of contiguous elements and order is maintained.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
     * Beware that for `split=:scatter` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
+- `chunking::Bool` (default `true`):
+    * Controls whether input elements are grouped into chunks (`true`) or not (`false`).
+    * For `chunking=false`, the arguments `nchunks`, `chunksize`, and `split` are ignored and input elements are regarded as "chunks" as is. Hence, there will be one parallel task spawned per input element. Note that, depending on the input, this **might spawn many(!) tasks** and can be costly!
 - `threadpool::Symbol` (default `:default`):
     * Possible options are `:default` and `:interactive`.
     * The high-priority pool `:interactive` should be used very carefully since tasks on this threadpool should not be allowed to run for a long time without `yield`ing as it can interfere with [heartbeat](https://en.wikipedia.org/wiki/Heartbeat_(computing)) processes.
@@ -63,25 +64,20 @@ struct DynamicScheduler{C <: ChunkingMode} <: Scheduler
     split::Symbol
 
     function DynamicScheduler(
-            threadpool::Symbol, nchunks::Integer, chunksize::Integer, split::Symbol)
+            threadpool::Symbol, nchunks::Integer, chunksize::Integer, split::Symbol; chunking::Bool = true)
         if !(threadpool in (:default, :interactive))
             throw(ArgumentError("threadpool must be either :default or :interactive"))
         end
-        if nchunks < 0
-            throw(ArgumentError("nchunks must be a positive integer (or zero)."))
-        end
-        if chunksize < 0
-            throw(ArgumentError("chunksize must be a positive integer (or zero)."))
-        end
-        if nchunks != 0 && chunksize != 0
-            throw(ArgumentError("nchunks and chunksize are mutually exclusive and only one of them may be non-zero"))
-        end
-        if nchunks == 0 && chunksize == 0
+        if !chunking
             C = NoChunking
-        elseif chunksize != 0
-            C = FixedSize
         else
-            C = FixedCount
+            if !(nchunks > 0 || chunksize > 0)
+                throw(ArgumentError("Either nchunks or chunksize must be a positive integer (or chunking=false)."))
+            end
+            if nchunks > 0 && chunksize > 0
+                throw(ArgumentError("nchunks and chunksize are mutually exclusive and only one of them may be a positive integer"))
+            end
+            C = chunksize > 0 ? FixedSize : FixedCount
         end
         new{C}(threadpool, nchunks, chunksize, split)
     end
@@ -91,19 +87,22 @@ function DynamicScheduler(;
         threadpool::Symbol = :default,
         nchunks::Union{Integer, Nothing} = nothing,
         chunksize::Union{Integer, Nothing} = nothing,
+        chunking::Bool = true,
         split::Symbol = :batch)
-    if isnothing(nchunks)
+    if !chunking
+        nchunks = -1
+        chunksize = -1
+    else
         # only choose nchunks default if chunksize hasn't been specified
-        if isnothing(chunksize)
+        if isnothing(nchunks) && isnothing(chunksize)
             nchunks = 2 * nthreads(threadpool)
+            chunksize = -1
         else
-            nchunks = 0
+            nchunks = isnothing(nchunks) ? -1 : nchunks
+            chunksize = isnothing(chunksize) ? -1 : chunksize
         end
     end
-    if isnothing(chunksize)
-        chunksize = 0
-    end
-    DynamicScheduler(threadpool, nchunks, chunksize, split)
+    DynamicScheduler(threadpool, nchunks, chunksize, split; chunking)
 end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::DynamicScheduler)
@@ -129,11 +128,12 @@ Isn't well composable with other multithreaded code though.
     * Determines the number of chunks (and thus also the number of parallel tasks).
     * Setting `nchunks < nthreads()` is an effective way to use only a subset of the available threads.
     * For `nchunks > nthreads()` the chunks will be distributed to the available threads in a round-robin fashion.
-    * Setting `nchunks = 0` (and `chunksize = 0`) turns off the internal chunking entirely (a task is spawned for each element). Note that, depending on the input, this scheduler **might spawn many(!) tasks** and can be
-    very costly!
-- `chunksize::Integer` (default `0`)
+- `chunksize::Integer` (default not set)
     * Specifies the desired chunk size (instead of the number of chunks).
     * The options `chunksize` and `nchunks` are **mutually exclusive** (only one may be non-zero).
+- `chunking::Bool` (default `true`):
+    * Controls whether input elements are grouped into chunks (`true`) or not (`false`).
+    * For `chunking=false`, the arguments `nchunks`, `chunksize`, and `split` are ignored and input elements are regarded as "chunks" as is. Hence, there will be one parallel task spawned per input element. Note that, depending on the input, this **might spawn many(!) tasks** and can be costly!
 - `split::Symbol` (default `:batch`):
     * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements and order is maintained.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
@@ -144,22 +144,18 @@ struct StaticScheduler{C <: ChunkingMode} <: Scheduler
     chunksize::Int
     split::Symbol
 
-    function StaticScheduler(nchunks::Integer, chunksize::Integer, split::Symbol)
-        if nchunks < 0
-            throw(ArgumentError("nchunks must be a positive integer (or zero)."))
-        end
-        if chunksize < 0
-            throw(ArgumentError("chunksize must be a positive integer (or zero)."))
-        end
-        if nchunks != 0 && chunksize != 0
-            throw(ArgumentError("nchunks and chunksize are mutually exclusive and only one of them may be non-zero"))
-        end
-        if nchunks == 0 && chunksize == 0
+    function StaticScheduler(
+            nchunks::Integer, chunksize::Integer, split::Symbol; chunking::Bool = true)
+        if !chunking
             C = NoChunking
-        elseif chunksize != 0
-            C = FixedSize
         else
-            C = FixedCount
+            if !(nchunks > 0 || chunksize > 0)
+                throw(ArgumentError("Either nchunks or chunksize must be a positive integer (or chunking=false)."))
+            end
+            if nchunks > 0 && chunksize > 0
+                throw(ArgumentError("nchunks and chunksize are mutually exclusive and only one of them may be a positive integer"))
+            end
+            C = chunksize > 0 ? FixedSize : FixedCount
         end
         new{C}(nchunks, chunksize, split)
     end
@@ -168,19 +164,22 @@ end
 function StaticScheduler(;
         nchunks::Union{Integer, Nothing} = nothing,
         chunksize::Union{Integer, Nothing} = nothing,
+        chunking::Bool = true,
         split::Symbol = :batch)
-    if isnothing(nchunks)
+    if !chunking
+        nchunks = -1
+        chunksize = -1
+    else
         # only choose nchunks default if chunksize hasn't been specified
-        if isnothing(chunksize)
+        if isnothing(nchunks) && isnothing(chunksize)
             nchunks = nthreads(:default)
+            chunksize = -1
         else
-            nchunks = 0
+            nchunks = isnothing(nchunks) ? -1 : nchunks
+            chunksize = isnothing(chunksize) ? -1 : chunksize
         end
     end
-    if isnothing(chunksize)
-        chunksize = 0
-    end
-    StaticScheduler(nchunks, chunksize, split)
+    StaticScheduler(nchunks, chunksize, split; chunking)
 end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::StaticScheduler)
