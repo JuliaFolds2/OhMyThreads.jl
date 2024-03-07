@@ -16,11 +16,12 @@ include("macros.jl")
 
 include("tools.jl")
 include("schedulers.jl")
-using .Schedulers: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
+using .Schedulers: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler,
+                   SerialScheduler
 include("implementation.jl")
 
 export @tasks, @set, @local
 export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
-export Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
+export Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler, SerialScheduler
 
 end # module OhMyThreads

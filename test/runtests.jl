@@ -16,13 +16,15 @@ sets_to_test = [(~ = isapprox, f = sin ∘ *, op = +,
     for (; ~, f, op, itrs, init) in sets_to_test
         @testset "f=$f, op=$op, itrs::$(typeof(itrs))" begin
             @testset for sched in (
-                StaticScheduler, DynamicScheduler, GreedyScheduler, DynamicScheduler{OhMyThreads.Schedulers.NoChunking})
+                StaticScheduler, DynamicScheduler, GreedyScheduler, DynamicScheduler{OhMyThreads.Schedulers.NoChunking}, SerialScheduler)
                 @testset for split in (:batch, :scatter)
                     for nchunks in (1, 2, 6)
                         if sched == GreedyScheduler
                             scheduler = sched(; ntasks = nchunks)
                         elseif sched == DynamicScheduler{OhMyThreads.Schedulers.NoChunking}
                             scheduler = DynamicScheduler(; nchunks = 0)
+                        elseif sched == SerialScheduler
+                            scheduler = SerialScheduler()
                         else
                             scheduler = sched(; nchunks, split)
                         end

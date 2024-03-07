@@ -32,6 +32,7 @@ Scheduler
 DynamicScheduler
 StaticScheduler
 GreedyScheduler
+SerialScheduler
 ```
 
 ## Non-Exported

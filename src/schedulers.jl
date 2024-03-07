@@ -8,6 +8,7 @@ Supertype for all available schedulers:
 * [`DynamicScheduler`](@ref): default dynamic scheduler
 * [`StaticScheduler`](@ref): low-overhead static scheduler
 * [`GreedyScheduler`](@ref): greedy load-balancing scheduler
+* [`SerialScheduler`](@ref): serial (non-parallel) execution
 """
 abstract type Scheduler end
 
@@ -221,10 +222,19 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::GreedyScheduler)
     print(io, "└ Threadpool: default")
 end
 
+"""
+A scheduler for turning off any multithreading and running the code in serial. It aims to
+make parallel functions like, e.g., `tmapreduce(sin, +, 1:100)` behave like their serial
+counterparts, e.g., `mapreduce(sin, +, 1:100)`.
+"""
+struct SerialScheduler <: Scheduler
+end
+
 chunking_mode(s::Scheduler) = chunking_mode(typeof(s))
 chunking_mode(::Type{DynamicScheduler{C}}) where {C} = C
 chunking_mode(::Type{StaticScheduler{C}}) where {C} = C
 chunking_mode(::Type{GreedyScheduler}) = NoChunking
+chunking_mode(::Type{SerialScheduler}) = NoChunking
 
 chunking_enabled(s::Scheduler) = chunking_enabled(typeof(s))
 chunking_enabled(::Type{S}) where {S <: Scheduler} = chunking_mode(S) != NoChunking

@@ -4,7 +4,8 @@ import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcol
 
 using OhMyThreads: chunks, @spawn, @spawnat, WithTaskLocals, promise_task_local
 using OhMyThreads.Tools: nthtid
-using OhMyThreads: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
+using OhMyThreads: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler,
+                   SerialScheduler
 using OhMyThreads.Schedulers: chunking_enabled, chunking_mode, ChunkingMode, NoChunking,
                               FixedSize, FixedCount
 using Base: @propagate_inbounds
@@ -41,7 +42,11 @@ function tmapreduce(f, op, Arrs...;
     if length(mapreduce_kwargs) > min_kwarg_len
         tmapreduce_kwargs_err(; mapreduce_kwargs...)
     end
-    _tmapreduce(f, op, Arrs, outputtype, scheduler, mapreduce_kwargs)
+    if scheduler isa SerialScheduler
+        mapreduce(f, op, Arrs...; mapreduce_kwargs...)
+    else
+        @noinline _tmapreduce(f, op, Arrs, outputtype, scheduler, mapreduce_kwargs)
+    end
 end
 
 @noinline function tmapreduce_kwargs_err(; init = nothing, kwargs...)
@@ -63,8 +68,9 @@ function _tmapreduce(f,
         tasks = map(_chunks(scheduler, first(Arrs))) do inds
             args = map(A -> view(A, inds), Arrs)
             # Note, calling `promise_task_local` here is only safe because we're assuming that
-            # Base.mapreduce isn't going to magically try to do multithreading on us... 
-            @spawn threadpool mapreduce(promise_task_local(f), promise_task_local(op), args...; $mapreduce_kwargs...)
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawn threadpool mapreduce(promise_task_local(f), promise_task_local(op),
+                args...; $mapreduce_kwargs...)
         end
         mapreduce(fetch, promise_task_local(op), tasks)
     else
@@ -105,11 +111,12 @@ function _tmapreduce(f,
             tid = @inbounds nthtid(mod1(c, nt))
             args = map(A -> view(A, inds), Arrs)
             # Note, calling `promise_task_local` here is only safe because we're assuming that
-            # Base.mapreduce isn't going to magically try to do multithreading on us... 
-            @spawnat tid mapreduce(promise_task_local(f), promise_task_local(op), args...; mapreduce_kwargs...)
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawnat tid mapreduce(
+                promise_task_local(f), promise_task_local(op), args...; mapreduce_kwargs...)
         end
         # Note, calling `promise_task_local` here is only safe because we're assuming that
-        # Base.mapreduce isn't going to magically try to do multithreading on us... 
+        # Base.mapreduce isn't going to magically try to do multithreading on us...
         mapreduce(fetch, promise_task_local(op), tasks)
     else
         tasks = map(enumerate(eachindex(first(Arrs)))) do (c, i)
@@ -118,7 +125,7 @@ function _tmapreduce(f,
             @spawnat tid promise_task_local(f)(args...)
         end
         # Note, calling `promise_task_local` here is only safe because we're assuming that
-        # Base.mapreduce isn't going to magically try to do multithreading on us... 
+        # Base.mapreduce isn't going to magically try to do multithreading on us...
         mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
     end
 end
@@ -137,11 +144,11 @@ function _tmapreduce(f,
     tasks = map(enumerate(chnks)) do (c, idcs)
         tid = @inbounds nthtid(mod1(c, nt))
         # Note, calling `promise_task_local` here is only safe because we're assuming that
-        # Base.mapreduce isn't going to magically try to do multithreading on us... 
+        # Base.mapreduce isn't going to magically try to do multithreading on us...
         @spawnat tid promise_task_local(f)(idcs)
     end
     # Note, calling `promise_task_local` here is only safe because we're assuming that
-    # Base.mapreduce isn't going to magically try to do multithreading on us... 
+    # Base.mapreduce isn't going to magically try to do multithreading on us...
     mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
 end
 
@@ -168,13 +175,13 @@ function _tmapreduce(f,
     end
     tasks = map(1:ntasks) do _
         # Note, calling `promise_task_local` here is only safe because we're assuming that
-        # Base.mapreduce isn't going to magically try to do multithreading on us... 
+        # Base.mapreduce isn't going to magically try to do multithreading on us...
         @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
             promise_task_local(f)(args...)
         end
     end
     # Note, calling `promise_task_local` here is only safe because we're assuming that
-    # Base.mapreduce isn't going to magically try to do multithreading on us... 
+    # Base.mapreduce isn't going to magically try to do multithreading on us...
     mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
 end
 
@@ -213,7 +220,7 @@ to unwrap `f` and delegate its `TaskLocalValues` to `g`.
 This should always be equivalent to just calling `g(f)`.
 """
 function maybe_rewrap(g::G, f::WithTaskLocals{F}) where {G, F}
-    (;inner_func, tasklocals) = f
+    (; inner_func, tasklocals) = f
     WithTaskLocals(vals -> g(inner_func(vals)), tasklocals)
 end
 
@@ -249,8 +256,12 @@ function tmap(f,
     end
 
     Arrs = (A, _Arrs...)
-    check_all_have_same_indices(Arrs)
-    _tmap(scheduler, f, A, _Arrs...; kwargs...)
+    if scheduler isa SerialScheduler
+        map(f, Arrs...; kwargs...)
+    else
+        check_all_have_same_indices(Arrs)
+        @noinline _tmap(scheduler, f, A, _Arrs...; kwargs...)
+    end
 end
 
 # w/o chunking (DynamicScheduler{NoChunking}): AbstractArray
@@ -327,16 +338,20 @@ end
         error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $scheduler)")
     end
     Arrs = (A, _Arrs...)
-    @boundscheck check_all_have_same_indices((out, Arrs...))
-    mapping_f = maybe_rewrap(f) do f
-        function mapping_function(i)
-            args = map(A -> @inbounds(A[i]), Arrs)
-            res = f(args...)
-            out[i] = res
+    if scheduler isa SerialScheduler
+        map!(f, out, Arrs...; kwargs...)
+    else
+        @boundscheck check_all_have_same_indices((out, Arrs...))
+        mapping_f = maybe_rewrap(f) do f
+            function mapping_function(i)
+                args = map(A -> @inbounds(A[i]), Arrs)
+                res = f(args...)
+                out[i] = res
+            end
         end
+        @noinline tforeach(mapping_f, eachindex(out); scheduler, kwargs...)
+        out
     end
-    tforeach(mapping_f, eachindex(out); scheduler, kwargs...)
-    out
 end
 
 #-------------------------------------------------------------
