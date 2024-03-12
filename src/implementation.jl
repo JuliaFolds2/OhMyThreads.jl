@@ -4,10 +4,12 @@ import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcol
 
 using OhMyThreads: chunks, @spawn, @spawnat, WithTaskLocals, promise_task_local
 using OhMyThreads.Tools: nthtid
-using OhMyThreads: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler,
-                   SerialScheduler
-using OhMyThreads.Schedulers: chunking_enabled, chunking_mode, ChunkingMode, NoChunking,
-                              FixedSize, FixedCount
+using OhMyThreads: Scheduler,
+    DynamicScheduler, StaticScheduler, GreedyScheduler,
+    SerialScheduler
+using OhMyThreads.Schedulers: chunking_enabled,
+    chunking_mode, ChunkingMode, NoChunking,
+    FixedSize, FixedCount, scheduler_from_symbol
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 
@@ -34,18 +36,35 @@ function _chunks(sched, arg; kwargs...)
     end
 end
 
+const MaybeScheduler = Union{Nothing, Scheduler, Symbol}
+const MaybeInteger = Union{Nothing, Integer}
+
 function tmapreduce(f, op, Arrs...;
-        scheduler::Scheduler = DynamicScheduler(),
+        scheduler::MaybeScheduler = nothing,
+        ntasks::MaybeInteger = nothing,
         outputtype::Type = Any,
         mapreduce_kwargs...)
     min_kwarg_len = haskey(mapreduce_kwargs, :init) ? 1 : 0
     if length(mapreduce_kwargs) > min_kwarg_len
         tmapreduce_kwargs_err(; mapreduce_kwargs...)
     end
-    if scheduler isa SerialScheduler
+    isnothing(ntasks) || ntasks > 0 ||
+        throw(ArgumentError("ntasks must be a positive integer."))
+    if scheduler isa Scheduler
+        isnothing(ntasks) ||
+            throw(ArgumentError("providing an explicit scheduler as well as ntasks is currently not supported."))
+        _scheduler = scheduler
+    elseif scheduler isa Symbol
+        _scheduler = scheduler_from_symbol(scheduler; ntasks)
+    else # scheduler == nothing
+        _scheduler = DynamicScheduler(; ntasks)
+    end
+
+    @show _scheduler
+    if _scheduler isa SerialScheduler
         mapreduce(f, op, Arrs...; mapreduce_kwargs...)
     else
-        @noinline _tmapreduce(f, op, Arrs, outputtype, scheduler, mapreduce_kwargs)
+        @noinline _tmapreduce(f, op, Arrs, outputtype, _scheduler, mapreduce_kwargs)
     end
 end
 
@@ -112,8 +131,8 @@ function _tmapreduce(f,
             args = map(A -> view(A, inds), Arrs)
             # Note, calling `promise_task_local` here is only safe because we're assuming that
             # Base.mapreduce isn't going to magically try to do multithreading on us...
-            @spawnat tid mapreduce(
-                promise_task_local(f), promise_task_local(op), args...; mapreduce_kwargs...)
+            @spawnat tid mapreduce(promise_task_local(f), promise_task_local(op), args...;
+                mapreduce_kwargs...)
         end
         # Note, calling `promise_task_local` here is only safe because we're assuming that
         # Base.mapreduce isn't going to magically try to do multithreading on us...
