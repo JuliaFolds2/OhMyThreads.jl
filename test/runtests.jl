@@ -132,14 +132,14 @@ end;
             init=0.0
         end
         i
-    end) == 55.0
+    end) === 55.0
     @test @tasks(for i in 1:10
         @set begin
             reducer=(+)
             init=0.0*im
         end
         i
-    end) == (55.0 + 0.0im)
+    end) === (55.0 + 0.0im)
 
     # top-level "kwargs"
     @test @tasks(for i in 1:3

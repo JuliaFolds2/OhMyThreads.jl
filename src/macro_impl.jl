@@ -62,6 +62,9 @@ function tasks_macro(forex)
     if isgiven(settings.scheduler)
         push!(kwexpr.args, Expr(:kw, :scheduler, settings.scheduler))
     end
+    if isgiven(settings.init)
+        push!(kwexpr.args, Expr(:kw, :init, settings.init))
+    end
     for (k, v) in settings.kwargs
         push!(kwexpr.args, Expr(:kw, k, v))
     end
