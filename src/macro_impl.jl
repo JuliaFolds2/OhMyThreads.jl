@@ -27,34 +27,45 @@ function tasks_macro(forex)
 
     make_mapping_function = if isempty(tls_names)
         :(local function mapping_function($itvar,)
-              $(forbody)
-          end)
+            $(forbody)
+        end)
 
     else
         :(local mapping_function = WithTaskLocals(($(tls_names...),)) do ($(locals_names...),)
-              function mapping_function_local($itvar,)
-                  $(forbody)
-              end
-          end)
+            function mapping_function_local($itvar,)
+                $(forbody)
+            end
+        end)
     end
-    q = if !isnothing(settings.reducer)
+    q = if isgiven(settings.reducer)
         quote
             $make_mapping_function
-            tmapreduce(mapping_function, $(settings.reducer), $(itrng); scheduler = $(settings.scheduler))
+            tmapreduce(mapping_function, $(settings.reducer),
+                $(itrng))
         end
-    elseif settings.collect
+    elseif isgiven(settings.collect)
         maybe_warn_useless_init(settings)
         quote
             $make_mapping_function
-            tmap(mapping_function, $(itrng); scheduler = $(settings.scheduler))
+            tmap(mapping_function, $(itrng))
         end
     else
         maybe_warn_useless_init(settings)
         quote
             $make_mapping_function
-            tforeach(mapping_function, $(itrng); scheduler = $(settings.scheduler))
+            tforeach(mapping_function, $(itrng))
         end
     end
+
+    # insert keyword arguments into the function call
+    kwexpr = :($(Expr(:parameters)))
+    if isgiven(settings.scheduler)
+        push!(kwexpr.args, Expr(:kw, :scheduler, settings.scheduler))
+    end
+    for (k, v) in settings.kwargs
+        push!(kwexpr.args, Expr(:kw, k, v))
+    end
+    insert!(q.args[4].args, 2, kwexpr)
 
     # wrap everything in a let ... end block
     # and, potentially, define the `TaskLocalValue`s.
@@ -71,27 +82,17 @@ function tasks_macro(forex)
 end
 
 function maybe_warn_useless_init(settings)
-    !isnothing(settings.init) &&
+    isgiven(settings.init) &&
         @warn("The @set init = ... settings won't have any effect because no reduction is performed.")
 end
 
 Base.@kwdef mutable struct Settings
-    scheduler::Expr = :(DynamicScheduler())
-    reducer::Union{Expr, Symbol, Nothing} = nothing
-    collect::Bool = false
-    init::Union{Expr, Symbol, Nothing} = nothing
-end
-
-function _sym2scheduler(s)
-    if s == :dynamic
-        :(DynamicScheduler())
-    elseif s == :static
-        :(StaticScheduler())
-    elseif s == :greedy
-        :(GreedyScheduler())
-    else
-        throw(ArgumentError("Unknown scheduler symbol."))
-    end
+    # scheduler::Expr = :(DynamicScheduler())
+    scheduler::Union{Expr, QuoteNode, NotGiven} = NotGiven()
+    reducer::Union{Expr, Symbol, NotGiven} = NotGiven()
+    collect::Union{Bool, NotGiven} = NotGiven()
+    init::Union{Expr, Symbol, NotGiven} = NotGiven()
+    kwargs::Vector{Pair{Symbol, Any}} = Pair{Symbol, Any}[]
 end
 
 function _maybe_handle_atlocal_block!(args)
@@ -119,7 +120,7 @@ function _unfold_atlocal_block(ex)
         for x in tlsexprs
             localb, localn = _atlocal_assign_to_exprs(x)
             push!(locals_before, localb)
-            push!(locals_names,  localn)
+            push!(locals_names, localn)
         end
     else
         throw(ErrorException("Wrong usage of @local. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
@@ -159,7 +160,7 @@ function _maybe_handle_atset_block!(settings, args)
     end
     deleteat!(args, idcs)
     # check incompatible settings
-    if settings.collect && !isnothing(settings.reducer)
+    if isgiven(settings.collect) && settings.collect && isgiven(settings.reducer)
         throw(ArgumentError("Specifying both collect and reducer isn't supported."))
     end
 end
@@ -169,20 +170,15 @@ function _handle_atset_single_assign!(settings, ex)
         throw(ErrorException("Wrong usage of @set. Expected assignment, e.g. `scheduler = StaticScheduler()`."))
     end
     sym = ex.args[1]
-    if !hasfield(Settings, sym)
-        throw(ArgumentError("Unknown setting \"$(sym)\". Must be ∈ $(fieldnames(Settings))."))
-    end
     def = ex.args[2]
-    if sym == :collect && !(def isa Bool)
-        throw(ArgumentError("Setting collect can only be true or false."))
-        #TODO support specifying the OutputElementType
-    end
-    def = if def isa QuoteNode
-        _sym2scheduler(def.value)
-    elseif def isa Bool
-        def
+    if hasfield(Settings, sym)
+        if sym == :collect && !(def isa Bool)
+            throw(ArgumentError("Setting collect can only be true or false."))
+            #TODO support specifying the OutputElementType
+        end
+        def = def isa Bool ? def : esc(def)
+        setfield!(settings, sym, def)
     else
-        esc(def)
+        push!(settings.kwargs, sym => def)
     end
-    setfield!(settings, sym, def)
 end

@@ -141,6 +141,42 @@ end;
         i
     end) == (55.0 + 0.0im)
 
+    # top-level "kwargs"
+    @test @tasks(for i in 1:3
+        @set scheduler=:static
+        @set ntasks=1
+        i
+    end) |> isnothing
+    @test @tasks(for i in 1:3
+        @set scheduler=:static
+        @set nchunks=2
+        i
+    end) |> isnothing
+    @test @tasks(for i in 1:3
+        @set scheduler=:dynamic
+        @set chunksize=2
+        i
+    end) |> isnothing
+    @test @tasks(for i in 1:3
+        @set scheduler=:dynamic
+        @set chunking=false
+        i
+    end) |> isnothing
+    @test_throws ArgumentError @tasks(for i in 1:3
+        @set scheduler=DynamicScheduler()
+        @set chunking=false
+        i
+    end)
+    @test_throws MethodError @tasks(for i in 1:3
+        @set scheduler=:serial
+        @set chunking=false
+        i
+    end)
+    @test_throws MethodError @tasks(for i in 1:3
+        @set scheduler=:dynamic
+        @set asd=123
+        i
+    end)
 
     # TaskLocalValue
     ntd = 2*Threads.nthreads()
