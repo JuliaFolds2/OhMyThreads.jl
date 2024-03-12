@@ -75,6 +75,8 @@ end
 
 @eval begin
     """
+        @local name = value
+
         @local name::T = value
     
     Can be used inside a `@tasks for ... end` block to specify
@@ -85,14 +87,14 @@ end
     There can only be a single `@local` block in a `@tasks for ... end` block. To specify
     multiple TLVs, use `@local begin ... end`. Compared to regular assignments, there are some
     limitations though, e.g. TLVs can't reference each other.
-    
+
     ## Examples
     
     ```julia
     using OhMyThreads.Tools: taskid
     @tasks for i in 1:10
         @set scheduler=DynamicScheduler(; nchunks=2)
-        @local x::Vector{Float64} = zeros(3) # TLV
+        @local x = zeros(3) # TLV
     
         x .+= 1
         println(taskid(), " -> ", x)
@@ -102,9 +104,18 @@ end
     ```julia
     @tasks for i in 1:10
         @local begin
-            x::Vector{Int64} = rand(Int, 3)
-            M::Matrix{Float64} = rand(3, 3)
+            x = rand(Int, 3)
+            M = rand(3, 3)
         end
+        # ...
+    end
+    ```
+
+    Task local variables created by `@local` are by default constrained to their inferred type,
+    but if you need to, you can specify a different type during declaration:
+    ```julia
+    @tasks for i in 1:10
+        @local x::Vector{Float64} = some_hard_to_infer_setup_function()
         # ...
     end
     ```
