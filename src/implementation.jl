@@ -386,9 +386,6 @@ end
         _Arrs::AbstractArray...;
         scheduler::Scheduler = DynamicScheduler(),
         kwargs...)
-    if hasfield(typeof(scheduler), :split) && scheduler.split != :batch
-        error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $scheduler)")
-    end
     Arrs = (A, _Arrs...)
     if scheduler isa SerialScheduler
         map!(f, out, Arrs...; kwargs...)
