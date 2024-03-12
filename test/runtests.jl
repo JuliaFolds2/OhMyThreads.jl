@@ -166,11 +166,11 @@ end
         x[] += 1
         x[]
     end) == 1.5 * ntd # if a new x would be allocated per iteration, we'd get ntd here.
-    # TaskLocalValue (begin ... end block)
+    # TaskLocalValue (begin ... end block), inferred TLV type
     @test @inferred (() -> @tasks for i in 1:10
         @local begin
-            C::Matrix{Int64} = fill(4, 3, 3)
-            x::Vector{Float64} = fill(5.0, 3)
+            C = fill(4, 3, 3)
+            x = fill(5.0, 3)
         end
         @set reducer = (+)
         sum(C * x)
