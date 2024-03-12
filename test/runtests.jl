@@ -264,4 +264,35 @@ end;
     end
 end;
 
+@testset "top-level kwargs" begin
+    res_tmr = mapreduce(sin, +, 1:10000)
+
+    # scheduler not given
+    @test tmapreduce(sin, +, 1:10000; ntasks=2) ≈ res_tmr
+    @test tmapreduce(sin, +, 1:10000; nchunks=2) ≈ res_tmr
+    @test tmapreduce(sin, +, 1:10000; split=:scatter) ≈ res_tmr
+    @test tmapreduce(sin, +, 1:10000; chunksize=2) ≈ res_tmr
+    @test tmapreduce(sin, +, 1:10000; chunking=false) ≈ res_tmr
+
+    # scheduler isa Scheduler
+    @test tmapreduce(sin, +, 1:10000; scheduler=StaticScheduler()) ≈ res_tmr
+    @test_throws ArgumentError tmapreduce(sin, +, 1:10000; ntasks=2, scheduler=DynamicScheduler())
+    @test_throws ArgumentError tmapreduce(sin, +, 1:10000; chunksize=2, scheduler=DynamicScheduler())
+    @test_throws ArgumentError tmapreduce(sin, +, 1:10000; split=:scatter, scheduler=StaticScheduler())
+    @test_throws ArgumentError tmapreduce(sin, +, 1:10000; ntasks=3, scheduler=SerialScheduler())
+
+    # scheduler isa Symbol
+    for s in (:dynamic, :static, :serial, :greedy)
+        @test tmapreduce(sin, +, 1:10000; scheduler=s) ≈ res_tmr
+    end
+    for s in (:dynamic, :static, :greedy)
+        @test tmapreduce(sin, +, 1:10000; ntasks=2, scheduler=s) ≈ res_tmr
+    end
+    for s in (:dynamic, :static)
+        @test tmapreduce(sin, +, 1:10000; chunksize=2, scheduler=s) ≈ res_tmr
+        @test tmapreduce(sin, +, 1:10000; chunking=false, scheduler=s) ≈ res_tmr
+        @test tmapreduce(sin, +, 1:10000; nchunks=3, scheduler=s) ≈ res_tmr
+    end
+end;
+
 # Todo way more testing, and easier tests to deal with
