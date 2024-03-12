@@ -36,16 +36,26 @@ end
 ```
 
 ```julia
+@tasks for i in 1:100
+    @set ntasks=4*nthreads()
+    # non-uniform work...
+end
+```
+
+```julia
 @tasks for i in 1:5
     @set scheduler=:static
     println("i=", i, " → ", threadid())
 end
-
 ```
+
 ```julia
 @tasks for i in 1:100
-    @set scheduler=DynamicScheduler(; nchunks=4*nthreads())
-    # non-uniform work...
+    @set begin
+        scheduler=:static
+        chunksize=10
+    end
+    println("i=", i, " → ", threadid())
 end
 ```
 """
@@ -64,10 +74,18 @@ Multiple settings are supported, either as separate `@set` statements or via
 
 ## Settings
 
-* `scheduler` (e.g. `scheduler=:static`): Can be either a [`Scheduler`](@ref) or a `Symbol` (e.g. `:dynamic` or `:static`)
 * `reducer` (e.g. `reducer=+`): Indicates that a reduction should be performed with the provided binary function. See [`tmapreduce`](@ref) for more information.
 * `collect` (e.g. `collect=true`): Indicates that results should be collected (similar to `map`).
+
+All other settings will be passed on to the underlying parallel functions (e.g. [tmapreduce](@ref))
+as keyword arguments. Hence, you may provide whatever these functions accept as
+keyword arguments. Among others, this includes
+
+* `scheduler` (e.g. `scheduler=:static`): Can be either a [`Scheduler`](@ref) or a `Symbol` (e.g. `:dynamic`, `:static`, `:serial`, or `:greedy`).
 * `init` (e.g. `init=0.0`): Initial value to be used in a reduction (requires `reducer=...`).
+
+Settings like `ntasks`, `chunksize`, and `split` etc. can be used to tune the scheduling policy (if the selected scheduler supports it).
+
 """
 macro set(args...)
     error("The @set macro may only be used inside of a @tasks block.")
@@ -78,29 +96,29 @@ end
         @local name = value
 
         @local name::T = value
-    
+
     Can be used inside a `@tasks for ... end` block to specify
     [task-local values](@ref TLS) (TLV) via explicitly typed assignments.
     These values will be allocated once per task
     (rather than once per iteration) and can be re-used between different task-local iterations.
-    
+
     There can only be a single `@local` block in a `@tasks for ... end` block. To specify
     multiple TLVs, use `@local begin ... end`. Compared to regular assignments, there are some
     limitations though, e.g. TLVs can't reference each other.
 
     ## Examples
-    
+
     ```julia
     using OhMyThreads.Tools: taskid
     @tasks for i in 1:10
         @set scheduler=DynamicScheduler(; nchunks=2)
         @local x = zeros(3) # TLV
-    
+
         x .+= 1
         println(taskid(), " -> ", x)
     end
     ```
-    
+
     ```julia
     @tasks for i in 1:10
         @local begin

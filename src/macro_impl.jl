@@ -140,7 +140,7 @@ is frozen for the full lifetime of the TLV, so and `eval` can't change the outco
 potential problems from the type being maximally narrow and then them trying to write a value of another type to it
 3) the task local value is not user-observable. we never let the user inspect its type, unless they themselves are
 using `code____` tools to inspect the generated code, hence if inference changes and gives a more or less precise
-type, there's no observable semantic changes, just performance increases or decreases. 
+type, there's no observable semantic changes, just performance increases or decreases.
 =#
 function _atlocal_assign_to_exprs(ex)
     left_ex = ex.args[1]
@@ -198,6 +198,6 @@ function _handle_atset_single_assign!(settings, ex)
         def = def isa Bool ? def : esc(def)
         setfield!(settings, sym, def)
     else
-        push!(settings.kwargs, sym => def)
+        push!(settings.kwargs, sym => esc(def))
     end
 end

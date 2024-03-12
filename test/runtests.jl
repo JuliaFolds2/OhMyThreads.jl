@@ -211,14 +211,22 @@ end;
         @set reducer = (+)
         sum(C * x)
     end)() == 1800
-    
+
     # hygiene / escaping
     var = 3
     sched = StaticScheduler()
+    sched_sym = :static
     data = rand(10)
     red = (a,b) -> a+b
+    n = 2
     @test @tasks(for d in data
         @set scheduler=sched
+        @set reducer=red
+        var * d
+    end) ≈ var * sum(data)
+    @test @tasks(for d in data
+        @set scheduler=sched_sym
+        @set ntasks=n
         @set reducer=red
         var * d
     end) ≈ var * sum(data)

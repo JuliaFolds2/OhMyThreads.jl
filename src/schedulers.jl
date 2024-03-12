@@ -37,6 +37,8 @@ function _chunkingstr(s::Scheduler)
 end
 
 """
+    DynamicScheduler (aka :dynamic)
+
 The default dynamic scheduler. Divides the given collection into chunks and
 then spawns a task per chunk to perform the requested operation in parallel.
 The tasks are assigned to threads by Julia's dynamic scheduler and are non-sticky, that is,
@@ -123,6 +125,8 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::DynamicScheduler
 end
 
 """
+    StaticScheduler (aka :static)
+
 A static low-overhead scheduler. Divides the given collection into chunks and
 then spawns a task per chunk to perform the requested operation in parallel.
 The tasks are statically assigned to threads up front and are made *sticky*, that is,
@@ -202,6 +206,8 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::StaticScheduler)
 end
 
 """
+    GreedyScheduler (aka :greedy)
+
 A greedy dynamic scheduler. The elements of the collection are first put into a `Channel`
 and then dynamic, non-sticky tasks are spawned to process channel content in parallel.
 
@@ -234,6 +240,8 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::GreedyScheduler)
 end
 
 """
+    SerialScheduler (aka :serial)
+
 A scheduler for turning off any multithreading and running the code in serial. It aims to
 make parallel functions like, e.g., `tmapreduce(sin, +, 1:100)` behave like their serial
 counterparts, e.g., `mapreduce(sin, +, 1:100)`.
