@@ -103,7 +103,7 @@ function _tmapreduce(f,
         Arrs,
         ::Type{OutputType},
         scheduler::StaticScheduler,
-        mapreduce_kwargs) where {OutputType}
+        mapreduce_kwargs)::OutputType where {OutputType}
     nt = nthreads()
     check_all_have_same_indices(Arrs)
     if chunking_enabled(scheduler)
@@ -136,7 +136,7 @@ function _tmapreduce(f,
         Arrs::Tuple{ChunkSplitters.Chunk{T}}, # we don't support multiple chunks for now
         ::Type{OutputType},
         scheduler::StaticScheduler,
-        mapreduce_kwargs) where {OutputType, T}
+        mapreduce_kwargs)::OutputType where {OutputType, T}
     chunking_enabled(scheduler) && auto_disable_chunking_warning()
     check_all_have_same_indices(Arrs)
     chnks = only(Arrs)
