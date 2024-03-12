@@ -174,7 +174,7 @@ function matmulsums_tlv_macro(As, Bs; kwargs...)
     N = size(first(As), 1)
     @tasks for i in eachindex(As,Bs)
         @set collect=true
-        @local C::Matrix{Float64} = Matrix{Float64}(undef, N, N)
+        @local C = Matrix{Float64}(undef, N, N)
         mul!(C, As[i], Bs[i])
         sum(C)
     end
@@ -183,9 +183,10 @@ end
 res_tlv_macro = matmulsums_tlv_macro(As, Bs)
 res ≈ res_tlv_macro
 
-# Here, `@local` expands to a pattern similar to the `TaskLocalValue` one above, although it
-# carries some optimizations (see [`OhMyThreads.WithTaskLocals`](@ref)) which can make accessing task
-# local values more efficient in loops which take on the order of 100ns to complete.
+# Here, `@local` expands to a pattern similar to the `TaskLocalValue` one above, although automatically
+# infers that the object's type is `Matrix{Float64}`, and it carries some optimizations (see 
+# [`OhMyThreads.WithTaskLocals`](@ref)) which can make accessing task local values more efficient in 
+# loops which take on the order of 100ns to complete.
 #
 #
 # ### Benchmark

@@ -127,19 +127,35 @@ function _unfold_atlocal_block(ex)
     return locals_before, locals_names
 end
 
+#=
+If the TLS doesn't have a declared return type, we're going to use `CC.return_type` to get it
+automatically. This would normally be non-kosher, but it's okay here for three reasons:
+1) The task local value *only* exists within the function being called, meaning that the worldage
+is frozen for the full lifetime of the TLV, so and `eval` can't change the outcome or cause incorrect inference.
+2) We do not allow users to *write* to the task local value, they can only retrieve its value, so there's no
+potential problems from the type being maximally narrow and then them trying to write a value of another type to it
+3) the task local value is not user-observable. we never let the user inspect its type, unless they themselves are
+using `code____` tools to inspect the generated code, hence if inference changes and gives a more or less precise
+type, there's no observable semantic changes, just performance increases or decreases. 
+=#
 function _atlocal_assign_to_exprs(ex)
     left_ex = ex.args[1]
-    if left_ex isa Symbol || left_ex.head != :(::)
-        throw(ErrorException("Wrong usage of @local. Expected typed assignment, e.g. `A::Matrix{Float} = rand(2,2)`."))
-    end
-    tls_sym = esc(left_ex.args[1])
-    tls_type = esc(left_ex.args[2])
     tls_def = esc(ex.args[2])
     @gensym tl_storage
-    local_before = :($(tl_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
+    if Base.isexpr(left_ex, :(::))
+        tls_sym = esc(left_ex.args[1])
+        tls_type = esc(left_ex.args[2])
+        local_before = :($(tl_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
+    else
+        tls_sym  = esc(left_ex)
+        local_before = :($(tl_storage) = let f = () -> $(tls_def)
+                             TaskLocalValue{Core.Compiler.return_type(f, Tuple{})}(f)
+                         end)
+    end
     local_name = :($(tls_sym))
     return local_before, local_name
 end
+
 
 function _maybe_handle_atset_block!(settings, args)
     idcs = findall(args) do arg
