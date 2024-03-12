@@ -61,7 +61,7 @@ sets_to_test = [(~ = isapprox, f = sin ∘ *, op = +,
             end
         end
     end
-end
+end;
 
 @testset "ChunkSplitters.Chunk" begin
     x = rand(100)
@@ -76,7 +76,7 @@ end
             @test isnothing(tforeach(x -> sin.(x), chnks; scheduler))
         end
     end
-end
+end;
 
 @testset "macro API" begin
     # basic
@@ -195,7 +195,7 @@ end
         @set reducer=+
         C.x
     end) == 10*var
-end
+end;
 
 @testset "WithTaskLocals" begin
     let x = TaskLocalValue{Base.RefValue{Int}}(() -> Ref{Int}(0)), y = TaskLocalValue{Base.RefValue{Int}}(() -> Ref{Int}(0))
@@ -234,7 +234,7 @@ end
         @test @fetch(h()) == (4, 4)
         @test @fetch(h()) == (5, 5)
     end
-end
+end;
 
 @testset "chunking mode + chunksize option" begin
     for sched in (DynamicScheduler, StaticScheduler)
@@ -262,6 +262,6 @@ end
             @test treduce(+, 1:10; scheduler) ≈ reduce(+, 1:10)
         end
     end
-end
+end;
 
 # Todo way more testing, and easier tests to deal with

@@ -2,6 +2,12 @@ module Schedulers
 
 using Base.Threads: nthreads
 
+# Used to indicate that a keyword argument has not been set by the user.
+# We don't use Nothing because nothing maybe sometimes be a valid user input (e.g. for init)
+struct NotGiven end
+isgiven(::NotGiven) = false
+isgiven(::T) where {T} = true
+
 const MaybeInteger = Union{Integer, Nothing}
 
 """

@@ -1,21 +1,21 @@
 module Implementation
 
 import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
-
 using OhMyThreads: chunks, @spawn, @spawnat, WithTaskLocals, promise_task_local
 using OhMyThreads.Tools: nthtid
 using OhMyThreads: Scheduler,
-    DynamicScheduler, StaticScheduler, GreedyScheduler,
-    SerialScheduler
+                   DynamicScheduler, StaticScheduler, GreedyScheduler,
+                   SerialScheduler
 using OhMyThreads.Schedulers: chunking_enabled,
-    chunking_mode, ChunkingMode, NoChunking,
-    FixedSize, FixedCount, scheduler_from_symbol
+                              chunking_mode, ChunkingMode, NoChunking,
+                              FixedSize, FixedCount, scheduler_from_symbol, NotGiven,
+                              isgiven
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
-
 using BangBang: append!!
-
 using ChunkSplitters: ChunkSplitters
+
+const MaybeScheduler = Union{NotGiven, Scheduler, Symbol}
 
 include("macro_impl.jl")
 
@@ -32,29 +32,28 @@ function _chunks(sched, arg)
     if C == FixedCount
         chunks(arg;
             n = sched.nchunks,
-            split = sched.split)::ChunkSplitters.Chunk{typeof(arg), ChunkSplitters.FixedCount}
+            split = sched.split)::ChunkSplitters.Chunk{
+            typeof(arg), ChunkSplitters.FixedCount}
     elseif C == FixedSize
         chunks(arg;
             size = sched.chunksize,
-            split = sched.split)::ChunkSplitters.Chunk{typeof(arg), ChunkSplitters.FixedSize}
+            split = sched.split)::ChunkSplitters.Chunk{
+            typeof(arg), ChunkSplitters.FixedSize}
     end
 end
 
-const MaybeScheduler = Union{Nothing, Scheduler, Symbol}
-const MaybeInteger = Union{Nothing, Integer}
-
 function tmapreduce(f, op, Arrs...;
-        scheduler::MaybeScheduler = nothing,
+        scheduler::MaybeScheduler = NotGiven(),
         outputtype::Type = Any,
-        init = nothing,
+        init = NotGiven(),
         kwargs...)
-    mapreduce_kwargs = !isnothing(init) ? (; init = kwargs.init) : (;)
+    mapreduce_kwargs = isgiven(init) ? (; init) : (;)
     if scheduler isa Scheduler
         isempty(kwargs) || scheduler_and_kwargs_err(; kwargs...)
         _scheduler = scheduler
     elseif scheduler isa Symbol
         _scheduler = scheduler_from_symbol(scheduler; kwargs...)
-    else # scheduler == nothing
+    else # default fallback
         _scheduler = DynamicScheduler(; kwargs...)
     end
 
@@ -252,14 +251,14 @@ end
 function tmap(f,
         A::Union{AbstractArray, ChunkSplitters.Chunk},
         _Arrs::AbstractArray...;
-        scheduler::MaybeScheduler = nothing,
+        scheduler::MaybeScheduler = NotGiven(),
         kwargs...)
     if scheduler isa Scheduler
         isempty(kwargs) || scheduler_and_kwargs_err(; kwargs...)
         _scheduler = scheduler
     elseif scheduler isa Symbol
         _scheduler = scheduler_from_symbol(scheduler; kwargs...)
-    else # scheduler == nothing
+    else # default fallback
         _scheduler = DynamicScheduler(; kwargs...)
     end
 
@@ -375,14 +374,14 @@ end
         out,
         A::AbstractArray,
         _Arrs::AbstractArray...;
-        scheduler::MaybeScheduler = nothing,
+        scheduler::MaybeScheduler = NotGiven(),
         kwargs...)
     if scheduler isa Scheduler
         isempty(kwargs) || scheduler_and_kwargs_err(; kwargs...)
         _scheduler = scheduler
     elseif scheduler isa Symbol
         _scheduler = scheduler_from_symbol(scheduler; kwargs...)
-    else # scheduler == nothing
+    else # default fallback
         _scheduler = DynamicScheduler(; kwargs...)
     end
 
