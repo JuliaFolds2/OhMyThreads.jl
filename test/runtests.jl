@@ -191,7 +191,7 @@ end
         x::Int
     end
     @test @tasks(for _ in 1:10
-        @local C::SingleInt = SingleInt(var)
+        @local C = SingleInt(var)
         @set reducer=+
         C.x
     end) == 10*var
