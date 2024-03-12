@@ -8,7 +8,7 @@ struct NotGiven end
 isgiven(::NotGiven) = false
 isgiven(::T) where {T} = true
 
-const MaybeInteger = Union{Integer, Nothing}
+const MaybeInteger = Union{Integer, NotGiven}
 
 """
 Supertype for all available schedulers:
@@ -95,9 +95,9 @@ end
 
 function DynamicScheduler(;
         threadpool::Symbol = :default,
-        nchunks::MaybeInteger = nothing,
-        ntasks::MaybeInteger = nothing, # "alias" for nchunks
-        chunksize::MaybeInteger = nothing,
+        nchunks::MaybeInteger = NotGiven(),
+        ntasks::MaybeInteger = NotGiven(), # "alias" for nchunks
+        chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = true,
         split::Symbol = :batch)
     if !chunking
@@ -105,16 +105,16 @@ function DynamicScheduler(;
         chunksize = -1
     else
         # only choose nchunks default if chunksize hasn't been specified
-        if isnothing(nchunks) && isnothing(chunksize) && isnothing(ntasks)
+        if !isgiven(nchunks) && !isgiven(chunksize) && !isgiven(ntasks)
             nchunks = 2 * nthreads(threadpool)
             chunksize = -1
         else
-            if !isnothing(nchunks) && !isnothing(ntasks)
+            if isgiven(nchunks) && isgiven(ntasks)
                 throw(ArgumentError("nchunks and ntasks are aliases and only one may be provided"))
             end
-            nchunks = !isnothing(nchunks) ? nchunks :
-                      !isnothing(ntasks) ? ntasks : -1
-            chunksize = isnothing(chunksize) ? -1 : chunksize
+            nchunks = isgiven(nchunks) ? nchunks :
+                      isgiven(ntasks) ? ntasks : -1
+            chunksize = isgiven(chunksize) ? chunksize : -1
         end
     end
     DynamicScheduler(threadpool, nchunks, chunksize, split; chunking)
@@ -179,9 +179,9 @@ struct StaticScheduler{C <: ChunkingMode} <: Scheduler
 end
 
 function StaticScheduler(;
-        nchunks::MaybeInteger = nothing,
-        ntasks::MaybeInteger = nothing, # "alias" for nchunks
-        chunksize::MaybeInteger = nothing,
+        nchunks::MaybeInteger = NotGiven(),
+        ntasks::MaybeInteger = NotGiven(), # "alias" for nchunks
+        chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = true,
         split::Symbol = :batch)
     if !chunking
@@ -189,16 +189,16 @@ function StaticScheduler(;
         chunksize = -1
     else
         # only choose nchunks default if chunksize hasn't been specified
-        if isnothing(nchunks) && isnothing(chunksize) && isnothing(ntasks)
+        if !isgiven(nchunks) && !isgiven(chunksize) && !isgiven(ntasks)
             nchunks = nthreads(:default)
             chunksize = -1
         else
-            if !isnothing(nchunks) && !isnothing(ntasks)
+            if isgiven(nchunks) && isgiven(ntasks)
                 throw(ArgumentError("nchunks and ntasks are aliases and only one may be provided"))
             end
-            nchunks = !isnothing(nchunks) ? nchunks :
-                      !isnothing(ntasks) ? ntasks : -1
-            chunksize = isnothing(chunksize) ? -1 : chunksize
+            nchunks = isgiven(nchunks) ? nchunks :
+                      isgiven(ntasks) ? ntasks : -1
+            chunksize = isgiven(chunksize) ? chunksize : -1
         end
     end
     StaticScheduler(nchunks, chunksize, split; chunking)
