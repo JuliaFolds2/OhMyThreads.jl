@@ -167,15 +167,15 @@ end
         x[]
     end) == 1.5 * ntd # if a new x would be allocated per iteration, we'd get ntd here.
     # TaskLocalValue (begin ... end block)
-    @test @tasks(for i in 1:10
+    @test @inferred (() -> @tasks for i in 1:10
         @local begin
             C::Matrix{Int64} = fill(4, 3, 3)
             x::Vector{Float64} = fill(5.0, 3)
         end
         @set reducer = (+)
         sum(C * x)
-    end) == 1800
-
+    end)() == 1800
+    
     # hygiene / escaping
     var = 3
     sched = StaticScheduler()

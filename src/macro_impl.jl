@@ -129,17 +129,22 @@ end
 
 function _atlocal_assign_to_exprs(ex)
     left_ex = ex.args[1]
-    if left_ex isa Symbol || left_ex.head != :(::)
-        throw(ErrorException("Wrong usage of @local. Expected typed assignment, e.g. `A::Matrix{Float} = rand(2,2)`."))
-    end
-    tls_sym = esc(left_ex.args[1])
-    tls_type = esc(left_ex.args[2])
     tls_def = esc(ex.args[2])
     @gensym tl_storage
-    local_before = :($(tl_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
+    if Base.isexpr(left_ex, :(::))
+        tls_sym = esc(left_ex.args[1])
+        tls_type = esc(left_ex.args[2])
+        local_before = :($(tl_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
+    else
+        tls_sym  = esc(left_ex)
+        local_before = :($(tl_storage) = let f = () -> $(tls_def)
+                             TaskLocalValue{Core.Compiler.return_type(f, Tuple{})}(f)
+                         end)
+    end
     local_name = :($(tls_sym))
     return local_before, local_name
 end
+
 
 function _maybe_handle_atset_block!(settings, args)
     idcs = findall(args) do arg
