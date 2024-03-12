@@ -127,6 +127,17 @@ function _unfold_atlocal_block(ex)
     return locals_before, locals_names
 end
 
+#=
+If the TLS doesn't have a declared return type, we're going to use `CC.return_type` to get it
+automatically. This would normally be non-kosher, but it's okay here for two reasons:
+1) The task local value *only* exists within the function being called, meaning that the worldage
+is frozen for the full lifetime of the TLV, so and `eval` can't change the outcome or cause incorrect inference.
+2) We do not allow users to *write* to the task local value, they can only retrieve its value, so there's no
+potential problems from the type being maximally narrow and then them trying to write a value of another type to it
+3) the task local value is not user-observable. we never let the user inspect its type, unless they themselves are
+using `code____` tools to inspect the generated code, hence if inference changes and gives a more or less precise
+type, there's no observable semantic changes, just performance increases or decreases. 
+=#
 function _atlocal_assign_to_exprs(ex)
     left_ex = ex.args[1]
     tls_def = esc(ex.args[2])
