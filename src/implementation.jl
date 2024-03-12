@@ -26,13 +26,17 @@ function auto_disable_chunking_warning()
           "or pass in `collect(chunks(...))`.")
 end
 
-function _chunks(sched, arg; kwargs...)
+function _chunks(sched, arg)
     C = chunking_mode(sched)
     @assert C != NoChunking
     if C == FixedCount
-        chunks(arg; n = sched.nchunks, split = sched.split, kwargs...)
+        chunks(arg;
+            n = sched.nchunks,
+            split = sched.split)::ChunkSplitters.Chunk{typeof(arg), ChunkSplitters.FixedCount}
     elseif C == FixedSize
-        chunks(arg; size = sched.chunksize, split = sched.split, kwargs...)
+        chunks(arg;
+            size = sched.chunksize,
+            split = sched.split)::ChunkSplitters.Chunk{typeof(arg), ChunkSplitters.FixedSize}
     end
 end
 
@@ -41,26 +45,20 @@ const MaybeInteger = Union{Nothing, Integer}
 
 function tmapreduce(f, op, Arrs...;
         scheduler::MaybeScheduler = nothing,
-        ntasks::MaybeInteger = nothing,
         outputtype::Type = Any,
-        mapreduce_kwargs...)
-    min_kwarg_len = haskey(mapreduce_kwargs, :init) ? 1 : 0
-    if length(mapreduce_kwargs) > min_kwarg_len
-        tmapreduce_kwargs_err(; mapreduce_kwargs...)
-    end
-    isnothing(ntasks) || ntasks > 0 ||
-        throw(ArgumentError("ntasks must be a positive integer."))
+        init = nothing,
+        kwargs...)
+    mapreduce_kwargs = !isnothing(init) ? (; init = kwargs.init) : (;)
     if scheduler isa Scheduler
-        isnothing(ntasks) ||
-            throw(ArgumentError("providing an explicit scheduler as well as ntasks is currently not supported."))
+        isempty(kwargs) || scheduler_and_kwargs_err(; kwargs...)
         _scheduler = scheduler
     elseif scheduler isa Symbol
-        _scheduler = scheduler_from_symbol(scheduler; ntasks)
+        _scheduler = scheduler_from_symbol(scheduler; kwargs...)
     else # scheduler == nothing
-        _scheduler = DynamicScheduler(; ntasks)
+        _scheduler = DynamicScheduler(; kwargs...)
     end
 
-    @show _scheduler
+    # @show _scheduler
     if _scheduler isa SerialScheduler
         mapreduce(f, op, Arrs...; mapreduce_kwargs...)
     else
@@ -68,8 +66,9 @@ function tmapreduce(f, op, Arrs...;
     end
 end
 
-@noinline function tmapreduce_kwargs_err(; init = nothing, kwargs...)
-    error("got unsupported keyword arguments: $((;kwargs...,)) ")
+@noinline function scheduler_and_kwargs_err(; kwargs...)
+    kwargstr = join(string.(keys(kwargs)), ", ")
+    throw(ArgumentError("Providing an explicit scheduler as well as direct keyword arguments (e.g. $(kwargstr)) is currently not supported."))
 end
 
 treducemap(op, f, A...; kwargs...) = tmapreduce(f, op, A...; kwargs...)
@@ -253,33 +252,44 @@ end
 function tmap(f,
         A::Union{AbstractArray, ChunkSplitters.Chunk},
         _Arrs::AbstractArray...;
-        scheduler::Scheduler = DynamicScheduler(),
+        scheduler::MaybeScheduler = nothing,
         kwargs...)
-    if scheduler isa GreedyScheduler
+    if scheduler isa Scheduler
+        isempty(kwargs) || scheduler_and_kwargs_err(; kwargs...)
+        _scheduler = scheduler
+    elseif scheduler isa Symbol
+        _scheduler = scheduler_from_symbol(scheduler; kwargs...)
+    else # scheduler == nothing
+        _scheduler = DynamicScheduler(; kwargs...)
+    end
+
+    if _scheduler isa GreedyScheduler
         error("Greedy scheduler isn't supported with `tmap` unless you provide an `OutputElementType` argument, since the greedy schedule requires a commutative reducing operator.")
     end
-    if chunking_enabled(scheduler) && hasfield(typeof(scheduler), :split) &&
-       scheduler.split != :batch
-        error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $scheduler)")
+    if chunking_enabled(_scheduler) && hasfield(typeof(_scheduler), :split) &&
+       _scheduler.split != :batch
+        error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $_scheduler)")
     end
-    if A isa ChunkSplitters.Chunk && chunking_enabled(scheduler)
+    if A isa ChunkSplitters.Chunk && chunking_enabled(_scheduler)
         auto_disable_chunking_warning()
-        if scheduler isa DynamicScheduler
-            scheduler = DynamicScheduler(; nchunks = 0, scheduler.threadpool)
-        elseif scheduler isa StaticScheduler
-            scheduler = StaticScheduler(; nchunks = 0)
+        if _scheduler isa DynamicScheduler
+            _scheduler = DynamicScheduler(;
+                threadpool = _scheduler.threadpool,
+                chunking = false)
+        elseif _scheduler isa StaticScheduler
+            _scheduler = StaticScheduler(; chunking = false)
         else
             error("Can't disable chunking for this scheduler?! Shouldn't be reached.",
-                scheduler)
+                _scheduler)
         end
     end
 
     Arrs = (A, _Arrs...)
-    if scheduler isa SerialScheduler
+    if _scheduler isa SerialScheduler
         map(f, Arrs...; kwargs...)
     else
         check_all_have_same_indices(Arrs)
-        @noinline _tmap(scheduler, f, A, _Arrs...; kwargs...)
+        @noinline _tmap(_scheduler, f, A, _Arrs...)
     end
 end
 
@@ -287,8 +297,7 @@ end
 function _tmap(scheduler::DynamicScheduler{NoChunking},
         f,
         A::AbstractArray,
-        _Arrs::AbstractArray...;
-        kwargs...)
+        _Arrs::AbstractArray...;)
     (; threadpool) = scheduler
     Arrs = (A, _Arrs...)
     tasks = map(eachindex(A)) do i
@@ -305,8 +314,7 @@ end
 function _tmap(scheduler::DynamicScheduler{NoChunking},
         f,
         A::ChunkSplitters.Chunk,
-        _Arrs::AbstractArray...;
-        kwargs...)
+        _Arrs::AbstractArray...)
     (; threadpool) = scheduler
     tasks = map(A) do idcs
         @spawn threadpool promise_task_local(f)(idcs)
@@ -318,8 +326,7 @@ end
 function _tmap(scheduler::StaticScheduler{NoChunking},
         f,
         A::ChunkSplitters.Chunk,
-        _Arrs::AbstractArray...;
-        kwargs...)
+        _Arrs::AbstractArray...)
     nt = nthreads()
     tasks = map(enumerate(A)) do (c, idcs)
         tid = @inbounds nthtid(mod1(c, nt))
@@ -332,8 +339,7 @@ end
 function _tmap(scheduler::StaticScheduler{NoChunking},
         f,
         A::AbstractArray,
-        _Arrs::AbstractArray...;
-        kwargs...)
+        _Arrs::AbstractArray...;)
     Arrs = (A, _Arrs...)
     nt = nthreads()
     tasks = map(enumerate(A)) do (c, i)
@@ -351,8 +357,7 @@ end
 function _tmap(scheduler::Scheduler,
         f,
         A::AbstractArray,
-        _Arrs::AbstractArray...;
-        kwargs...)
+        _Arrs::AbstractArray...)
     Arrs = (A, _Arrs...)
     idcs = collect(_chunks(scheduler, A))
     reduction_f = append!!
@@ -362,7 +367,7 @@ function _tmap(scheduler::Scheduler,
             map(f, args...)
         end
     end
-    v = tmapreduce(mapping_f, reduction_f, idcs; scheduler, kwargs...)
+    v = tmapreduce(mapping_f, reduction_f, idcs; scheduler)
     reshape(v, size(A)...)
 end
 
@@ -370,14 +375,23 @@ end
         out,
         A::AbstractArray,
         _Arrs::AbstractArray...;
-        scheduler::Scheduler = DynamicScheduler(),
+        scheduler::MaybeScheduler = nothing,
         kwargs...)
-    if hasfield(typeof(scheduler), :split) && scheduler.split != :batch
-        error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $scheduler)")
+    if scheduler isa Scheduler
+        isempty(kwargs) || scheduler_and_kwargs_err(; kwargs...)
+        _scheduler = scheduler
+    elseif scheduler isa Symbol
+        _scheduler = scheduler_from_symbol(scheduler; kwargs...)
+    else # scheduler == nothing
+        _scheduler = DynamicScheduler(; kwargs...)
+    end
+
+    if hasfield(typeof(_scheduler), :split) && _scheduler.split != :batch
+        error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $_scheduler)")
     end
     Arrs = (A, _Arrs...)
-    if scheduler isa SerialScheduler
-        map!(f, out, Arrs...; kwargs...)
+    if _scheduler isa SerialScheduler
+        map!(f, out, Arrs...)
     else
         @boundscheck check_all_have_same_indices((out, Arrs...))
         mapping_f = maybe_rewrap(f) do f
@@ -387,7 +401,7 @@ end
                 out[i] = res
             end
         end
-        @noinline tforeach(mapping_f, eachindex(out); scheduler, kwargs...)
+        @noinline tforeach(mapping_f, eachindex(out); scheduler = _scheduler)
         out
     end
 end
