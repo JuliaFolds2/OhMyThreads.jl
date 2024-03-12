@@ -109,6 +109,9 @@ function DynamicScheduler(;
             nchunks = 2 * nthreads(threadpool)
             chunksize = -1
         else
+            if !isnothing(nchunks) && !isnothing(ntasks)
+                throw(ArgumentError("nchunks and ntasks are aliases and only one may be provided"))
+            end
             nchunks = !isnothing(nchunks) ? nchunks :
                       !isnothing(ntasks) ? ntasks : -1
             chunksize = isnothing(chunksize) ? -1 : chunksize
@@ -190,6 +193,9 @@ function StaticScheduler(;
             nchunks = nthreads(:default)
             chunksize = -1
         else
+            if !isnothing(nchunks) && !isnothing(ntasks)
+                throw(ArgumentError("nchunks and ntasks are aliases and only one may be provided"))
+            end
             nchunks = !isnothing(nchunks) ? nchunks :
                       !isnothing(ntasks) ? ntasks : -1
             chunksize = isnothing(chunksize) ? -1 : chunksize

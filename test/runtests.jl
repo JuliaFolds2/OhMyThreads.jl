@@ -336,6 +336,8 @@ end;
         @test tmapreduce(sin, +, 1:10000; chunksize=2, scheduler=s) ≈ res_tmr
         @test tmapreduce(sin, +, 1:10000; chunking=false, scheduler=s) ≈ res_tmr
         @test tmapreduce(sin, +, 1:10000; nchunks=3, scheduler=s) ≈ res_tmr
+        @test tmapreduce(sin, +, 1:10000; ntasks=3, scheduler=s) ≈ res_tmr
+        @test_throws ArgumentError tmapreduce(sin, +, 1:10000; ntasks=3, nchunks=2, scheduler=s) ≈ res_tmr
     end
 end;
 
