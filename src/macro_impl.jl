@@ -129,7 +129,7 @@ end
 
 #=
 If the TLS doesn't have a declared return type, we're going to use `CC.return_type` to get it
-automatically. This would normally be non-kosher, but it's okay here for two reasons:
+automatically. This would normally be non-kosher, but it's okay here for three reasons:
 1) The task local value *only* exists within the function being called, meaning that the worldage
 is frozen for the full lifetime of the TLV, so and `eval` can't change the outcome or cause incorrect inference.
 2) We do not allow users to *write* to the task local value, they can only retrieve its value, so there's no
