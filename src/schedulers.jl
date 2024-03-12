@@ -106,7 +106,7 @@ function DynamicScheduler(;
 end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::DynamicScheduler)
-    print("DynamicScheduler", "\n")
+    print(io, "DynamicScheduler", "\n")
     cstr = _chunkingstr(s)
     println(io, "├ Chunking: ", cstr)
     print(io, "└ Threadpool: ", s.threadpool)
@@ -183,7 +183,7 @@ function StaticScheduler(;
 end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::StaticScheduler)
-    print("StaticScheduler", "\n")
+    print(io, "StaticScheduler", "\n")
     cstr = _chunkingstr(s)
     println(io, "├ Chunking: ", cstr)
     print(io, "└ Threadpool: default")
@@ -216,7 +216,7 @@ Base.@kwdef struct GreedyScheduler <: Scheduler
 end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::GreedyScheduler)
-    print("GreedyScheduler", "\n")
+    print(io, "GreedyScheduler", "\n")
     println(io, "├ Num. tasks: ", s.ntasks)
     print(io, "└ Threadpool: default")
 end
