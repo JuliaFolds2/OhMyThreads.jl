@@ -28,7 +28,7 @@ makedocs(;
         ]
     ],
     repo = "https://github.com/JuliaFolds2/OhMyThreads.jl/blob/{commit}{path}#{line}",
-    format = Documenter.HTML(repolink = "https://github.com/JuliaFolds2/OhMyThreads.jl"))
+    format = Documenter.HTML(repolink = "https://github.com/JuliaFolds2/OhMyThreads.jl"; collapselevel = 1))
 
 if ci
     @info "Deploying documentation to GitHub"

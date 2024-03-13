@@ -172,9 +172,9 @@ using OhMyThreads: @tasks
 
 function matmulsums_tlv_macro(As, Bs; kwargs...)
     N = size(first(As), 1)
-    @tasks for i in eachindex(As,Bs)
-        @set collect=true
-        @local C::Matrix{Float64} = Matrix{Float64}(undef, N, N)
+    @tasks for i in eachindex(As, Bs)
+        @set collect = true
+        @local C = Matrix{Float64}(undef, N, N)
         mul!(C, As[i], Bs[i])
         sum(C)
     end
@@ -183,9 +183,10 @@ end
 res_tlv_macro = matmulsums_tlv_macro(As, Bs)
 res ≈ res_tlv_macro
 
-# Here, `@local` expands to a pattern similar to the `TaskLocalValue` one above, although it
-# carries some optimizations (see [`OhMyThreads.WithTaskLocals`](@ref)) which can make accessing task
-# local values more efficient in loops which take on the order of 100ns to complete.
+# Here, `@local` expands to a pattern similar to the `TaskLocalValue` one above, although automatically
+# infers that the object's type is `Matrix{Float64}`, and it carries some optimizations (see
+# [`OhMyThreads.WithTaskLocals`](@ref)) which can make accessing task local values more efficient in
+# loops which take on the order of 100ns to complete.
 #
 #
 # ### Benchmark
@@ -210,23 +211,7 @@ sleep(2) #hide
 # As we can see, `matmulsums_tlv` (and `matmulsums_tlv_macro`) isn't only convenient
 # but also efficient: It allocates much less memory than `matmulsums_naive` and is about on
 # par with the manual implementation.
-
-# #### Tuning the scheduling
 #
-# Since the workload is uniform, we don't need load balancing. We can thus try to improve
-# the performance and reduce the number of allocations by choosing the number of chunks
-# (i.e. tasks) to match the number of Julia threads. Concretely, this
-# amounts to passing in `DynamicScheduler(; nchunks=nthreads())`. If we further want to
-# opt-out of dynamic scheduling alltogether, we can choose the `StaticScheduler()`.
-
-using OhMyThreads: DynamicScheduler, StaticScheduler
-
-@btime matmulsums_tlv(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
-@btime matmulsums_tlv($As, $Bs; scheduler = $(StaticScheduler()));
-
-# Interestingly, this doesn't always lead to speedups (maybe even a slight slowdown).
-
 #
 # ## Per-thread allocation
 #
@@ -284,13 +269,14 @@ res_nu ≈ res_pt_naive
 # ### The quick fix (with caveats)
 #
 # A simple solution for the task-migration issue is to opt-out of dynamic scheduling with
-# the `StaticScheduler()`. This scheduler statically assigns tasks to threads
-# upfront without any dynamic rescheduling (the tasks are sticky and won't migrate).
+# `scheduler=:static` (or `scheduler=StaticScheduler()`). This scheduler statically
+# assigns tasks to threads upfront without any dynamic rescheduling
+# (the tasks are sticky and won't migrate).
 #
 function matmulsums_perthread_static(As, Bs)
     N = size(first(As), 1)
     Cs = [Matrix{Float64}(undef, N, N) for _ in 1:nthreads()]
-    tmap(As, Bs; scheduler = StaticScheduler()) do A, B
+    tmap(As, Bs; scheduler = :static) do A, B
         C = Cs[threadid()]
         mul!(C, A, B)
         sum(C)
@@ -335,27 +321,21 @@ res_nu ≈ res_pt_channel
 # ### Benchmark
 #
 # Let's benchmark the variants above and compare them to the task-local implementation.
-# We want to look at both `nchunks = nthreads()` and `nchunks > nthreads()`, the latter
+# We want to look at both `ntasks = nthreads()` and `ntasks > nthreads()`, the latter
 # of which gives us dynamic load balancing.
 #
 
-## no load balancing because nchunks == nthreads()
-@btime matmulsums_tlv($As_nu, $Bs_nu;
-    scheduler = $(DynamicScheduler(; nchunks = nthreads())));
+## no load balancing because ntasks == nthreads()
+@btime matmulsums_tlv($As_nu, $Bs_nu);
 @btime matmulsums_perthread_static($As_nu, $Bs_nu);
-@btime matmulsums_perthread_channel($As_nu, $Bs_nu;
-    scheduler = $(DynamicScheduler(; nchunks = nthreads())));
+@btime matmulsums_perthread_channel($As_nu, $Bs_nu);
 
-## load balancing because nchunks > nthreads()
-@btime matmulsums_tlv($As_nu, $Bs_nu;
-    scheduler = $(DynamicScheduler(; nchunks = 2 * nthreads())));
-@btime matmulsums_perthread_channel($As_nu, $Bs_nu;
-    scheduler = $(DynamicScheduler(; nchunks = 2 * nthreads())));
+## load balancing because ntasks > nthreads()
+@btime matmulsums_tlv($As_nu, $Bs_nu; ntasks = 2 * nthreads());
+@btime matmulsums_perthread_channel($As_nu, $Bs_nu; ntasks = 2 * nthreads());
 
-@btime matmulsums_tlv($As_nu, $Bs_nu;
-    scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));
-@btime matmulsums_perthread_channel($As_nu, $Bs_nu;
-    scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));
+@btime matmulsums_tlv($As_nu, $Bs_nu; ntasks = 10 * nthreads());
+@btime matmulsums_perthread_channel($As_nu, $Bs_nu; ntasks = 10 * nthreads());
 
 #
 # Note that the runtime of `matmulsums_perthread_channel` improves with increasing number
@@ -370,14 +350,15 @@ res_nu ≈ res_pt_channel
 # a limited number of tasks (e.g. `nthreads()`) with task-local buffers.
 #
 using OhMyThreads: tmapreduce
+
 function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
     N = size(first(As), 1)
-    chnl = Channel{Int}(length(As); spawn=true) do chnl
+    chnl = Channel{Int}(length(As); spawn = true) do chnl
         for i in 1:length(As)
             put!(chnl, i)
         end
     end
-    tmapreduce(vcat, 1:ntasks; scheduler = DynamicScheduler(; nchunks = 0)) do _ # we turn chunking off
+    tmapreduce(vcat, 1:ntasks; chunking=false) do _ # we turn chunking off
         local C = Matrix{Float64}(undef, N, N)
         map(chnl) do i # implicitly takes the values from the channel (parallel safe)
             A = As[i]
@@ -407,7 +388,7 @@ sort(res_nu) ≈ sort(res_channel_flipped)
 # give [Bumper.jl](https://github.com/MasonProtter/Bumper.jl) a try. Essentially, it
 # allows you to *bring your own stacks*, that is, task-local bump allocators which you can
 # dynamically allocate memory to, and reset them at the end of a code block, just like
-# Julia's stack. 
+# Julia's stack.
 # Be warned though that Bumper.jl is (1) a rather young package with (likely) some bugs
 # and (2) can easily lead to segfaults when used incorrectly. If you can live with the
 # risk, Bumper.jl is especially useful for causes  we don't know ahead of time how large
@@ -429,7 +410,7 @@ function matmulsums_bumper(As, Bs)
 end
 
 res_bumper = matmulsums_bumper(As, Bs);
-sort(res_nu) ≈ sort(res_bumper)
+sort(res) ≈ sort(res_bumper)
 
 @btime matmulsums_bumper($As, $Bs);
 

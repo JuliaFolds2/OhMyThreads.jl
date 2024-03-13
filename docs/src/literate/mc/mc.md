@@ -34,7 +34,7 @@ mc(N)
 ````
 
 ````
-3.14145748
+3.14171236
 ````
 
 ## Parallelization with `tmapreduce`
@@ -69,7 +69,7 @@ mc_parallel(N)
 ````
 
 ````
-3.14134792
+3.14156496
 ````
 
 Let's run a quick benchmark.
@@ -86,9 +86,9 @@ using Base.Threads: nthreads
 ````
 
 ````
-nthreads() = 5
-  317.745 ms (0 allocations: 0 bytes)
-  88.384 ms (66 allocations: 5.72 KiB)
+nthreads() = 10
+  301.636 ms (0 allocations: 0 bytes)
+  41.864 ms (68 allocations: 5.81 KiB)
 
 ````
 
@@ -100,13 +100,13 @@ and compare the performance of static and dynamic scheduling (with default param
 ````julia
 using OhMyThreads: StaticScheduler
 
-@btime mc_parallel($N) samples=10 evals=3;
-@btime mc_parallel($N; scheduler=StaticScheduler()) samples=10 evals=3;
+@btime mc_parallel($N; scheduler=:dynamic) samples=10 evals=3; # default
+@btime mc_parallel($N; scheduler=:static) samples=10 evals=3;
 ````
 
 ````
-  88.222 ms (66 allocations: 5.72 KiB)
-  88.203 ms (36 allocations: 2.98 KiB)
+  41.839 ms (68 allocations: 5.81 KiB)
+  41.838 ms (68 allocations: 5.81 KiB)
 
 ````
 
@@ -121,7 +121,7 @@ simulation. Finally, we fetch the results and compute the average estimate for $
 using OhMyThreads: @spawn, chunks
 
 function mc_parallel_manual(N; nchunks = nthreads())
-    tasks = map(chunks(1:N; n = nchunks)) do idcs # TODO: replace by `tmap` once ready
+    tasks = map(chunks(1:N; n = nchunks)) do idcs
         @spawn mc(length(idcs))
     end
     pi = sum(fetch, tasks) / nchunks
@@ -132,7 +132,7 @@ mc_parallel_manual(N)
 ````
 
 ````
-3.1414609999999996
+3.14180504
 ````
 
 And this is the performance:
@@ -142,7 +142,7 @@ And this is the performance:
 ````
 
 ````
-  64.042 ms (31 allocations: 2.80 KiB)
+  30.224 ms (65 allocations: 5.70 KiB)
 
 ````
 
@@ -161,8 +161,8 @@ end samples=10 evals=3;
 ````
 
 ````
-  88.041 ms (0 allocations: 0 bytes)
-  63.427 ms (0 allocations: 0 bytes)
+  41.750 ms (0 allocations: 0 bytes)
+  30.148 ms (0 allocations: 0 bytes)
 
 ````
 
