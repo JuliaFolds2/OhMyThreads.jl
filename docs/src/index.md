@@ -14,11 +14,13 @@ to add the package to your Julia environment.
 ### Basic example
 
 ```julia
-using OhMyThreads
+using OhMyThreads: tmapreduce, @tasks
+using BenchmarkTools: @btime
+using Base.Threads: nthreads
 
 # Variant 1: function API
-function mc_parallel(N; kw...)
-    M = tmapreduce(+, 1:N; kw...) do i
+function mc_parallel(N; ntasks=nthreads())
+    M = tmapreduce(+, 1:N; ntasks) do i
         rand()^2 + rand()^2 < 1.0
     end
     pi = 4 * M / N
@@ -26,9 +28,12 @@ function mc_parallel(N; kw...)
 end
 
 # Variant 2: macro API
-function mc_parallel_macro(N)
+function mc_parallel_macro(N; ntasks=nthreads())
     M = @tasks for i in 1:N
-        @set reducer=+
+        @set begin
+            reducer=+
+            ntasks=ntasks
+        end
         rand()^2 + rand()^2 < 1.0
     end
     pi = 4 * M / N
@@ -38,19 +43,17 @@ end
 N = 100_000_000
 mc_parallel(N) # gives, e.g., 3.14159924
 
-using BenchmarkTools
-
-@show Threads.nthreads()                                        # 5 in this example
-
-@btime mc_parallel($N; scheduler=DynamicScheduler(; nchunks=1))   # effectively using 1 thread
-@btime mc_parallel($N)                                          # using all 5 threads
+@btime mc_parallel($N; ntasks=1) # use a single task (and hence a single thread)
+@btime mc_parallel($N)           # using all threads
+@btime mc_parallel_macro($N)     # using all threads
 ```
 
-Timings might be something like this:
+With 5 threads, timings might be something like this:
 
 ```
-447.093 ms (7 allocations: 624 bytes)
-89.401 ms (66 allocations: 5.72 KiB)
+417.282 ms (14 allocations: 912 bytes)
+83.578 ms (38 allocations: 3.08 KiB)
+83.573 ms (38 allocations: 3.08 KiB)
 ```
 
 (Check out the full [Parallel Monte Carlo](@ref) example if you like.)
