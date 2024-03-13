@@ -45,7 +45,7 @@ end
 
 # or
 
-tforeach(1:10; scheduler=StaticScheduler()) do i
+tforeach(1:10; scheduler=:static) do i
     println(i)
 end
 ```
@@ -62,13 +62,13 @@ end
 ```julia
 # OhMyThreads
 @tasks for i in 1:10
-    @set scheduler=DynamicScheduler(; nchunks=0) # turn off chunking
+    @set chunking=false
     println(i)
 end
 
 # or
 
-tforeach(1:10; scheduler=DynamicScheduler(; nchunks=0)) do i
+tforeach(1:10; chunking=false) do i
     println(i)
 end
 ```

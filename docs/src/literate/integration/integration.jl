@@ -29,7 +29,6 @@ end
 # interval, as a multiple of the number of available Julia threads.
 
 using Base.Threads: nthreads
-@show nthreads()
 
 N = nthreads() * 1_000_000
 
@@ -82,3 +81,5 @@ using BenchmarkTools
 
 # Because the problem is trivially parallel - all threads to the same thing and don't need
 # to communicate - we expect an ideal speedup of (close to) the number of available threads.
+
+nthreads()

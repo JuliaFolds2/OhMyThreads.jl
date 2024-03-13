@@ -74,8 +74,8 @@ using Base.Threads: nthreads
 
 using OhMyThreads: StaticScheduler
 
-@btime mc_parallel($N) samples=10 evals=3;
-@btime mc_parallel($N; scheduler = StaticScheduler()) samples=10 evals=3;
+@btime mc_parallel($N; scheduler=:dynamic) samples=10 evals=3; # default
+@btime mc_parallel($N; scheduler=:static) samples=10 evals=3;
 
 # ## Manual parallelization
 #

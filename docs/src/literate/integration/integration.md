@@ -46,13 +46,12 @@ interval, as a multiple of the number of available Julia threads.
 
 ````julia
 using Base.Threads: nthreads
-@show nthreads()
 
 N = nthreads() * 1_000_000
 ````
 
 ````
-5000000
+10000000
 ````
 
 Calling `trapezoidal` we do indeed find the (approximate) value of $\pi$.
@@ -101,6 +100,10 @@ end
 # end
 ````
 
+````
+trapezoidal_parallel (generic function with 1 method)
+````
+
 First, we check the correctness of our parallel implementation.
 
 ````julia
@@ -120,13 +123,21 @@ using BenchmarkTools
 ````
 
 ````
-  12.782 ms (0 allocations: 0 bytes)
-  2.563 ms (37 allocations: 3.16 KiB)
+  24.348 ms (0 allocations: 0 bytes)
+  2.457 ms (69 allocations: 6.05 KiB)
 
 ````
 
 Because the problem is trivially parallel - all threads to the same thing and don't need
 to communicate - we expect an ideal speedup of (close to) the number of available threads.
+
+````julia
+nthreads()
+````
+
+````
+10
+````
 
 ---
 
