@@ -152,6 +152,9 @@ function _tmapreduce(f,
     mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
 end
 
+# NOTE: once v1.12 releases we should switch this to wait(t; throw=false)
+wait_nothrow(t) = Base._wait(t);
+
 # GreedyScheduler
 function _tmapreduce(f,
         op,
@@ -176,13 +179,24 @@ function _tmapreduce(f,
     tasks = map(1:ntasks) do _
         # Note, calling `promise_task_local` here is only safe because we're assuming that
         # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
-            promise_task_local(f)(args...)
+        @spawn begin
+            mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
+                promise_task_local(f)(args...)
+            end
+        end
+    end
+    filtered_tasks = filter(tasks) do stabletask
+        task = stabletask.t
+        istaskdone(task) || wait_nothrow(task)
+        if task.result isa MethodError && task.result.f == Base.mapreduce_empty
+            false
+        else
+            true
         end
     end
     # Note, calling `promise_task_local` here is only safe because we're assuming that
     # Base.mapreduce isn't going to magically try to do multithreading on us...
-    mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
+    mapreduce(fetch, promise_task_local(op), filtered_tasks; mapreduce_kwargs...)
 end
 
 function check_all_have_same_indices(Arrs)
