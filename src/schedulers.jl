@@ -49,7 +49,7 @@ with other multithreaded code.
 
 ## Keyword arguments:
 
-- `nchunks::Integer` or `ntasks::Integer` (default `2 * nthreads(threadpool)`):
+- `nchunks::Integer` or `ntasks::Integer` (default `nthreads(threadpool)`):
     * Determines the number of chunks (and thus also the number of parallel tasks).
     * Increasing `nchunks` can help with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)), but at the expense of creating more overhead. For `nchunks <= nthreads()` there are not enough chunks for any load balancing.
     * Setting `nchunks < nthreads()` is an effective way to use only a subset of the available threads.
@@ -106,7 +106,7 @@ function DynamicScheduler(;
     else
         # only choose nchunks default if chunksize hasn't been specified
         if !isgiven(nchunks) && !isgiven(chunksize) && !isgiven(ntasks)
-            nchunks = 2 * nthreads(threadpool)
+            nchunks = nthreads(threadpool)
             chunksize = -1
         else
             if isgiven(nchunks) && isgiven(ntasks)
