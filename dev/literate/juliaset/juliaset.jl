@@ -111,12 +111,12 @@ img = zeros(Int, N, N)
 # the load balancing of the default dynamic scheduler. The latter divides the overall
 # workload into tasks that can then be dynamically distributed among threads to adjust the
 # per-thread load. We can try to fine tune and improve the load balancing further by
-# increasing the `nchunks` parameter of the scheduler, that is, creating more and smaller
-# tasks.
+# increasing the `ntasks` parameter of the scheduler, that is, creating more tasks with
+# smaller per-task workload.
 
 using OhMyThreads: DynamicScheduler
 
-@btime compute_juliaset_parallel!($img; scheduler=DynamicScheduler(; nchunks=N)) samples=10 evals=3;
+@btime compute_juliaset_parallel!($img; ntasks=N, scheduler=:dynamic) samples=10 evals=3;
 
 # Note that while this turns out to be a bit faster, it comes at the expense of much more
 # allocations.
@@ -126,4 +126,4 @@ using OhMyThreads: DynamicScheduler
 
 using OhMyThreads: StaticScheduler
 
-@btime compute_juliaset_parallel!($img; scheduler=StaticScheduler()) samples=10 evals=3;
+@btime compute_juliaset_parallel!($img; scheduler=:static) samples=10 evals=3;
