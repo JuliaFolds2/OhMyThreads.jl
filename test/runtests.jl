@@ -327,10 +327,10 @@ end;
 
     # scheduler isa Symbol
     for s in (:dynamic, :static, :serial, :greedy)
-        @test tmapreduce(sin, +, 1:100_000; scheduler=s) ≈ res_tmr
+        @test tmapreduce(sin, +, 1:10000; scheduler=s, init=0.0) ≈ res_tmr
     end
     for s in (:dynamic, :static, :greedy)
-        @test tmapreduce(sin, +, 1:100_000; ntasks=2, scheduler=s) ≈ res_tmr
+        @test tmapreduce(sin, +, 1:10000; ntasks=2, scheduler=s, init=0.0) ≈ res_tmr
     end
     for s in (:dynamic, :static)
         @test tmapreduce(sin, +, 1:10000; chunksize=2, scheduler=s) ≈ res_tmr
