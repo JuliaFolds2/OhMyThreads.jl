@@ -15,8 +15,6 @@ using BangBang: append!!
 
 using ChunkSplitters: ChunkSplitters
 
-using StableTasks: StableTasks
-
 include("macro_impl.jl")
 
 function auto_disable_chunking_warning()
