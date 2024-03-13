@@ -61,7 +61,7 @@ sets_to_test = [(~ = isapprox, f = sin ∘ *, op = +,
             end
         end
     end
-end
+end;
 
 @testset "ChunkSplitters.Chunk" begin
     x = rand(100)
@@ -76,7 +76,7 @@ end
             @test isnothing(tforeach(x -> sin.(x), chnks; scheduler))
         end
     end
-end
+end;
 
 @testset "macro API" begin
     # basic
@@ -132,15 +132,51 @@ end
             init=0.0
         end
         i
-    end) == 55.0
+    end) === 55.0
     @test @tasks(for i in 1:10
         @set begin
             reducer=(+)
             init=0.0*im
         end
         i
-    end) == (55.0 + 0.0im)
+    end) === (55.0 + 0.0im)
 
+    # top-level "kwargs"
+    @test @tasks(for i in 1:3
+        @set scheduler=:static
+        @set ntasks=1
+        i
+    end) |> isnothing
+    @test @tasks(for i in 1:3
+        @set scheduler=:static
+        @set nchunks=2
+        i
+    end) |> isnothing
+    @test @tasks(for i in 1:3
+        @set scheduler=:dynamic
+        @set chunksize=2
+        i
+    end) |> isnothing
+    @test @tasks(for i in 1:3
+        @set scheduler=:dynamic
+        @set chunking=false
+        i
+    end) |> isnothing
+    @test_throws ArgumentError @tasks(for i in 1:3
+        @set scheduler=DynamicScheduler()
+        @set chunking=false
+        i
+    end)
+    @test_throws MethodError @tasks(for i in 1:3
+        @set scheduler=:serial
+        @set chunking=false
+        i
+    end)
+    @test_throws MethodError @tasks(for i in 1:3
+        @set scheduler=:dynamic
+        @set asd=123
+        i
+    end)
 
     # TaskLocalValue
     ntd = 2*Threads.nthreads()
@@ -175,14 +211,22 @@ end
         @set reducer = (+)
         sum(C * x)
     end)() == 1800
-    
+
     # hygiene / escaping
     var = 3
     sched = StaticScheduler()
+    sched_sym = :static
     data = rand(10)
     red = (a,b) -> a+b
+    n = 2
     @test @tasks(for d in data
         @set scheduler=sched
+        @set reducer=red
+        var * d
+    end) ≈ var * sum(data)
+    @test @tasks(for d in data
+        @set scheduler=sched_sym
+        @set ntasks=n
         @set reducer=red
         var * d
     end) ≈ var * sum(data)
@@ -195,7 +239,7 @@ end
         @set reducer=+
         C.x
     end) == 10*var
-end
+end;
 
 @testset "WithTaskLocals" begin
     let x = TaskLocalValue{Base.RefValue{Int}}(() -> Ref{Int}(0)), y = TaskLocalValue{Base.RefValue{Int}}(() -> Ref{Int}(0))
@@ -234,7 +278,7 @@ end
         @test @fetch(h()) == (4, 4)
         @test @fetch(h()) == (5, 5)
     end
-end
+end;
 
 @testset "chunking mode + chunksize option" begin
     for sched in (DynamicScheduler, StaticScheduler)
@@ -262,6 +306,39 @@ end
             @test treduce(+, 1:10; scheduler) ≈ reduce(+, 1:10)
         end
     end
-end
+end;
+
+@testset "top-level kwargs" begin
+    res_tmr = mapreduce(sin, +, 1:10000)
+
+    # scheduler not given
+    @test tmapreduce(sin, +, 1:10000; ntasks=2) ≈ res_tmr
+    @test tmapreduce(sin, +, 1:10000; nchunks=2) ≈ res_tmr
+    @test tmapreduce(sin, +, 1:10000; split=:scatter) ≈ res_tmr
+    @test tmapreduce(sin, +, 1:10000; chunksize=2) ≈ res_tmr
+    @test tmapreduce(sin, +, 1:10000; chunking=false) ≈ res_tmr
+
+    # scheduler isa Scheduler
+    @test tmapreduce(sin, +, 1:10000; scheduler=StaticScheduler()) ≈ res_tmr
+    @test_throws ArgumentError tmapreduce(sin, +, 1:10000; ntasks=2, scheduler=DynamicScheduler())
+    @test_throws ArgumentError tmapreduce(sin, +, 1:10000; chunksize=2, scheduler=DynamicScheduler())
+    @test_throws ArgumentError tmapreduce(sin, +, 1:10000; split=:scatter, scheduler=StaticScheduler())
+    @test_throws ArgumentError tmapreduce(sin, +, 1:10000; ntasks=3, scheduler=SerialScheduler())
+
+    # scheduler isa Symbol
+    for s in (:dynamic, :static, :serial, :greedy)
+        @test tmapreduce(sin, +, 1:10000; scheduler=s, init=0.0) ≈ res_tmr
+    end
+    for s in (:dynamic, :static, :greedy)
+        @test tmapreduce(sin, +, 1:10000; ntasks=2, scheduler=s, init=0.0) ≈ res_tmr
+    end
+    for s in (:dynamic, :static)
+        @test tmapreduce(sin, +, 1:10000; chunksize=2, scheduler=s) ≈ res_tmr
+        @test tmapreduce(sin, +, 1:10000; chunking=false, scheduler=s) ≈ res_tmr
+        @test tmapreduce(sin, +, 1:10000; nchunks=3, scheduler=s) ≈ res_tmr
+        @test tmapreduce(sin, +, 1:10000; ntasks=3, scheduler=s) ≈ res_tmr
+        @test_throws ArgumentError tmapreduce(sin, +, 1:10000; ntasks=3, nchunks=2, scheduler=s) ≈ res_tmr
+    end
+end;
 
 # Todo way more testing, and easier tests to deal with

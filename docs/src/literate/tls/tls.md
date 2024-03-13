@@ -222,8 +222,8 @@ using OhMyThreads: @tasks
 
 function matmulsums_tlv_macro(As, Bs; kwargs...)
     N = size(first(As), 1)
-    @tasks for i in eachindex(As,Bs)
-        @set collect=true
+    @tasks for i in eachindex(As, Bs)
+        @set collect = true
         @local C = Matrix{Float64}(undef, N, N)
         mul!(C, As[i], Bs[i])
         sum(C)
@@ -239,8 +239,8 @@ true
 ````
 
 Here, `@local` expands to a pattern similar to the `TaskLocalValue` one above, although automatically
-infers that the object's type is `Matrix{Float64}`, and it carries some optimizations (see 
-[`OhMyThreads.WithTaskLocals`](@ref)) which can make accessing task local values more efficient in 
+infers that the object's type is `Matrix{Float64}`, and it carries some optimizations (see
+[`OhMyThreads.WithTaskLocals`](@ref)) which can make accessing task local values more efficient in
 loops which take on the order of 100ns to complete.
 
 
@@ -263,11 +263,11 @@ using BenchmarkTools
 
 ````
 nthreads() = 10
-  49.077 ms (3 allocations: 518.17 KiB)
-  32.658 ms (1691 allocations: 384.08 MiB)
-  9.513 ms (200 allocations: 10.08 MiB)
-  9.588 ms (236 allocations: 10.05 MiB)
-  9.650 ms (239 allocations: 10.05 MiB)
+  61.314 ms (3 allocations: 518.17 KiB)
+  22.122 ms (1621 allocations: 384.06 MiB)
+  7.620 ms (204 allocations: 10.08 MiB)
+  7.702 ms (126 allocations: 5.03 MiB)
+  7.600 ms (127 allocations: 5.03 MiB)
 
 ````
 
@@ -275,29 +275,6 @@ As we can see, `matmulsums_tlv` (and `matmulsums_tlv_macro`) isn't only convenie
 but also efficient: It allocates much less memory than `matmulsums_naive` and is about on
 par with the manual implementation.
 
-#### Tuning the scheduling
-
-Since the workload is uniform, we don't need load balancing. We can thus try to improve
-the performance and reduce the number of allocations by choosing the number of chunks
-(i.e. tasks) to match the number of Julia threads. Concretely, this
-amounts to passing in `DynamicScheduler(; nchunks=nthreads())`. If we further want to
-opt-out of dynamic scheduling alltogether, we can choose the `StaticScheduler()`.
-
-````julia
-using OhMyThreads: DynamicScheduler, StaticScheduler
-
-@btime matmulsums_tlv(
-    $As, $Bs; scheduler = $(DynamicScheduler(; nchunks = nthreads())));
-@btime matmulsums_tlv($As, $Bs; scheduler = $(StaticScheduler()));
-````
-
-````
-  9.561 ms (124 allocations: 5.03 MiB)
-  9.618 ms (124 allocations: 5.03 MiB)
-
-````
-
-Interestingly, this doesn't always lead to speedups (maybe even a slight slowdown).
 
 ## Per-thread allocation
 
@@ -361,14 +338,15 @@ above, but you can't rely on it!)
 ### The quick fix (with caveats)
 
 A simple solution for the task-migration issue is to opt-out of dynamic scheduling with
-the `StaticScheduler()`. This scheduler statically assigns tasks to threads
-upfront without any dynamic rescheduling (the tasks are sticky and won't migrate).
+`scheduler=:static` (or `scheduler=StaticScheduler()`). This scheduler statically
+assigns tasks to threads upfront without any dynamic rescheduling
+(the tasks are sticky and won't migrate).
 
 ````julia
 function matmulsums_perthread_static(As, Bs)
     N = size(first(As), 1)
     Cs = [Matrix{Float64}(undef, N, N) for _ in 1:nthreads()]
-    tmap(As, Bs; scheduler = StaticScheduler()) do A, B
+    tmap(As, Bs; scheduler = :static) do A, B
         C = Cs[threadid()]
         mul!(C, A, B)
         sum(C)
@@ -423,37 +401,31 @@ true
 ### Benchmark
 
 Let's benchmark the variants above and compare them to the task-local implementation.
-We want to look at both `nchunks = nthreads()` and `nchunks > nthreads()`, the latter
+We want to look at both `ntasks = nthreads()` and `ntasks > nthreads()`, the latter
 of which gives us dynamic load balancing.
 
 ````julia
-# no load balancing because nchunks == nthreads()
-@btime matmulsums_tlv($As_nu, $Bs_nu;
-    scheduler = $(DynamicScheduler(; nchunks = nthreads())));
+# no load balancing because ntasks == nthreads()
+@btime matmulsums_tlv($As_nu, $Bs_nu);
 @btime matmulsums_perthread_static($As_nu, $Bs_nu);
-@btime matmulsums_perthread_channel($As_nu, $Bs_nu;
-    scheduler = $(DynamicScheduler(; nchunks = nthreads())));
+@btime matmulsums_perthread_channel($As_nu, $Bs_nu);
 
-# load balancing because nchunks > nthreads()
-@btime matmulsums_tlv($As_nu, $Bs_nu;
-    scheduler = $(DynamicScheduler(; nchunks = 2 * nthreads())));
-@btime matmulsums_perthread_channel($As_nu, $Bs_nu;
-    scheduler = $(DynamicScheduler(; nchunks = 2 * nthreads())));
+# load balancing because ntasks > nthreads()
+@btime matmulsums_tlv($As_nu, $Bs_nu; ntasks = 2 * nthreads());
+@btime matmulsums_perthread_channel($As_nu, $Bs_nu; ntasks = 2 * nthreads());
 
-@btime matmulsums_tlv($As_nu, $Bs_nu;
-    scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));
-@btime matmulsums_perthread_channel($As_nu, $Bs_nu;
-    scheduler = $(DynamicScheduler(; nchunks = 10 * nthreads())));
+@btime matmulsums_tlv($As_nu, $Bs_nu; ntasks = 10 * nthreads());
+@btime matmulsums_perthread_channel($As_nu, $Bs_nu; ntasks = 10 * nthreads());
 ````
 
 ````
-  149.095 ms (124 allocations: 5.03 MiB)
-  175.355 ms (107 allocations: 5.02 MiB)
-  148.470 ms (112 allocations: 5.02 MiB)
-  137.638 ms (235 allocations: 10.05 MiB)
-  135.293 ms (183 allocations: 5.04 MiB)
-  124.591 ms (1116 allocations: 50.13 MiB)
-  124.716 ms (744 allocations: 5.10 MiB)
+  170.563 ms (126 allocations: 5.03 MiB)
+  165.647 ms (108 allocations: 5.02 MiB)
+  172.216 ms (114 allocations: 5.02 MiB)
+  108.662 ms (237 allocations: 10.05 MiB)
+  114.673 ms (185 allocations: 5.04 MiB)
+  97.933 ms (1118 allocations: 50.13 MiB)
+  96.868 ms (746 allocations: 5.10 MiB)
 
 ````
 
@@ -470,14 +442,15 @@ a limited number of tasks (e.g. `nthreads()`) with task-local buffers.
 
 ````julia
 using OhMyThreads: tmapreduce
+
 function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
     N = size(first(As), 1)
-    chnl = Channel{Int}(length(As); spawn=true) do chnl
+    chnl = Channel{Int}(length(As); spawn = true) do chnl
         for i in 1:length(As)
             put!(chnl, i)
         end
     end
-    tmapreduce(vcat, 1:ntasks; scheduler = DynamicScheduler(; nchunks = 0)) do _ # we turn chunking off
+    tmapreduce(vcat, 1:ntasks; chunking=false) do _ # we turn chunking off
         local C = Matrix{Float64}(undef, N, N)
         map(chnl) do i # implicitly takes the values from the channel (parallel safe)
             A = As[i]
@@ -511,9 +484,9 @@ Quick benchmark:
 ````
 
 ````
-  121.715 ms (163 allocations: 5.07 MiB)
-  122.457 ms (267 allocations: 10.11 MiB)
-  122.374 ms (1068 allocations: 50.37 MiB)
+  94.389 ms (170 allocations: 5.07 MiB)
+  94.580 ms (271 allocations: 10.10 MiB)
+  94.768 ms (1071 allocations: 50.41 MiB)
 
 ````
 
@@ -546,13 +519,13 @@ function matmulsums_bumper(As, Bs)
 end
 
 res_bumper = matmulsums_bumper(As, Bs);
-sort(res_nu) ≈ sort(res_bumper)
+sort(res) ≈ sort(res_bumper)
 
 @btime matmulsums_bumper($As, $Bs);
 ````
 
 ````
-  9.865 ms (254 allocations: 50.92 KiB)
+  7.814 ms (134 allocations: 27.92 KiB)
 
 ````
 

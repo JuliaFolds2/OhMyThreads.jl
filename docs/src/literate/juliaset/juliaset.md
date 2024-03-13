@@ -121,9 +121,9 @@ img = zeros(Int, N, N)
 ````
 
 ````
-nthreads() = 5
-  138.157 ms (0 allocations: 0 bytes)
-  40.373 ms (67 allocations: 6.20 KiB)
+nthreads() = 10
+  131.295 ms (0 allocations: 0 bytes)
+  31.422 ms (68 allocations: 6.09 KiB)
 
 ````
 
@@ -135,17 +135,17 @@ As stated above, the per-pixel computation is non-uniform. Hence, we do benefit 
 the load balancing of the default dynamic scheduler. The latter divides the overall
 workload into tasks that can then be dynamically distributed among threads to adjust the
 per-thread load. We can try to fine tune and improve the load balancing further by
-increasing the `nchunks` parameter of the scheduler, that is, creating more and smaller
-tasks.
+increasing the `ntasks` parameter of the scheduler, that is, creating more tasks with
+smaller per-task workload.
 
 ````julia
 using OhMyThreads: DynamicScheduler
 
-@btime compute_juliaset_parallel!($img; scheduler=DynamicScheduler(; nchunks=N)) samples=10 evals=3;
+@btime compute_juliaset_parallel!($img; ntasks=N, scheduler=:dynamic) samples=10 evals=3;
 ````
 
 ````
-  31.751 ms (12011 allocations: 1.14 MiB)
+  17.438 ms (12018 allocations: 1.11 MiB)
 
 ````
 
@@ -158,11 +158,11 @@ To quantify the impact of load balancing we can opt out of dynamic scheduling an
 ````julia
 using OhMyThreads: StaticScheduler
 
-@btime compute_juliaset_parallel!($img; scheduler=StaticScheduler()) samples=10 evals=3;
+@btime compute_juliaset_parallel!($img; scheduler=:static) samples=10 evals=3;
 ````
 
 ````
-  63.147 ms (37 allocations: 3.26 KiB)
+  30.097 ms (73 allocations: 6.23 KiB)
 
 ````
 
