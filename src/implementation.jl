@@ -15,6 +15,8 @@ using BangBang: append!!
 
 using ChunkSplitters: ChunkSplitters
 
+using StableTasks: StableTasks
+
 include("macro_impl.jl")
 
 function auto_disable_chunking_warning()
@@ -173,16 +175,24 @@ function _tmapreduce(f,
             put!(ch, args)
         end
     end
+
     tasks = map(1:ntasks) do _
         # Note, calling `promise_task_local` here is only safe because we're assuming that
         # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
-            promise_task_local(f)(args...)
+        @spawn begin
+            try
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
+                    promise_task_local(f)(args...)
+                end
+            catch MethodError
+            end
         end
     end
     # Note, calling `promise_task_local` here is only safe because we're assuming that
     # Base.mapreduce isn't going to magically try to do multithreading on us...
-    mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
+    results = fetch.(tasks)
+    filter!(!isnothing, results)
+    reduce(promise_task_local(op), results; mapreduce_kwargs...)
 end
 
 function check_all_have_same_indices(Arrs)
