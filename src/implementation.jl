@@ -42,12 +42,7 @@ function _chunks(sched, arg)
     end
 end
 
-function tmapreduce(f, op, Arrs...;
-        scheduler::MaybeScheduler = NotGiven(),
-        outputtype::Type = Any,
-        init = NotGiven(),
-        kwargs...)
-    mapreduce_kwargs = isgiven(init) ? (; init) : (;)
+function _scheduler_from_userinput(scheduler::MaybeScheduler; kwargs...)
     if scheduler isa Scheduler
         isempty(kwargs) || scheduler_and_kwargs_err(; kwargs...)
         _scheduler = scheduler
@@ -56,6 +51,15 @@ function tmapreduce(f, op, Arrs...;
     else # default fallback
         _scheduler = DynamicScheduler(; kwargs...)
     end
+end
+
+function tmapreduce(f, op, Arrs...;
+        scheduler::MaybeScheduler = NotGiven(),
+        outputtype::Type = Any,
+        init = NotGiven(),
+        kwargs...)
+    mapreduce_kwargs = isgiven(init) ? (; init) : (;)
+    _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
     # @show _scheduler
     if _scheduler isa SerialScheduler
@@ -253,14 +257,7 @@ function tmap(f,
         _Arrs::AbstractArray...;
         scheduler::MaybeScheduler = NotGiven(),
         kwargs...)
-    if scheduler isa Scheduler
-        isempty(kwargs) || scheduler_and_kwargs_err(; kwargs...)
-        _scheduler = scheduler
-    elseif scheduler isa Symbol
-        _scheduler = scheduler_from_symbol(scheduler; kwargs...)
-    else # default fallback
-        _scheduler = DynamicScheduler(; kwargs...)
-    end
+    _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
     if _scheduler isa GreedyScheduler
         error("Greedy scheduler isn't supported with `tmap` unless you provide an `OutputElementType` argument, since the greedy schedule requires a commutative reducing operator.")
@@ -376,14 +373,7 @@ end
         _Arrs::AbstractArray...;
         scheduler::MaybeScheduler = NotGiven(),
         kwargs...)
-    if scheduler isa Scheduler
-        isempty(kwargs) || scheduler_and_kwargs_err(; kwargs...)
-        _scheduler = scheduler
-    elseif scheduler isa Symbol
-        _scheduler = scheduler_from_symbol(scheduler; kwargs...)
-    else # default fallback
-        _scheduler = DynamicScheduler(; kwargs...)
-    end
+    _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
     if hasfield(typeof(_scheduler), :split) && _scheduler.split != :batch
         error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $_scheduler)")
