@@ -60,6 +60,10 @@ function tmapreduce(f, op, Arrs...;
         kwargs...)
     mapreduce_kwargs = isgiven(init) ? (; init) : (;)
     _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
+    if isempty(first(Arrs))
+        isempty(mapreduce_kwargs) && reduce_empty_err()
+        return mapreduce_kwargs.init
+    end
 
     # @show _scheduler
     if _scheduler isa SerialScheduler
@@ -72,6 +76,10 @@ end
 @noinline function scheduler_and_kwargs_err(; kwargs...)
     kwargstr = join(string.(keys(kwargs)), ", ")
     throw(ArgumentError("Providing an explicit scheduler as well as direct keyword arguments (e.g. $(kwargstr)) is currently not supported."))
+end
+
+@noinline function reduce_empty_err()
+    throw(ArgumentError("reducing over an empty collection is not allowed; consider supplying `init`"))
 end
 
 treducemap(op, f, A...; kwargs...) = tmapreduce(f, op, A...; kwargs...)
@@ -174,7 +182,7 @@ function _tmapreduce(f,
 end
 
 # NOTE: once v1.12 releases we should switch this to wait(t; throw=false)
-wait_nothrow(t) = Base._wait(t);
+wait_nothrow(t) = Base._wait(t)
 
 # GreedyScheduler
 function _tmapreduce(f,
