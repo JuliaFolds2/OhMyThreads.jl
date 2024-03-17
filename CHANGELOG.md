@@ -18,6 +18,7 @@ Version 0.5.0
 - ![BREAKING][badge-breaking] The (already deprecated) `SpawnAllScheduler` has been dropped.
 - ![BREAKING][badge-breaking] The default value for `ntasks`/`nchunks` for `DynamicScheduler` has been changed from `2*nthreads()` to `nthreads()`. With the new value we now align with `@threads :dynamic`. The old value wasn't giving good load balancing anyways and choosing a higher value penalizes uniform use cases even more. To get the old behavior, set `nchunks=2*nthreads()`.
 - ![Bugfix][badge-bugfix] When using the `GreedyScheduler` in combination with `tmapreduce` (or functions that build upon it) there could be non-deterministic errors in some cases (small input collection, not much work per element, see [#82](https://github.com/JuliaFolds2/OhMyThreads.jl/issues/82)). These cases should be fixed now.
+- ![Bugfix][badge-bugfix] We now handle empty collections as input in `tmapreduce` and `tforeach` explicitly ([#86](https://github.com/JuliaFolds2/OhMyThreads.jl/issues/86)). Our general philosophy is to try match the behavior of the serial `Base` functions.
 
 Version 0.4.6
 -------------

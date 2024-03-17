@@ -341,4 +341,18 @@ end;
     end
 end;
 
+@testset "empty collections" begin
+    for empty_coll in (11:9, Float64[])
+        for f in (sin, x->im*x, identity)
+            for op in (+, *, min)
+                @test_throws ArgumentError tmapreduce(f, op, empty_coll)
+                for init in (0.0, 0, 0.0*im, 0f0)
+                    @test tmapreduce(f, op, empty_coll; init) == init
+                end
+                @test tforeach(f, empty_coll) |> isnothing
+            end
+        end
+    end
+end;
+
 # Todo way more testing, and easier tests to deal with
