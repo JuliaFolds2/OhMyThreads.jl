@@ -9,12 +9,12 @@ Version 0.5.0
 - ![Feature][badge-feature] Added `OhMyThreads.WithTaskLocals` that represents a closure over `TaskLocalValues`, but can have those values materialized as an optimization (using `OhMyThreads.promise_task_local`)
 - ![Feature][badge-feature] In the case `nchunks > nthreads()`, the `StaticScheduler` now distributes chunks in a round-robin fashion (instead of either implicitly decreasing `nchunks` to `nthreads()` or throwing an error).
 - ![Feature][badge-feature] `@set init = ...` may now be used to specify an initial value for a reduction (only has an effect in conjuction with `@set reducer=...` and triggers a warning otherwise).
-- ![Feature][badge-feature] The greedy scheduler now supports chunking (similar to the static and dynamic scheduler). You can opt into it with, e.g., `chunking=true`.
 - ![Enhancement][badge-enhancement] `SerialScheduler` and `DynamicScheduler` now support the keyword argument `ntasks` as an alias for `nchunks`.
 - ![Enhancement][badge-enhancement] Made `@tasks` use `OhMyThreads.WithTaskLocals` automatically as an optimization.
 - ![Enhancement][badge-enhancement] Uses of `@local` within `@tasks` no-longer require users to declare the type of the task local value, it can be inferred automatically if a type is not provided.
 - ![Enhancement][badge-enhancement] Made `using OhMyThreads: ...` more explicit in examples in the documentation and docstrings.
 - ![BREAKING][badge-breaking] The `DynamicScheduler` (default) and the `StaticScheduler` now support a `chunksize` argument to specify the desired size of chunks instead of the number of chunks (`nchunks`). Note that `chunksize` and `nchunks` are mutually exclusive. (This is unlikely to break existing code but technically could because the type parameter has changed from `Bool` to `ChunkingMode`.)
+- ![BREAKING][badge-breaking] The greedy scheduler now supports chunking (similar to the static and dynamic scheduler). You can opt into it with, e.g., `chunking=true`. (This is unlikely to break existing code but technically could because we introduced a new type parameter for `GreedyScheduler`.)
 - ![Breaking][badge-breaking] `DynamicScheduler` and `StaticScheduler` don't support `nchunks=0` or `chunksize=0` any longer. Instead, chunking can now be turned off via an explicit new keyword argument `chunking=false`.
 - ![BREAKING][badge-breaking] Within a `@tasks` block, task-local values must from now on be defined via `@local` instead of `@init` (renamed).
 - ![BREAKING][badge-breaking] The (already deprecated) `SpawnAllScheduler` has been dropped.
