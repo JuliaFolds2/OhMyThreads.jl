@@ -230,7 +230,6 @@ function _maybe_handle_atsection_blocks!(args)
             if kind.value == :critical
                 @gensym critical_lock
                 init_lock_ex = :($(critical_lock) = $(Base.ReentrantLock()))
-                # init_lock_ex = esc(:($(critical_lock) = $(Base.ReentrantLock())))
                 push!(setup_sections.args, init_lock_ex)
                 args[i] = quote
                     $(esc(:lock))($(critical_lock)) do
@@ -239,7 +238,6 @@ function _maybe_handle_atsection_blocks!(args)
                 end
             elseif kind.value == :single
                 @gensym single_section
-                # init_single_section_ex = esc(:($(single_section) = $(SectionSingle())))
                 init_single_section_ex = :($(single_section) = $(SectionSingle()))
                 push!(setup_sections.args, init_single_section_ex)
                 args[i] = quote
