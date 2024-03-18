@@ -268,11 +268,11 @@ end
 
 function GreedyScheduler(;
         ntasks::Integer = nthreads(),
-        nchunks::Union{Integer, Nothing} = nothing,
-        chunksize::Union{Integer, Nothing} = nothing,
+        nchunks::MaybeInteger = NotGiven(),
+        chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = false,
         split::Symbol = :scatter)
-    if !isnothing(nchunks) || !isnothing(chunksize)
+    if isgiven(nchunks) || isgiven(chunksize)
         chunking = true
     end
     if !chunking
@@ -280,12 +280,13 @@ function GreedyScheduler(;
         chunksize = -1
     else
         # only choose nchunks default if chunksize hasn't been specified
-        if isnothing(nchunks) && isnothing(chunksize)
+        if !isgiven(nchunks) && !isgiven(chunksize)
             nchunks = 4 * nthreads(:default)
             chunksize = -1
         else
-            nchunks = isnothing(nchunks) ? -1 : nchunks
-            chunksize = isnothing(chunksize) ? -1 : chunksize
+            nchunks = isgiven(nchunks) ? nchunks :
+                      isgiven(ntasks) ? ntasks : -1
+            chunksize = isgiven(chunksize) ? chunksize : -1
         end
     end
     GreedyScheduler(ntasks, nchunks, chunksize, split; chunking)
