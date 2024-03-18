@@ -184,12 +184,12 @@ end
 # NOTE: once v1.12 releases we should switch this to wait(t; throw=false)
 wait_nothrow(t) = Base._wait(t)
 
-# GreedyScheduler
+# GreedyScheduler w/o chunking
 function _tmapreduce(f,
         op,
         Arrs,
         ::Type{OutputType},
-        scheduler::GreedyScheduler,
+        scheduler::GreedyScheduler{NoChunking},
         mapreduce_kwargs)::OutputType where {OutputType}
     ntasks_desired = scheduler.ntasks
     if Base.IteratorSize(first(Arrs)) isa Base.SizeUnknown
@@ -210,6 +210,55 @@ function _tmapreduce(f,
         # Base.mapreduce isn't going to magically try to do multithreading on us...
         @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
             promise_task_local(f)(args...)
+        end
+    end
+    # Doing this because of https://github.com/JuliaFolds2/OhMyThreads.jl/issues/82
+    # The idea is that if the channel gets fully consumed before a task gets started up,
+    # then if the user does not supply an `init` kwarg, we'll get an error.
+    # Current way of dealing with this is just filtering out `mapreduce_empty` method
+    # errors. This may not be the most stable way of dealing with things, e.g. if the
+    # name of the function throwing the error changes this could break, so long term
+    # we may want to try a different design.
+    filtered_tasks = filter(tasks) do stabletask
+        task = stabletask.t
+        istaskdone(task) || wait_nothrow(task)
+        if task.result isa MethodError && task.result.f == Base.mapreduce_empty
+            false
+        else
+            true
+        end
+    end
+    # Note, calling `promise_task_local` here is only safe because we're assuming that
+    # Base.mapreduce isn't going to magically try to do multithreading on us...
+    mapreduce(fetch, promise_task_local(op), filtered_tasks; mapreduce_kwargs...)
+end
+
+# GreedyScheduler w/ chunking
+function _tmapreduce(f,
+        op,
+        Arrs,
+        ::Type{OutputType},
+        scheduler::GreedyScheduler,
+        mapreduce_kwargs)::OutputType where {OutputType}
+    if Base.IteratorSize(first(Arrs)) isa Base.SizeUnknown
+        throw(ArgumentError("SizeUnkown iterators in combination with a greedy scheduler and chunking are currently not supported."))
+    end
+    check_all_have_same_indices(Arrs)
+    chnks = _chunks(scheduler, first(Arrs))
+    ntasks_desired = scheduler.ntasks
+    ntasks = min(length(chnks), ntasks_desired)
+
+    ch = Channel{typeof(first(chnks))}(length(chnks); spawn = true) do ch
+        for args in chnks
+            put!(ch, args)
+        end
+    end
+    tasks = map(1:ntasks) do _
+        # Note, calling `promise_task_local` here is only safe because we're assuming that
+        # Base.mapreduce isn't going to magically try to do multithreading on us...
+        @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
+            args = map(A -> view(A, inds), Arrs)
+            mapreduce(promise_task_local(f), promise_task_local(op), args...)
         end
     end
     # Doing this because of https://github.com/JuliaFolds2/OhMyThreads.jl/issues/82
@@ -402,9 +451,6 @@ end
         kwargs...)
     _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
-    if hasfield(typeof(_scheduler), :split) && _scheduler.split != :batch
-        error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $_scheduler)")
-    end
     Arrs = (A, _Arrs...)
     if _scheduler isa SerialScheduler
         map!(f, out, Arrs...)
