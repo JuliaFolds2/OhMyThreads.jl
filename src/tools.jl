@@ -25,8 +25,10 @@ Return a `UInt` identifier for the current running [Task](https://docs.julialang
 taskid() = objectid(current_task())
 
 """
-When `try_enter(s::SectionSingle) do ... end` is called from multiple parallel tasks only
-a single task will run the content of the `do ... end` block.
+May be used to implement a "single" section in parallel code. This section will only be
+run by a single task (other tasks will skip over it).
+
+See [`try_enter`](@ref).
 """
 struct SectionSingle
     first::Base.RefValue{Bool}
