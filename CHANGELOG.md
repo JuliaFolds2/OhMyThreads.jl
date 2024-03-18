@@ -3,7 +3,8 @@ OhMyThreads.jl Changelog
 
 Version 0.5.1
 -------------
-- ![Feature][badge-feature] Within a `@tasks` block one can now mark a section as "critical" via `@section :critical begin ... end`.
+- ![Feature][badge-feature] Within a `@tasks` block one can now mark a section as "critical" via `@section :critical begin ... end`. This section will be run by one task at a time.
+- ![Feature][badge-feature] Within a `@tasks` block one can now mark a section as "single" via `@section :single begin ... end`. This section will be run by a single task only.
 
 Version 0.5.0
 -------------

@@ -164,6 +164,7 @@ Multiple `@section` blocks are supported.
 ## Kinds
 
 * `:critical`: Section of code that must be executed by a single task at a time (arbitrary order).
+* `:single`: Section of code that must be executed by a single task only. All other tasks will skip over this section.
 
 ## Example
 
@@ -174,6 +175,19 @@ Multiple `@section` blocks are supported.
     println(i, ": before")
     @section :critical begin
         println(i, ": one task at a time")
+        sleep(1)
+    end
+    println(i, ": after")
+end
+```
+
+```julia
+@tasks for i in 1:10
+    @set ntasks = 10
+
+    println(i, ": before")
+    @section :single begin
+        println(i, ": only printed by a single task")
         sleep(1)
     end
     println(i, ": after")

@@ -412,6 +412,45 @@ end
         else
             @test true
         end
+
+        # test escaping
+        x = 0
+        y = 0
+        sao = SingleAccessOnly()
+        try
+            @tasks for i in 1:10
+                @set ntasks = 10
+
+                y += 1 # not safe (race condition)
+                @section :critical begin
+                    x += 1 # parallel-safe because inside of critical section
+                    acquire(sao) do
+                        sleep(0.01)
+                    end
+                end
+            end
+            @test x == 10
+        catch ErrorException
+            @test false
+        end
+    end
+
+    @testset ":single" begin
+        x = 0
+        y = 0
+        try
+            @tasks for i in 1:10
+                @set ntasks = 10
+
+                y += 1 # not safe (race condition)
+                @section :single begin
+                    x += 1 # parallel-safe because inside of single section
+                end
+            end
+            @test x == 1 # only a single task should have incremented x
+        catch ErrorException
+            @test false
+        end
     end
 end;
 

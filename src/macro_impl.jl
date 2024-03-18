@@ -1,3 +1,5 @@
+using OhMyThreads.Tools: SectionSingle, try_enter
+
 function tasks_macro(forex)
     if forex.head != :for
         throw(ErrorException("Expected a for loop after `@tasks`."))
@@ -17,12 +19,22 @@ function tasks_macro(forex)
 
     settings = Settings()
 
+    # Escape everything in the loop body that is not used in conjuction with one of our
+    # "macros", e.g. @set or @local. Code inside of these macro blocks will be escaped by
+    # the respective "macro" handling functions below.
+    for i in findall(forbody.args) do arg
+        !(arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@set")) &&
+            !(arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@local")) &&
+            !(arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@section"))
+    end
+        forbody.args[i] = esc(forbody.args[i])
+    end
+
     locals_before, locals_names = _maybe_handle_atlocal_block!(forbody.args)
     tls_names = isnothing(locals_before) ? [] : map(x -> x.args[1], locals_before)
     _maybe_handle_atset_block!(settings, forbody.args)
     setup_sections = _maybe_handle_atsection_blocks!(forbody.args)
 
-    forbody = esc(forbody)
     itrng = esc(itrng)
     itvar = esc(itvar)
 
@@ -217,11 +229,22 @@ function _maybe_handle_atsection_blocks!(args)
         if kind isa QuoteNode
             if kind.value == :critical
                 @gensym critical_lock
-                init_lock_ex = esc(:($(critical_lock) = $(ReentrantLock())))
+                init_lock_ex = :($(critical_lock) = $(Base.ReentrantLock()))
+                # init_lock_ex = esc(:($(critical_lock) = $(Base.ReentrantLock())))
                 push!(setup_sections.args, init_lock_ex)
                 args[i] = quote
-                    lock($(critical_lock)) do
-                        $(body)
+                    $(esc(:lock))($(critical_lock)) do
+                        $(esc(body))
+                    end
+                end
+            elseif kind.value == :single
+                @gensym single_section
+                # init_single_section_ex = esc(:($(single_section) = $(SectionSingle())))
+                init_single_section_ex = :($(single_section) = $(SectionSingle()))
+                push!(setup_sections.args, init_single_section_ex)
+                args[i] = quote
+                    Tools.try_enter($(single_section)) do
+                        $(esc(body))
                     end
                 end
             else
