@@ -16,6 +16,10 @@ See also: [`@set`](@ref), [`@local`](@ref)
 ## Examples
 
 ```julia
+using OhMyThreads: @tasks
+```
+
+```julia
 @tasks for i in 1:3
     println(i)
 end
@@ -109,9 +113,14 @@ end
     ## Examples
 
     ```julia
+    using OhMyThreads: @tasks
     using OhMyThreads.Tools: taskid
+
     @tasks for i in 1:10
-        @set scheduler=DynamicScheduler(; nchunks=2)
+        @set begin
+            scheduler=:dynamic
+            ntasks=2
+        end
         @local x = zeros(3) # TLV
 
         x .+= 1

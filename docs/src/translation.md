@@ -9,6 +9,8 @@ This page tries to give a general overview of how to translate patterns written 
 
 ```julia
 # Base.Threads
+using Base.Threads: @threads
+
 @threads for i in 1:10
     println(i)
 end
@@ -16,11 +18,14 @@ end
 
 ```julia
 # OhMyThreads
+using OhMyThreads: @tasks
+
 @tasks for i in 1:10
     println(i)
 end
 
 # or
+using OhMyThreads: tforeach
 
 tforeach(1:10) do i
     println(i)
@@ -31,6 +36,8 @@ end
 
 ```julia
 # Base.Threads
+using Base.Threads: @threads
+
 @threads :static for i in 1:10
     println(i)
 end
@@ -38,12 +45,15 @@ end
 
 ```julia
 # OhMyThreads
+using OhMyThreads: @tasks
+
 @tasks for i in 1:10
     @set scheduler=:static
     println(i)
 end
 
 # or
+using OhMyThreads: tforeach
 
 tforeach(1:10; scheduler=:static) do i
     println(i)
@@ -54,6 +64,8 @@ end
 
 ```julia
 # Base.Threads
+using Base.Threads: @spawn
+
 @sync for i in 1:10
     @spawn println(i)
 end
@@ -61,15 +73,25 @@ end
 
 ```julia
 # OhMyThreads
+using OhMyThreads: @tasks
+
 @tasks for i in 1:10
     @set chunking=false
     println(i)
 end
 
 # or
+using OhMyThreads: tforeach
 
 tforeach(1:10; chunking=false) do i
     println(i)
+end
+
+# or
+using OhMyThreads: @spawn
+
+@sync for i in 1:10
+    @spawn println(i)
 end
 ```
 
@@ -79,6 +101,8 @@ No built-in feature in Base.Threads.
 
 ```julia
 # Base.Threads: basic manual implementation
+using Base.Threads: @spawn
+
 data = rand(10)
 chunks_itr = Iterators.partition(data, length(data) ÷ nthreads())
 tasks = map(chunks_itr) do chunk
@@ -89,6 +113,7 @@ reduce(+, fetch.(tasks))
 
 ```julia
 # OhMyThreads
+using OhMyThreads: @tasks
 data = rand(10)
 
 @tasks for x in data
@@ -96,6 +121,7 @@ data = rand(10)
 end
 
 # or
+using OhMyThreads: treduce
 
 treduce(+, data)
 ```
@@ -107,7 +133,9 @@ treduce(+, data)
 
 ```julia
 # Base.Threads
+using Base.Threads: @threads
 data = rand(10)
+
 @threads for i in 1:10
     data[i] = calc(i)
 end
@@ -115,6 +143,7 @@ end
 
 ```julia
 # OhMyThreads
+using OhMyThreads: @tasks
 data = rand(10)
 
 @tasks for i in 1:10
@@ -122,12 +151,14 @@ data = rand(10)
 end
 
 # or
+using OhMyThreads: tforeach
 
 tforeach(data) do i
     data[i] = calc(i)
 end
 
 # or
+using OhMyThreads: tmap!
 
 tmap!(data, data) do i # this kind of aliasing is fine
     calc(i)
@@ -141,6 +172,8 @@ end
 
 ```julia
 # Base.Threads
+using Base.Threads: @threads
+
 data = Vector{Float64}(undef, 10)
 @threads for i in 1:10
     data[i] = calc(i)
@@ -149,16 +182,20 @@ end
 
 ```julia
 # OhMyThreads
+using OhMyThreads: @tasks
+
 data = @tasks for i in 1:10
     @set collect=true
     calc(i)
 end
 
 # or
+using OhMyThreads: tmap
 
 data = tmap(i->calc(i), 1:10)
 
 # or
+using OhMyThreads: tcollect
 
 data = tcollect(calc(i) for i in 1:10)
 ```
