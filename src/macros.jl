@@ -173,7 +173,7 @@ Multiple `@section` blocks are supported.
 
     println(i, ": before")
     @section :critical begin
-        println(i, ": critical")
+        println(i, ": one task at a time")
         sleep(1)
     end
     println(i, ": after")
