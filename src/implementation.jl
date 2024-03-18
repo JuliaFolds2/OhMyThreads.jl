@@ -184,12 +184,12 @@ end
 # NOTE: once v1.12 releases we should switch this to wait(t; throw=false)
 wait_nothrow(t) = Base._wait(t)
 
-# GreedyScheduler
+# GreedyScheduler w/o chunking
 function _tmapreduce(f,
         op,
         Arrs,
         ::Type{OutputType},
-        scheduler::GreedyScheduler,
+        scheduler::GreedyScheduler{NoChunking},
         mapreduce_kwargs)::OutputType where {OutputType}
     ntasks_desired = scheduler.ntasks
     if Base.IteratorSize(first(Arrs)) isa Base.SizeUnknown
@@ -231,6 +231,39 @@ function _tmapreduce(f,
     # Note, calling `promise_task_local` here is only safe because we're assuming that
     # Base.mapreduce isn't going to magically try to do multithreading on us...
     mapreduce(fetch, promise_task_local(op), filtered_tasks; mapreduce_kwargs...)
+end
+
+# GreedyScheduler w/ chunking
+function _tmapreduce(f,
+        op,
+        Arrs,
+        ::Type{OutputType},
+        scheduler::GreedyScheduler,
+        mapreduce_kwargs)::OutputType where {OutputType}
+    if Base.IteratorSize(first(Arrs)) isa Base.SizeUnknown
+        throw(ArgumentError("SizeUnkown iterators in combination with a greedy scheduler and chunking are currently not supported."))
+    end
+    check_all_have_same_indices(Arrs)
+    chnks = _chunks(scheduler, first(Arrs))
+    ntasks_desired = scheduler.ntasks
+    ntasks = min(length(chnks), ntasks_desired)
+
+    ch = Channel{typeof(first(chnks))}(length(chnks); spawn = true) do ch
+        for args in chnks
+            put!(ch, args)
+        end
+    end
+    tasks = map(1:ntasks) do _
+        # Note, calling `promise_task_local` here is only safe because we're assuming that
+        # Base.mapreduce isn't going to magically try to do multithreading on us...
+        @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
+            args = map(A -> view(A, inds), Arrs)
+            mapreduce(promise_task_local(f), promise_task_local(op), args...)
+        end
+    end
+    # Note, calling `promise_task_local` here is only safe because we're assuming that
+    # Base.mapreduce isn't going to magically try to do multithreading on us...
+    mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
 end
 
 function check_all_have_same_indices(Arrs)
