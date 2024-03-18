@@ -20,6 +20,7 @@ function tasks_macro(forex)
     locals_before, locals_names = _maybe_handle_atlocal_block!(forbody.args)
     tls_names = isnothing(locals_before) ? [] : map(x -> x.args[1], locals_before)
     _maybe_handle_atset_block!(settings, forbody.args)
+    setup_sections = _maybe_handle_atsection_blocks!(forbody.args)
 
     forbody = esc(forbody)
     itrng = esc(itrng)
@@ -39,6 +40,7 @@ function tasks_macro(forex)
     end
     q = if isgiven(settings.reducer)
         quote
+            $setup_sections
             $make_mapping_function
             tmapreduce(mapping_function, $(settings.reducer),
                 $(itrng))
@@ -46,12 +48,14 @@ function tasks_macro(forex)
     elseif isgiven(settings.collect)
         maybe_warn_useless_init(settings)
         quote
+            $setup_sections
             $make_mapping_function
             tmap(mapping_function, $(itrng))
         end
     else
         maybe_warn_useless_init(settings)
         quote
+            $setup_sections
             $make_mapping_function
             tforeach(mapping_function, $(itrng))
         end
@@ -68,7 +72,7 @@ function tasks_macro(forex)
     for (k, v) in settings.kwargs
         push!(kwexpr.args, Expr(:kw, k, v))
     end
-    insert!(q.args[4].args, 2, kwexpr)
+    insert!(q.args[6].args, 2, kwexpr)
 
     # wrap everything in a let ... end block
     # and, potentially, define the `TaskLocalValue`s.
@@ -151,15 +155,14 @@ function _atlocal_assign_to_exprs(ex)
         tls_type = esc(left_ex.args[2])
         local_before = :($(tl_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
     else
-        tls_sym  = esc(left_ex)
+        tls_sym = esc(left_ex)
         local_before = :($(tl_storage) = let f = () -> $(tls_def)
-                             TaskLocalValue{Core.Compiler.return_type(f, Tuple{})}(f)
-                         end)
+            TaskLocalValue{Core.Compiler.return_type(f, Tuple{})}(f)
+        end)
     end
     local_name = :($(tls_sym))
     return local_before, local_name
 end
-
 
 function _maybe_handle_atset_block!(settings, args)
     idcs = findall(args) do arg
@@ -200,4 +203,33 @@ function _handle_atset_single_assign!(settings, ex)
     else
         push!(settings.kwargs, sym => esc(def))
     end
+end
+
+function _maybe_handle_atsection_blocks!(args)
+    idcs = findall(args) do arg
+        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@section")
+    end
+    isnothing(idcs) && return # no @section blocks
+    setup_sections = quote end
+    for i in idcs
+        kind = args[i].args[3]
+        body = args[i].args[4]
+        if kind isa QuoteNode
+            if kind.value == :critical
+                @gensym critical_lock
+                init_lock_ex = esc(:($(critical_lock) = $(ReentrantLock())))
+                push!(setup_sections.args, init_lock_ex)
+                args[i] = quote
+                    lock($(critical_lock)) do
+                        $(body)
+                    end
+                end
+            else
+                throw(ErrorException("Unknown section kind :$(kind.value)."))
+            end
+        else
+            throw(ErrorException("Wrong usage of @section. Must be followed by a symbol, indicating the kind of section."))
+        end
+    end
+    return setup_sections
 end

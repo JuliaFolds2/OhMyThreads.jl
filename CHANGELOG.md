@@ -1,6 +1,10 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.5.1
+-------------
+- ![Feature][badge-feature] Within a `@tasks` block one can now mark a section as "critical" via `@section :critical begin ... end`.
+
 Version 0.5.0
 -------------
 

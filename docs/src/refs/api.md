@@ -11,6 +11,7 @@ CollapsedDocStrings = true
 @tasks
 @set
 @local
+@section
 ```
 
 ### Functions

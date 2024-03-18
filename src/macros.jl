@@ -151,3 +151,35 @@ end
         error("The @local macro may only be used inside of a @tasks block.")
     end
 end
+
+"""
+    @section kind begin ... end
+
+This can be used inside a `@tasks for ... end` block to identify a section of code that
+must be executed according to a specific synchronization policy
+(as indicated by the symbol `kind`, see below).
+
+Multiple `@section` blocks are supported.
+
+## Kinds
+
+* `:critical`: Section of code that must be executed by a single task at a time (arbitrary order).
+
+## Example
+
+```julia
+@tasks for i in 1:10
+    @set ntasks = 10
+
+    println(i, ": before")
+    @section :critical begin
+        println(i, ": critical")
+        sleep(1)
+    end
+    println(i, ": after")
+end
+```
+"""
+macro section(args...)
+    error("The @section macro may only be used inside of a @tasks block.")
+end
