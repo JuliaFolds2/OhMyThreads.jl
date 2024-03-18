@@ -151,3 +151,31 @@ end
         error("The @local macro may only be used inside of a @tasks block.")
     end
 end
+
+"""
+    @barrier
+
+This can be used inside a `@tasks for ... end` block to mark a barrier at which all tasks
+will wait for each other (synchronize) before moving on.
+
+## Example
+
+```julia
+using OhMyThreads: @tasks
+
+tstart = time_ns() * 1e-9
+now = () -> time_ns() * 1e-9 - tstart
+
+@tasks for i in 1:10
+    @set ntasks = 10
+
+    sleep(i * 0.2)
+    println(i, ": arriving at barrier (", now(), ")")
+    @barrier
+    println(i, ": moving on (", now(), ")")
+end
+```
+"""
+macro barrier()
+    error("The @barrier macro may only be used inside of a @tasks block.")
+end

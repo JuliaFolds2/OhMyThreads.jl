@@ -1,3 +1,5 @@
+using OhMyThreads.Tools: SimpleBarrier
+
 function tasks_macro(forex)
     if forex.head != :for
         throw(ErrorException("Expected a for loop after `@tasks`."))
@@ -20,6 +22,7 @@ function tasks_macro(forex)
     locals_before, locals_names = _maybe_handle_atlocal_block!(forbody.args)
     tls_names = isnothing(locals_before) ? [] : map(x -> x.args[1], locals_before)
     _maybe_handle_atset_block!(settings, forbody.args)
+    setup_barrier = _maybe_handle_atbarrier!(forbody.args)
 
     forbody = esc(forbody)
     itrng = esc(itrng)
@@ -39,6 +42,7 @@ function tasks_macro(forex)
     end
     q = if isgiven(settings.reducer)
         quote
+            $setup_barrier
             $make_mapping_function
             tmapreduce(mapping_function, $(settings.reducer),
                 $(itrng))
@@ -46,12 +50,14 @@ function tasks_macro(forex)
     elseif isgiven(settings.collect)
         maybe_warn_useless_init(settings)
         quote
+            $setup_barrier
             $make_mapping_function
             tmap(mapping_function, $(itrng))
         end
     else
         maybe_warn_useless_init(settings)
         quote
+            $setup_barrier
             $make_mapping_function
             tforeach(mapping_function, $(itrng))
         end
@@ -68,7 +74,7 @@ function tasks_macro(forex)
     for (k, v) in settings.kwargs
         push!(kwexpr.args, Expr(:kw, k, v))
     end
-    insert!(q.args[4].args, 2, kwexpr)
+    insert!(q.args[6].args, 2, kwexpr)
 
     # wrap everything in a let ... end block
     # and, potentially, define the `TaskLocalValue`s.
@@ -151,15 +157,14 @@ function _atlocal_assign_to_exprs(ex)
         tls_type = esc(left_ex.args[2])
         local_before = :($(tl_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
     else
-        tls_sym  = esc(left_ex)
+        tls_sym = esc(left_ex)
         local_before = :($(tl_storage) = let f = () -> $(tls_def)
-                             TaskLocalValue{Core.Compiler.return_type(f, Tuple{})}(f)
-                         end)
+            TaskLocalValue{Core.Compiler.return_type(f, Tuple{})}(f)
+        end)
     end
     local_name = :($(tls_sym))
     return local_before, local_name
 end
-
 
 function _maybe_handle_atset_block!(settings, args)
     idcs = findall(args) do arg
@@ -200,4 +205,20 @@ function _handle_atset_single_assign!(settings, ex)
     else
         push!(settings.kwargs, sym => esc(def))
     end
+end
+
+function _maybe_handle_atbarrier!(args)
+    idcs = findall(args) do arg
+        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@barrier")
+    end
+    isnothing(idcs) && return # no @barrier
+    setup_barrier = quote end
+    for i in idcs
+        @gensym barrier
+        # TODO: Problem... we need to know the number of tasks but I think we can't know that...
+        init_barrier_ex = esc(:($(barrier) = $(SimpleBarrier(10)))) # drop escape once merged with PR#93
+        push!(setup_barrier.args, init_barrier_ex)
+        args[i] = :(wait($(barrier)))
+    end
+    return setup_barrier
 end
