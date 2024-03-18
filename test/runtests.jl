@@ -1,8 +1,6 @@
 using Test, OhMyThreads
 using OhMyThreads: TaskLocalValue, WithTaskLocals, @fetch, promise_task_local
 
-
-
 sets_to_test = [(~ = isapprox, f = sin ∘ *, op = +,
                     itrs = (rand(ComplexF64, 10, 10), rand(-10:10, 10, 10)),
                     init = complex(0.0))
@@ -12,11 +10,13 @@ sets_to_test = [(~ = isapprox, f = sin ∘ *, op = +,
                     itrs = ([1 => "a", 2 => "b", 3 => "c", 4 => "d", 5 => "e"],),
                     init = "")]
 
+ChunkedGreedy(;kwargs...) = GreedyScheduler(;kwargs...)
+
 @testset "Basics" begin
     for (; ~, f, op, itrs, init) in sets_to_test
         @testset "f=$f, op=$op, itrs::$(typeof(itrs))" begin
             @testset for sched in (
-                StaticScheduler, DynamicScheduler, GreedyScheduler, DynamicScheduler{OhMyThreads.Schedulers.NoChunking}, SerialScheduler)
+                StaticScheduler, DynamicScheduler, GreedyScheduler, DynamicScheduler{OhMyThreads.Schedulers.NoChunking}, SerialScheduler, ChunkedGreedy)
                 @testset for split in (:batch, :scatter)
                     for nchunks in (1, 2, 6)
                         if sched == GreedyScheduler
@@ -30,7 +30,7 @@ sets_to_test = [(~ = isapprox, f = sin ∘ *, op = +,
                         end
 
                         kwargs = (; scheduler)
-                        if (split == :scatter || sched == GreedyScheduler) || op ∉ (vcat, *)
+                        if (split == :scatter || sched ∈ (GreedyScheduler, ChunkedGreedy)) || op ∉ (vcat, *)
                             # scatter and greedy only works for commutative operators!
                         else
                             mapreduce_f_op_itr = mapreduce(f, op, itrs...)
@@ -51,7 +51,7 @@ sets_to_test = [(~ = isapprox, f = sin ∘ *, op = +,
                         @test tcollect(RT, (f(x...) for x in collect(zip(itrs...))); kwargs...) ~ map_f_itr
                         @test tcollect(RT, f.(itrs...); kwargs...) ~ map_f_itr
 
-                        if sched !== GreedyScheduler
+                        if sched ∉ (GreedyScheduler, ChunkedGreedy)
                             @test tmap(f, itrs...; kwargs...) ~ map_f_itr
                             @test tcollect((f(x...) for x in collect(zip(itrs...))); kwargs...) ~ map_f_itr
                             @test tcollect(f.(itrs...); kwargs...) ~ map_f_itr

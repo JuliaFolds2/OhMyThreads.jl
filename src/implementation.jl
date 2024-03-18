@@ -435,9 +435,9 @@ end
         kwargs...)
     _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
-    if hasfield(typeof(_scheduler), :split) && _scheduler.split != :batch
-        error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $_scheduler)")
-    end
+    # if hasfield(typeof(_scheduler), :split) && _scheduler.split != :batch
+    #     error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $_scheduler)")
+    # end
     Arrs = (A, _Arrs...)
     if _scheduler isa SerialScheduler
         map!(f, out, Arrs...)
