@@ -12,7 +12,7 @@
 [cov-img]: https://codecov.io/gh/JuliaFolds2/OhMyThreads.jl/branch/master/graph/badge.svg
 [cov-url]: https://codecov.io/gh/JuliaFolds2/OhMyThreads.jl
 
-[lifecycle-img]: https://img.shields.io/badge/lifecycle-experimental-red.svg
+[lifecycle-img]: https://img.shields.io/badge/lifecycle-maturing-blue.svg
 
 [code-style-img]: https://img.shields.io/badge/code%20style-blue-4495d1.svg
 [code-style-url]: https://github.com/invenia/BlueStyle
