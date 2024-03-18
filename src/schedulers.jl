@@ -232,7 +232,7 @@ some additional overhead.
 - `chunking::Bool` (default `false`):
     * Controls whether input elements are grouped into chunks (`true`) or not (`false`) before put into the channel. This can improve the performance especially if there are many iterations each of which are computationally cheap.
     * If `nchunks` or `chunksize` are explicitly specified, `chunking` will be automatically set to `true`.
-- `nchunks::Integer` (default `4 * nthreads()`):
+- `nchunks::Integer` (default `10 * nthreads()`):
     * Determines the number of chunks (that will eventually be put into the channel).
     * Increasing `nchunks` can help with [load balancing](https://en.wikipedia.org/wiki/Load_balancing_(computing)). For `nchunks <= nthreads()` there are not enough chunks for any load balancing.
 - `chunksize::Integer` (default not set)
@@ -281,7 +281,7 @@ function GreedyScheduler(;
     else
         # only choose nchunks default if chunksize hasn't been specified
         if !isgiven(nchunks) && !isgiven(chunksize)
-            nchunks = 4 * nthreads(:default)
+            nchunks = 10 * nthreads(:default)
             chunksize = -1
         else
             nchunks = isgiven(nchunks) ? nchunks :
