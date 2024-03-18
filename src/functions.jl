@@ -16,6 +16,8 @@ will get undefined results.
 ## Example:
 
 ```
+using OhMyThreads: tmapreduce
+
 tmapreduce(√, +, [1, 2, 3, 4, 5])
 ```
 
@@ -60,6 +62,8 @@ will get undefined results.
 ## Example:
 
 ```
+using OhMyThreads: treducemap
+
 treducemap(+, √, [1, 2, 3, 4, 5])
 ```
 
@@ -102,6 +106,8 @@ will get undefined results.
 ## Example:
 
 ```
+using OhMyThreads: treduce
+
 treduce(+, [1, 2, 3, 4, 5])
 ```
 
@@ -143,6 +149,8 @@ end
 ## Example:
 
 ```
+using OhMyThreads: tforeach
+
 tforeach(1:10) do i
     println(i^2)
 end
@@ -178,6 +186,8 @@ returned container, and will generally incur fewer allocations than the version 
 ## Example:
 
 ```
+using OhMyThreads: tmap
+
 tmap(sin, 1:10)
 ```
 
@@ -227,6 +237,8 @@ returned container, and will generally incur fewer allocations than the version 
 ## Example:
 
 ```
+using OhMyThreads: tcollect
+
 tcollect(sin(i) for i in 1:10)
 ```
 
