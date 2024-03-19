@@ -32,8 +32,8 @@
 |:-------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|
 | [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] | [![][ci-img]][ci-url] [![][cov-img]][cov-url] | ![][lifecycle-img] |
 
-[OhMyThreads.jl](https://github.com/JuliaFolds2/OhMyThreads.jl/) is meant to be a simple, unambitious package that provides user-friendly ways of doing task-parallel multithreaded calculations in Julia. Most importantly, it provides an API of higher-order functions, with a
-focus on [data parallelism](https://en.wikipedia.org/wiki/Data_parallelism), that can be used without having to worry much about manual [Task](https://docs.julialang.org/en/v1/base/parallel/) creation.
+[OhMyThreads.jl](https://github.com/JuliaFolds2/OhMyThreads.jl/) is meant to be a simple, unambitious package that provides user-friendly ways of doing [task-based](https://docs.julialang.org/en/v1/base/parallel/) multithreaded calculations in Julia. Most importantly, with a
+focus on [data parallelism](https://en.wikipedia.org/wiki/Data_parallelism), it provides an [API of higher-order functions](https://juliafolds2.github.io/OhMyThreads.jl/stable/refs/api/#Functions) (e.g. `tmapreduce`) as well as a [macro API](https://juliafolds2.github.io/OhMyThreads.jl/stable/refs/api/#Macros) `@tasks for ... end` (conceptually similar to `@threads`).
 
 ## Example
 
