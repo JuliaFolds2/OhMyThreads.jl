@@ -25,33 +25,35 @@ Return a `UInt` identifier for the current running [Task](https://docs.julialang
 taskid() = objectid(current_task())
 
 """
-May be used to implement a "single" section in parallel code. This section will only be
-run by a single task (other tasks will skip over it).
+May be used to mark a region in parallel code to be executed by a single task only
+(all other tasks shall skip over it).
 
-See [`try_enter`](@ref).
+See [`try_enter!`](@ref) and [`reset!`](@ref).
 """
-struct SectionSingle
-    first::Base.RefValue{Bool}
-    lck::ReentrantLock
-    SectionSingle() = new(Ref(true), ReentrantLock())
+mutable struct OneOnlyRegion
+    @atomic latch::Bool
+    OneOnlyRegion() = new(false)
 end
 
 """
-    try_enter(f, s::SectionSingle)
+    try_enter!(f, s::OneOnlyRegion)
 
-When called from multiple parallel tasks (on a shared `s::SectionSingle`) only a single
-task will execute `f`. Typical usage:
+When called from multiple parallel tasks (on a shared `s::OneOnlyRegion`) only a single
+task will execute `f`.
+
+## Example
 
 ```julia
-using OhMyThreads.Tools: SectionSingle
+using OhMyThreads: @tasks
+using OhMyThreads.Tools: OneOnlyRegion, try_enter!
 
-s = SectionSingle()
+one_only = OneOnlyRegion()
 
 @tasks for i in 1:10
     @set ntasks = 10
 
     println(i, ": before")
-    try_enter(s) do
+    try_enter!(one_only) do
         println(i, ": only printed by a single task")
         sleep(1)
     end
@@ -59,15 +61,25 @@ s = SectionSingle()
 end
 ```
 """
-function try_enter(f, s::SectionSingle)
-    run_f = false
-    lock(s.lck) do
-        if s.first[]
-           run_f = true # The first task to try_enter → run f
-           s.first[] = false
-        end
+function try_enter!(f, s::OneOnlyRegion)
+    latch = @atomic :monotonic s.latch
+    if latch
+        return
     end
-    run_f && f()
+    (_, success) = @atomicreplace s.latch false=>true
+    if !success
+        return
+    end
+    f()
+    return
+end
+
+"""
+Reset the `OneOnlyRegion` (so that it can be used again).
+"""
+function reset!(s::OneOnlyRegion)
+    @atomicreplace s.latch true=>false
+    nothing
 end
 
 end # Tools

@@ -1,4 +1,4 @@
-using OhMyThreads.Tools: SectionSingle, try_enter
+using OhMyThreads.Tools: OneOnlyRegion, try_enter!
 
 function tasks_macro(forex)
     if forex.head != :for
@@ -25,7 +25,10 @@ function tasks_macro(forex)
     for i in findall(forbody.args) do arg
         !(arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@set")) &&
             !(arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@local")) &&
-            !(arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@section"))
+            !(arg isa Expr && arg.head == :macrocall &&
+              arg.args[1] == Symbol("@one_only")) &&
+            !(arg isa Expr && arg.head == :macrocall &&
+              arg.args[1] == Symbol("@one_by_one"))
     end
         forbody.args[i] = esc(forbody.args[i])
     end
@@ -33,7 +36,8 @@ function tasks_macro(forex)
     locals_before, locals_names = _maybe_handle_atlocal_block!(forbody.args)
     tls_names = isnothing(locals_before) ? [] : map(x -> x.args[1], locals_before)
     _maybe_handle_atset_block!(settings, forbody.args)
-    setup_sections = _maybe_handle_atsection_blocks!(forbody.args)
+    setup_oneonly_blocks = _maybe_handle_atoneonly_blocks!(forbody.args)
+    setup_onebyone_blocks = _maybe_handle_atonebyone_blocks!(forbody.args)
 
     itrng = esc(itrng)
     itvar = esc(itvar)
@@ -52,7 +56,8 @@ function tasks_macro(forex)
     end
     q = if isgiven(settings.reducer)
         quote
-            $setup_sections
+            $setup_oneonly_blocks
+            $setup_onebyone_blocks
             $make_mapping_function
             tmapreduce(mapping_function, $(settings.reducer),
                 $(itrng))
@@ -60,14 +65,16 @@ function tasks_macro(forex)
     elseif isgiven(settings.collect)
         maybe_warn_useless_init(settings)
         quote
-            $setup_sections
+            $setup_oneonly_blocks
+            $setup_onebyone_blocks
             $make_mapping_function
             tmap(mapping_function, $(itrng))
         end
     else
         maybe_warn_useless_init(settings)
         quote
-            $setup_sections
+            $setup_oneonly_blocks
+            $setup_onebyone_blocks
             $make_mapping_function
             tforeach(mapping_function, $(itrng))
         end
@@ -84,7 +91,7 @@ function tasks_macro(forex)
     for (k, v) in settings.kwargs
         push!(kwexpr.args, Expr(:kw, k, v))
     end
-    insert!(q.args[6].args, 2, kwexpr)
+    insert!(q.args[8].args, 2, kwexpr)
 
     # wrap everything in a let ... end block
     # and, potentially, define the `TaskLocalValue`s.
@@ -217,40 +224,42 @@ function _handle_atset_single_assign!(settings, ex)
     end
 end
 
-function _maybe_handle_atsection_blocks!(args)
+function _maybe_handle_atoneonly_blocks!(args)
     idcs = findall(args) do arg
-        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@section")
+        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@one_only")
     end
-    isnothing(idcs) && return # no @section blocks
-    setup_sections = quote end
+    isnothing(idcs) && return # no @one_only blocks
+    setup_oneonly_blocks = quote end
     for i in idcs
-        kind = args[i].args[3]
-        body = args[i].args[4]
-        if kind isa QuoteNode
-            if kind.value == :critical
-                @gensym critical_lock
-                init_lock_ex = :($(critical_lock) = $(Base.ReentrantLock()))
-                push!(setup_sections.args, init_lock_ex)
-                args[i] = quote
-                    $(esc(:lock))($(critical_lock)) do
-                        $(esc(body))
-                    end
-                end
-            elseif kind.value == :single
-                @gensym single_section
-                init_single_section_ex = :($(single_section) = $(SectionSingle()))
-                push!(setup_sections.args, init_single_section_ex)
-                args[i] = quote
-                    Tools.try_enter($(single_section)) do
-                        $(esc(body))
-                    end
-                end
-            else
-                throw(ErrorException("Unknown section kind :$(kind.value)."))
+        body = args[i].args[3]
+        @gensym oneonly
+        init_oneonly_ex = :($(oneonly) = $(OneOnlyRegion()))
+        push!(setup_oneonly_blocks.args, init_oneonly_ex)
+        args[i] = quote
+            Tools.try_enter!($(oneonly)) do
+                $(esc(body))
             end
-        else
-            throw(ErrorException("Wrong usage of @section. Must be followed by a symbol, indicating the kind of section."))
         end
     end
-    return setup_sections
+    return setup_oneonly_blocks
+end
+
+function _maybe_handle_atonebyone_blocks!(args)
+    idcs = findall(args) do arg
+        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@one_by_one")
+    end
+    isnothing(idcs) && return # no @one_by_one blocks
+    setup_onebyone_blocks = quote end
+    for i in idcs
+        body = args[i].args[3]
+        @gensym onebyone
+        init_lock_ex = :($(onebyone) = $(Base.ReentrantLock()))
+        push!(setup_onebyone_blocks.args, init_lock_ex)
+        args[i] = quote
+            $(esc(:lock))($(onebyone)) do
+                $(esc(body))
+            end
+        end
+    end
+    return setup_onebyone_blocks
 end

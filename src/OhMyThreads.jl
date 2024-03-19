@@ -20,7 +20,7 @@ using .Schedulers: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
                    SerialScheduler
 include("implementation.jl")
 
-export @tasks, @set, @local, @section
+export @tasks, @set, @local, @one_by_one, @one_only
 export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
 export Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler, SerialScheduler
 

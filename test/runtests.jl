@@ -374,7 +374,7 @@ end;
     end
 end;
 
-# for testing @section :critical
+# for testing @one_by_one region
 mutable struct SingleAccessOnly
     in_use::Bool
     const lck::ReentrantLock
@@ -395,13 +395,13 @@ function acquire(f, o::SingleAccessOnly)
     end
 end
 
-@testset "sections" begin
-    @testset ":critical" begin
+@testset "regions" begin
+    @testset "@one_by_one" begin
         sao = SingleAccessOnly()
         try
             @tasks for i in 1:10
                 @set ntasks = 10
-                @section :critical begin
+                @one_by_one begin
                     acquire(sao) do
                         sleep(0.01)
                     end
@@ -422,8 +422,8 @@ end
                 @set ntasks = 10
 
                 y += 1 # not safe (race condition)
-                @section :critical begin
-                    x += 1 # parallel-safe because inside of critical section
+                @one_by_one begin
+                    x += 1 # parallel-safe because inside of one_by_one region
                     acquire(sao) do
                         sleep(0.01)
                     end
@@ -435,7 +435,7 @@ end
         end
     end
 
-    @testset ":single" begin
+    @testset "@one_only" begin
         x = 0
         y = 0
         try
@@ -443,11 +443,32 @@ end
                 @set ntasks = 10
 
                 y += 1 # not safe (race condition)
-                @section :single begin
-                    x += 1 # parallel-safe because inside of single section
+                @one_only begin
+                    x += 1 # parallel-safe because only a single task will execute this
                 end
             end
             @test x == 1 # only a single task should have incremented x
+        catch ErrorException
+            @test false
+        end
+    end
+
+    @testset "@one_only + @one_by_one" begin
+        x = 0
+        y = 0
+        try
+            @tasks for i in 1:10
+                @set ntasks = 10
+
+                @one_only begin
+                    x += 1 # parallel-safe
+                end
+
+                @one_by_one begin
+                    y += 1 # parallel-safe
+                end
+            end
+            @test x == 1 &&  y == 10
         catch ErrorException
             @test false
         end

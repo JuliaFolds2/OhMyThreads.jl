@@ -153,40 +153,21 @@ end
 end
 
 """
-    @section kind begin ... end
+    @one_only begin ... end
 
-This can be used inside a `@tasks for ... end` block to identify a section of code that
-must be executed according to a specific synchronization policy
-(as indicated by the symbol `kind`, see below).
-
-Multiple `@section` blocks are supported.
-
-## Kinds
-
-* `:critical`: Section of code that must be executed by a single task at a time (arbitrary order).
-* `:single`: Section of code that must be executed by a single task only. All other tasks will skip over this section.
+This can be used inside a `@tasks for ... end` block to mark a region of code to be
+executed by only one of the parallel tasks (all other tasks skip over this region).
 
 ## Example
 
 ```julia
+using OhMyThreads: @tasks
+
 @tasks for i in 1:10
     @set ntasks = 10
 
     println(i, ": before")
-    @section :critical begin
-        println(i, ": one task at a time")
-        sleep(1)
-    end
-    println(i, ": after")
-end
-```
-
-```julia
-@tasks for i in 1:10
-    @set ntasks = 10
-
-    println(i, ": before")
-    @section :single begin
+    @one_only begin
         println(i, ": only printed by a single task")
         sleep(1)
     end
@@ -194,6 +175,34 @@ end
 end
 ```
 """
-macro section(args...)
-    error("The @section macro may only be used inside of a @tasks block.")
+macro one_only(args...)
+    error("The @one_only macro may only be used inside of a @tasks block.")
+end
+
+"""
+    @one_by_one begin ... end
+
+This can be used inside a `@tasks for ... end` block to mark a region of code to be
+executed by one parallel task at a time (i.e. exclusive access). The order may be arbitrary
+and non-deterministic.
+
+## Example
+
+```julia
+using OhMyThreads: @tasks
+
+@tasks for i in 1:10
+    @set ntasks = 10
+
+    println(i, ": before")
+    @one_by_one begin
+        println(i, ": one task at a time")
+        sleep(0.5)
+    end
+    println(i, ": after")
+end
+```
+"""
+macro one_by_one(args...)
+    error("The @one_by_one macro may only be used inside of a @tasks block.")
 end
