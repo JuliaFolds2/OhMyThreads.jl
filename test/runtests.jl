@@ -435,7 +435,7 @@ end
         end
     end
 
-    @testset "@one_only" begin
+    @testset "@only_one" begin
         x = 0
         y = 0
         try
@@ -443,7 +443,7 @@ end
                 @set ntasks = 10
 
                 y += 1 # not safe (race condition)
-                @one_only begin
+                @only_one begin
                     x += 1 # parallel-safe because only a single task will execute this
                 end
             end
@@ -453,14 +453,14 @@ end
         end
     end
 
-    @testset "@one_only + @one_by_one" begin
+    @testset "@only_one + @one_by_one" begin
         x = 0
         y = 0
         try
             @tasks for i in 1:10
                 @set ntasks = 10
 
-                @one_only begin
+                @only_one begin
                     x += 1 # parallel-safe
                 end
 

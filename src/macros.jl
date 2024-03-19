@@ -153,7 +153,7 @@ end
 end
 
 """
-    @one_only begin ... end
+    @only_one begin ... end
 
 This can be used inside a `@tasks for ... end` block to mark a region of code to be
 executed by only one of the parallel tasks (all other tasks skip over this region).
@@ -167,7 +167,7 @@ using OhMyThreads: @tasks
     @set ntasks = 10
 
     println(i, ": before")
-    @one_only begin
+    @only_one begin
         println(i, ": only printed by a single task")
         sleep(1)
     end
@@ -175,8 +175,8 @@ using OhMyThreads: @tasks
 end
 ```
 """
-macro one_only(args...)
-    error("The @one_only macro may only be used inside of a @tasks block.")
+macro only_one(args...)
+    error("The @only_one macro may only be used inside of a @tasks block.")
 end
 
 """

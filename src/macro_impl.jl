@@ -1,4 +1,4 @@
-using OhMyThreads.Tools: OneOnlyRegion, try_enter!
+using OhMyThreads.Tools: OnlyOneRegion, try_enter!
 
 function tasks_macro(forex)
     if forex.head != :for
@@ -26,7 +26,7 @@ function tasks_macro(forex)
         !(arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@set")) &&
             !(arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@local")) &&
             !(arg isa Expr && arg.head == :macrocall &&
-              arg.args[1] == Symbol("@one_only")) &&
+              arg.args[1] == Symbol("@only_one")) &&
             !(arg isa Expr && arg.head == :macrocall &&
               arg.args[1] == Symbol("@one_by_one"))
     end
@@ -36,7 +36,7 @@ function tasks_macro(forex)
     locals_before, locals_names = _maybe_handle_atlocal_block!(forbody.args)
     tls_names = isnothing(locals_before) ? [] : map(x -> x.args[1], locals_before)
     _maybe_handle_atset_block!(settings, forbody.args)
-    setup_oneonly_blocks = _maybe_handle_atoneonly_blocks!(forbody.args)
+    setup_onlyone_blocks = _maybe_handle_atonlyone_blocks!(forbody.args)
     setup_onebyone_blocks = _maybe_handle_atonebyone_blocks!(forbody.args)
 
     itrng = esc(itrng)
@@ -56,7 +56,7 @@ function tasks_macro(forex)
     end
     q = if isgiven(settings.reducer)
         quote
-            $setup_oneonly_blocks
+            $setup_onlyone_blocks
             $setup_onebyone_blocks
             $make_mapping_function
             tmapreduce(mapping_function, $(settings.reducer),
@@ -65,7 +65,7 @@ function tasks_macro(forex)
     elseif isgiven(settings.collect)
         maybe_warn_useless_init(settings)
         quote
-            $setup_oneonly_blocks
+            $setup_onlyone_blocks
             $setup_onebyone_blocks
             $make_mapping_function
             tmap(mapping_function, $(itrng))
@@ -73,7 +73,7 @@ function tasks_macro(forex)
     else
         maybe_warn_useless_init(settings)
         quote
-            $setup_oneonly_blocks
+            $setup_onlyone_blocks
             $setup_onebyone_blocks
             $make_mapping_function
             tforeach(mapping_function, $(itrng))
@@ -224,24 +224,24 @@ function _handle_atset_single_assign!(settings, ex)
     end
 end
 
-function _maybe_handle_atoneonly_blocks!(args)
+function _maybe_handle_atonlyone_blocks!(args)
     idcs = findall(args) do arg
-        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@one_only")
+        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@only_one")
     end
-    isnothing(idcs) && return # no @one_only blocks
-    setup_oneonly_blocks = quote end
+    isnothing(idcs) && return # no @only_one blocks
+    setup_onlyone_blocks = quote end
     for i in idcs
         body = args[i].args[3]
-        @gensym oneonly
-        init_oneonly_ex = :($(oneonly) = $(OneOnlyRegion()))
-        push!(setup_oneonly_blocks.args, init_oneonly_ex)
+        @gensym onlyone
+        init_onlyone_ex = :($(onlyone) = $(OnlyOneRegion()))
+        push!(setup_onlyone_blocks.args, init_onlyone_ex)
         args[i] = quote
-            Tools.try_enter!($(oneonly)) do
+            Tools.try_enter!($(onlyone)) do
                 $(esc(body))
             end
         end
     end
-    return setup_oneonly_blocks
+    return setup_onlyone_blocks
 end
 
 function _maybe_handle_atonebyone_blocks!(args)

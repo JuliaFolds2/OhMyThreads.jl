@@ -30,30 +30,30 @@ May be used to mark a region in parallel code to be executed by a single task on
 
 See [`try_enter!`](@ref) and [`reset!`](@ref).
 """
-mutable struct OneOnlyRegion
+mutable struct OnlyOneRegion
     @atomic latch::Bool
-    OneOnlyRegion() = new(false)
+    OnlyOneRegion() = new(false)
 end
 
 """
-    try_enter!(f, s::OneOnlyRegion)
+    try_enter!(f, s::OnlyOneRegion)
 
-When called from multiple parallel tasks (on a shared `s::OneOnlyRegion`) only a single
+When called from multiple parallel tasks (on a shared `s::OnlyOneRegion`) only a single
 task will execute `f`.
 
 ## Example
 
 ```julia
 using OhMyThreads: @tasks
-using OhMyThreads.Tools: OneOnlyRegion, try_enter!
+using OhMyThreads.Tools: OnlyOneRegion, try_enter!
 
-one_only = OneOnlyRegion()
+only_one = OnlyOneRegion()
 
 @tasks for i in 1:10
     @set ntasks = 10
 
     println(i, ": before")
-    try_enter!(one_only) do
+    try_enter!(only_one) do
         println(i, ": only printed by a single task")
         sleep(1)
     end
@@ -61,7 +61,7 @@ one_only = OneOnlyRegion()
 end
 ```
 """
-function try_enter!(f, s::OneOnlyRegion)
+function try_enter!(f, s::OnlyOneRegion)
     latch = @atomic :monotonic s.latch
     if latch
         return
@@ -75,9 +75,9 @@ function try_enter!(f, s::OneOnlyRegion)
 end
 
 """
-Reset the `OneOnlyRegion` (so that it can be used again).
+Reset the `OnlyOneRegion` (so that it can be used again).
 """
-function reset!(s::OneOnlyRegion)
+function reset!(s::OnlyOneRegion)
     @atomicreplace s.latch true=>false
     nothing
 end
