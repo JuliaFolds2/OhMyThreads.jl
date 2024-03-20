@@ -1,6 +1,11 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.5.1
+-------------
+- ![Feature][badge-feature] Within a parallel `@tasks` block one can now mark a region with `@one_by_one`. This region will be run by one task at a time ("critical region").
+- ![Feature][badge-feature] Within a `@tasks` block one can now mark a region as with `@only_one`. This region will be run by a single parallel task only (other tasks will skip over it).
+
 Version 0.5.0
 -------------
 

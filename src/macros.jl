@@ -151,3 +151,58 @@ end
         error("The @local macro may only be used inside of a @tasks block.")
     end
 end
+
+"""
+    @only_one begin ... end
+
+This can be used inside a `@tasks for ... end` block to mark a region of code to be
+executed by only one of the parallel tasks (all other tasks skip over this region).
+
+## Example
+
+```julia
+using OhMyThreads: @tasks
+
+@tasks for i in 1:10
+    @set ntasks = 10
+
+    println(i, ": before")
+    @only_one begin
+        println(i, ": only printed by a single task")
+        sleep(1)
+    end
+    println(i, ": after")
+end
+```
+"""
+macro only_one(args...)
+    error("The @only_one macro may only be used inside of a @tasks block.")
+end
+
+"""
+    @one_by_one begin ... end
+
+This can be used inside a `@tasks for ... end` block to mark a region of code to be
+executed by one parallel task at a time (i.e. exclusive access). The order may be arbitrary
+and non-deterministic.
+
+## Example
+
+```julia
+using OhMyThreads: @tasks
+
+@tasks for i in 1:10
+    @set ntasks = 10
+
+    println(i, ": before")
+    @one_by_one begin
+        println(i, ": one task at a time")
+        sleep(0.5)
+    end
+    println(i, ": after")
+end
+```
+"""
+macro one_by_one(args...)
+    error("The @one_by_one macro may only be used inside of a @tasks block.")
+end

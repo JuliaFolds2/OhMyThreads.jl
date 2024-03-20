@@ -1,3 +1,5 @@
+using OhMyThreads.Tools: OnlyOneRegion, try_enter!
+
 function tasks_macro(forex)
     if forex.head != :for
         throw(ErrorException("Expected a for loop after `@tasks`."))
@@ -17,11 +19,26 @@ function tasks_macro(forex)
 
     settings = Settings()
 
+    # Escape everything in the loop body that is not used in conjuction with one of our
+    # "macros", e.g. @set or @local. Code inside of these macro blocks will be escaped by
+    # the respective "macro" handling functions below.
+    for i in findall(forbody.args) do arg
+        !(arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@set")) &&
+            !(arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@local")) &&
+            !(arg isa Expr && arg.head == :macrocall &&
+              arg.args[1] == Symbol("@only_one")) &&
+            !(arg isa Expr && arg.head == :macrocall &&
+              arg.args[1] == Symbol("@one_by_one"))
+    end
+        forbody.args[i] = esc(forbody.args[i])
+    end
+
     locals_before, locals_names = _maybe_handle_atlocal_block!(forbody.args)
     tls_names = isnothing(locals_before) ? [] : map(x -> x.args[1], locals_before)
     _maybe_handle_atset_block!(settings, forbody.args)
+    setup_onlyone_blocks = _maybe_handle_atonlyone_blocks!(forbody.args)
+    setup_onebyone_blocks = _maybe_handle_atonebyone_blocks!(forbody.args)
 
-    forbody = esc(forbody)
     itrng = esc(itrng)
     itvar = esc(itvar)
 
@@ -39,6 +56,8 @@ function tasks_macro(forex)
     end
     q = if isgiven(settings.reducer)
         quote
+            $setup_onlyone_blocks
+            $setup_onebyone_blocks
             $make_mapping_function
             tmapreduce(mapping_function, $(settings.reducer),
                 $(itrng))
@@ -46,12 +65,16 @@ function tasks_macro(forex)
     elseif isgiven(settings.collect)
         maybe_warn_useless_init(settings)
         quote
+            $setup_onlyone_blocks
+            $setup_onebyone_blocks
             $make_mapping_function
             tmap(mapping_function, $(itrng))
         end
     else
         maybe_warn_useless_init(settings)
         quote
+            $setup_onlyone_blocks
+            $setup_onebyone_blocks
             $make_mapping_function
             tforeach(mapping_function, $(itrng))
         end
@@ -68,7 +91,7 @@ function tasks_macro(forex)
     for (k, v) in settings.kwargs
         push!(kwexpr.args, Expr(:kw, k, v))
     end
-    insert!(q.args[4].args, 2, kwexpr)
+    insert!(q.args[8].args, 2, kwexpr)
 
     # wrap everything in a let ... end block
     # and, potentially, define the `TaskLocalValue`s.
@@ -151,15 +174,14 @@ function _atlocal_assign_to_exprs(ex)
         tls_type = esc(left_ex.args[2])
         local_before = :($(tl_storage) = TaskLocalValue{$tls_type}(() -> $(tls_def)))
     else
-        tls_sym  = esc(left_ex)
+        tls_sym = esc(left_ex)
         local_before = :($(tl_storage) = let f = () -> $(tls_def)
-                             TaskLocalValue{Core.Compiler.return_type(f, Tuple{})}(f)
-                         end)
+            TaskLocalValue{Core.Compiler.return_type(f, Tuple{})}(f)
+        end)
     end
     local_name = :($(tls_sym))
     return local_before, local_name
 end
-
 
 function _maybe_handle_atset_block!(settings, args)
     idcs = findall(args) do arg
@@ -200,4 +222,44 @@ function _handle_atset_single_assign!(settings, ex)
     else
         push!(settings.kwargs, sym => esc(def))
     end
+end
+
+function _maybe_handle_atonlyone_blocks!(args)
+    idcs = findall(args) do arg
+        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@only_one")
+    end
+    isnothing(idcs) && return # no @only_one blocks
+    setup_onlyone_blocks = quote end
+    for i in idcs
+        body = args[i].args[3]
+        @gensym onlyone
+        init_onlyone_ex = :($(onlyone) = $(OnlyOneRegion()))
+        push!(setup_onlyone_blocks.args, init_onlyone_ex)
+        args[i] = quote
+            Tools.try_enter!($(onlyone)) do
+                $(esc(body))
+            end
+        end
+    end
+    return setup_onlyone_blocks
+end
+
+function _maybe_handle_atonebyone_blocks!(args)
+    idcs = findall(args) do arg
+        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@one_by_one")
+    end
+    isnothing(idcs) && return # no @one_by_one blocks
+    setup_onebyone_blocks = quote end
+    for i in idcs
+        body = args[i].args[3]
+        @gensym onebyone
+        init_lock_ex = :($(onebyone) = $(Base.ReentrantLock()))
+        push!(setup_onebyone_blocks.args, init_lock_ex)
+        args[i] = quote
+            $(esc(:lock))($(onebyone)) do
+                $(esc(body))
+            end
+        end
+    end
+    return setup_onebyone_blocks
 end
