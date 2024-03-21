@@ -7,5 +7,6 @@ using Aqua
     # stale_deps=(ignore=[:SomePackage],),
     deps_compat=(ignore=[:Test],),
     # piracies=false,
+    persistent_tasks=false,
   )
 end
