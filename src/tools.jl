@@ -130,4 +130,44 @@ function Base.wait(b::SimpleBarrier)
     end
 end
 
+"""
+    @barrier
+    @barrier(ntasks)
+
+This can be used inside a `@tasks for ... end` to synchronize `ntasks` parallel tasks.
+Specifically, a task can only pass the `@barrier` if `ntask-1` other tasks have reached it
+as well. If `ntasks` is not given explicitly it is determined from `@set ntasks=...`, which
+is mandatory in this case.
+
+**WARNING:** It is the responsibility of the user to ensure that the number of iterations
+is a multiple of `ntasks`. Otherwise, for the last few iterations (remainder) not enough
+tasks will reach the `@barrier` leading to a **deadlock**.
+
+## Example
+
+```julia
+using OhMyThreads: @tasks
+
+@tasks for i in 1:20
+    @set ntasks = 20
+
+    println(i, ": before")
+    @barrier
+    println(i, ": after")
+end
+
+# wrong - deadlock!
+@tasks for i in 1:22 # ntasks % niterations != 0
+    @set ntasks = 20
+
+    println(i, ": before")
+    @barrier
+    println(i, ": after")
+end
+```
+"""
+macro barrier(args...)
+    error("The @barrier macro may only be used inside of a @tasks block.")
+end
+
 end # Tools

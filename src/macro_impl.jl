@@ -40,7 +40,7 @@ function tasks_macro(forex)
     _maybe_handle_atset_block!(settings, forbody.args)
     setup_onlyone_blocks = _maybe_handle_atonlyone_blocks!(forbody.args)
     setup_onebyone_blocks = _maybe_handle_atonebyone_blocks!(forbody.args)
-    setup_barriers = _maybe_handle_atbarriers!(forbody.args)
+    setup_barriers = _maybe_handle_atbarriers!(forbody.args, settings)
 
     itrng = esc(itrng)
     itvar = esc(itvar)
@@ -124,7 +124,8 @@ Base.@kwdef mutable struct Settings
     reducer::Union{Expr, Symbol, NotGiven} = NotGiven()
     collect::Union{Bool, NotGiven} = NotGiven()
     init::Union{Expr, Symbol, NotGiven} = NotGiven()
-    kwargs::Vector{Pair{Symbol, Any}} = Pair{Symbol, Any}[]
+    # kwargs::Vector{Pair{Symbol, Any}} = Pair{Symbol, Any}[]
+    kwargs::Dict{Symbol, Any} = Dict{Symbol, Any}()
 end
 
 function _maybe_handle_atlocal_block!(args)
@@ -226,7 +227,8 @@ function _handle_atset_single_assign!(settings, ex)
         def = def isa Bool ? def : esc(def)
         setfield!(settings, sym, def)
     else
-        push!(settings.kwargs, sym => esc(def))
+        # push!(settings.kwargs, sym => esc(def))
+        settings.kwargs[sym] = esc(def)
     end
 end
 
@@ -270,16 +272,30 @@ function _maybe_handle_atonebyone_blocks!(args)
     return setup_onebyone_blocks
 end
 
-function _maybe_handle_atbarriers!(args)
+function _maybe_handle_atbarriers!(args, settings)
     idcs = findall(args) do arg
         arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@barrier")
     end
     isnothing(idcs) && return # no @barrier found
     setup_barriers = quote end
     for i in idcs
-        dump(args[i])
+        if length(args[i].args) < 3
+            !haskey(settings.kwargs, :ntasks) &&
+                throw(ErrorException("When using `@barrier`, the number of tasks must be " *
+                                     "specified explicitly, e.g. via `@set ntasks=...`. " *
+                                     "Alternatively, you can explicitly indicate the " *
+                                     "number of tasks the barrier should wait for via `@barrier(n)`."))
+
+            ntasks = settings.kwargs[:ntasks]
+        else
+            ntasks = esc(args[i].args[3])
+
+            if haskey(settings.kwargs, :ntasks) && ntasks != settings.kwargs[:ntasks]
+                @warn("Setting the number of tasks (e.g. `@set ntasks=x`) as well as using `@barrier(y)` can potentially be dangerous, especially for `x != y`, and is thus discouraged.")
+            end
+        end
         @gensym barrier
-        push!(setup_barriers.args, :($(barrier) = $(SimpleBarrier(3)))) # TODO: generalize to ntasks!
+        push!(setup_barriers.args, :($(barrier) = $(SimpleBarrier)($ntasks)))
         args[i] = :($(esc(:wait))($(barrier)))
     end
     return setup_barriers
