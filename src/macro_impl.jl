@@ -1,4 +1,5 @@
 using OhMyThreads.Tools: OnlyOneRegion, try_enter!
+using OhMyThreads.Tools: SimpleBarrier
 
 function tasks_macro(forex)
     if forex.head != :for
@@ -28,7 +29,8 @@ function tasks_macro(forex)
             !(arg isa Expr && arg.head == :macrocall &&
               arg.args[1] == Symbol("@only_one")) &&
             !(arg isa Expr && arg.head == :macrocall &&
-              arg.args[1] == Symbol("@one_by_one"))
+              arg.args[1] == Symbol("@one_by_one")) &&
+            !(arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@barrier"))
     end
         forbody.args[i] = esc(forbody.args[i])
     end
@@ -38,6 +40,7 @@ function tasks_macro(forex)
     _maybe_handle_atset_block!(settings, forbody.args)
     setup_onlyone_blocks = _maybe_handle_atonlyone_blocks!(forbody.args)
     setup_onebyone_blocks = _maybe_handle_atonebyone_blocks!(forbody.args)
+    setup_barriers = _maybe_handle_atbarriers!(forbody.args)
 
     itrng = esc(itrng)
     itvar = esc(itvar)
@@ -58,6 +61,7 @@ function tasks_macro(forex)
         quote
             $setup_onlyone_blocks
             $setup_onebyone_blocks
+            $setup_barriers
             $make_mapping_function
             tmapreduce(mapping_function, $(settings.reducer),
                 $(itrng))
@@ -67,6 +71,7 @@ function tasks_macro(forex)
         quote
             $setup_onlyone_blocks
             $setup_onebyone_blocks
+            $setup_barriers
             $make_mapping_function
             tmap(mapping_function, $(itrng))
         end
@@ -75,6 +80,7 @@ function tasks_macro(forex)
         quote
             $setup_onlyone_blocks
             $setup_onebyone_blocks
+            $setup_barriers
             $make_mapping_function
             tforeach(mapping_function, $(itrng))
         end
@@ -91,7 +97,7 @@ function tasks_macro(forex)
     for (k, v) in settings.kwargs
         push!(kwexpr.args, Expr(:kw, k, v))
     end
-    insert!(q.args[8].args, 2, kwexpr)
+    insert!(q.args[10].args, 2, kwexpr)
 
     # wrap everything in a let ... end block
     # and, potentially, define the `TaskLocalValue`s.
@@ -262,4 +268,19 @@ function _maybe_handle_atonebyone_blocks!(args)
         end
     end
     return setup_onebyone_blocks
+end
+
+function _maybe_handle_atbarriers!(args)
+    idcs = findall(args) do arg
+        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@barrier")
+    end
+    isnothing(idcs) && return # no @barrier found
+    setup_barriers = quote end
+    for i in idcs
+        dump(args[i])
+        @gensym barrier
+        push!(setup_barriers.args, :($(barrier) = $(SimpleBarrier(3)))) # TODO: generalize to ntasks!
+        args[i] = :($(esc(:wait))($(barrier)))
+    end
+    return setup_barriers
 end
