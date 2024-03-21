@@ -132,15 +132,14 @@ end
 
 """
     @barrier
-    @barrier(ntasks)
 
-This can be used inside a `@tasks for ... end` to synchronize `ntasks` parallel tasks.
-Specifically, a task can only pass the `@barrier` if `ntask-1` other tasks have reached it
-as well. If `ntasks` is not given explicitly it is determined from `@set ntasks=...`, which
-is mandatory in this case.
+This can be used inside a `@tasks for ... end` to synchronize `n` parallel tasks.
+Specifically, a task can only pass the `@barrier` if `n-1` other tasks have reached it
+as well. The value of `n` is determined from `@set ntasks=...`, which
+is required if one wants to use `@barrier`.
 
 **WARNING:** It is the responsibility of the user to ensure that the number of iterations
-is a multiple of `ntasks`. Otherwise, for the last few iterations (remainder) not enough
+is a multiple of `n`. Otherwise, for the last few iterations (remainder) not enough
 tasks will reach the `@barrier` leading to a **deadlock**.
 
 ## Example
@@ -148,6 +147,7 @@ tasks will reach the `@barrier` leading to a **deadlock**.
 ```julia
 using OhMyThreads: @tasks
 
+# works
 @tasks for i in 1:20
     @set ntasks = 20
 

@@ -279,21 +279,10 @@ function _maybe_handle_atbarriers!(args, settings)
     isnothing(idcs) && return # no @barrier found
     setup_barriers = quote end
     for i in idcs
-        if length(args[i].args) < 3
-            !haskey(settings.kwargs, :ntasks) &&
-                throw(ErrorException("When using `@barrier`, the number of tasks must be " *
-                                     "specified explicitly, e.g. via `@set ntasks=...`. " *
-                                     "Alternatively, you can explicitly indicate the " *
-                                     "number of tasks the barrier should wait for via `@barrier(n)`."))
-
-            ntasks = settings.kwargs[:ntasks]
-        else
-            ntasks = esc(args[i].args[3])
-
-            if haskey(settings.kwargs, :ntasks) && ntasks != settings.kwargs[:ntasks]
-                @warn("Setting the number of tasks (e.g. `@set ntasks=x`) as well as using `@barrier(y)` can potentially be dangerous, especially for `x != y`, and is thus discouraged.")
-            end
-        end
+        !haskey(settings.kwargs, :ntasks) &&
+            throw(ErrorException("When using `@barrier`, the number of tasks must be " *
+                                 "specified explicitly, e.g. via `@set ntasks=...`. "))
+        ntasks = settings.kwargs[:ntasks]
         @gensym barrier
         push!(setup_barriers.args, :($(barrier) = $(SimpleBarrier)($ntasks)))
         args[i] = :($(esc(:wait))($(barrier)))
