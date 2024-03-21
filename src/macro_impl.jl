@@ -119,12 +119,10 @@ function maybe_warn_useless_init(settings)
 end
 
 Base.@kwdef mutable struct Settings
-    # scheduler::Expr = :(DynamicScheduler())
     scheduler::Union{Expr, QuoteNode, NotGiven} = NotGiven()
     reducer::Union{Expr, Symbol, NotGiven} = NotGiven()
     collect::Union{Bool, NotGiven} = NotGiven()
     init::Union{Expr, Symbol, NotGiven} = NotGiven()
-    # kwargs::Vector{Pair{Symbol, Any}} = Pair{Symbol, Any}[]
     kwargs::Dict{Symbol, Any} = Dict{Symbol, Any}()
 end
 
