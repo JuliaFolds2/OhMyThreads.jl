@@ -1,6 +1,8 @@
 using Test, OhMyThreads
 using OhMyThreads: TaskLocalValue, WithTaskLocals, @fetch, promise_task_local
 
+include("Aqua.jl")
+
 sets_to_test = [(~ = isapprox, f = sin ∘ *, op = +,
                     itrs = (rand(ComplexF64, 10, 10), rand(-10:10, 10, 10)),
                     init = complex(0.0))

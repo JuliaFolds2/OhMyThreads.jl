@@ -1,7 +1,7 @@
 name = "OhMyThreads"
 uuid = "67456a42-1dca-4109-a031-0a68de7e3ad5"
 authors = ["Carsten Bauer <mail@carstenbauer.eu>", "Mason Protter <mason.protter@icloud.com>"]
-version = "0.5"
+version = "0.5.0"
 
 [deps]
 BangBang = "198e06fe-97b7-11e9-32a5-e1d131e6ad66"
@@ -10,14 +10,17 @@ StableTasks = "91464d47-22a1-43fe-8b7f-2d57ee82463f"
 TaskLocalValues = "ed4db957-447d-4319-bfb6-7fa9ae7ecf34"
 
 [compat]
+Aqua = "0.8"
 BangBang = "0.4"
 ChunkSplitters = "2.4"
 StableTasks = "0.1.5"
 TaskLocalValues = "0.1"
+Test = "1"
 julia = "1.6"
 
 [extras]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test"]
+test = ["Test", "Aqua"]
