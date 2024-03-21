@@ -5,6 +5,7 @@ Version 0.5.1
 -------------
 - ![Feature][badge-feature] Within a parallel `@tasks` block one can now mark a region with `@one_by_one`. This region will be run by one task at a time ("critical region").
 - ![Feature][badge-feature] Within a `@tasks` block one can now mark a region as with `@only_one`. This region will be run by a single parallel task only (other tasks will skip over it).
+- ![Experimental][badge-experimental] Added tentative support for `@barrier` in `@tasks` blocks. See `?OhMyThreads.Tools.@barrier` for more information. Note that this feature is experimental and **not** part of the public API (i.e. doesn't fall under SemVer).
 
 Version 0.5.0
 -------------
@@ -97,6 +98,7 @@ Version 0.2.0
 [badge-breaking]: https://img.shields.io/badge/BREAKING-red.svg
 [badge-deprecation]: https://img.shields.io/badge/Deprecation-orange.svg
 [badge-feature]: https://img.shields.io/badge/Feature-green.svg
+[badge-experimental]: https://img.shields.io/badge/Experimental-yellow.svg
 [badge-enhancement]: https://img.shields.io/badge/Enhancement-blue.svg
 [badge-bugfix]: https://img.shields.io/badge/Bugfix-purple.svg
 [badge-fix]: https://img.shields.io/badge/Fix-purple.svg
