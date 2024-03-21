@@ -17,6 +17,9 @@
 [code-style-img]: https://img.shields.io/badge/code%20style-blue-4495d1.svg
 [code-style-url]: https://github.com/invenia/BlueStyle
 
+[aqua-img]: https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg
+[aqua-url]: https://github.com/JuliaTesting/Aqua.jl
+
 <!--
 ![Lifecycle](https://img.shields.io/badge/lifecycle-maturing-blue.svg)
 ![Lifecycle](https://img.shields.io/badge/lifecycle-stable-green.svg)
@@ -30,7 +33,7 @@
 
 | **Documentation**                                                               | **Build Status**                                                                                |  **Quality**                                                                                |
 |:-------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|
-| [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] | [![][ci-img]][ci-url] [![][cov-img]][cov-url] | ![][lifecycle-img] |
+| [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] | [![][ci-img]][ci-url] [![][cov-img]][cov-url] | ![][lifecycle-img] [![][aqua-img]][aqua-url] |
 
 [OhMyThreads.jl](https://github.com/JuliaFolds2/OhMyThreads.jl/) is meant to be a simple, unambitious package that provides user-friendly ways of doing [task-based](https://docs.julialang.org/en/v1/base/parallel/) multithreaded calculations in Julia. Most importantly, with a
 focus on [data parallelism](https://en.wikipedia.org/wiki/Data_parallelism), it provides an [API of higher-order functions](https://juliafolds2.github.io/OhMyThreads.jl/stable/refs/api/#Functions) (e.g. `tmapreduce`) as well as a [macro API](https://juliafolds2.github.io/OhMyThreads.jl/stable/refs/api/#Macros) `@tasks for ... end` (conceptually similar to `@threads`).
