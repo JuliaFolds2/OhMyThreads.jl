@@ -478,6 +478,25 @@ end
 end;
 
 @testset "@barrier" begin
+    @test (@tasks for i in 1:20
+        @set ntasks = 20
+        @barrier
+    end) |> isnothing
+
+    @test try
+        @macroexpand @tasks for i in 1:20
+            @barrier
+        end
+        false
+    catch
+        true
+    end
+
+    @test (@tasks for i in 1:20
+        @set ntasks = 20
+        @barrier(20)
+    end) |> isnothing
+
     @test try
         x = Threads.Atomic{Int64}(0)
         y = Threads.Atomic{Int64}(0)
