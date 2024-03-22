@@ -5,7 +5,7 @@ CollapsedDocStrings = true
 # Internal
 
 !!! warning
-    **Everything on this page is internal and might change at any point!**
+    **Everything on this page is internal and and might changed or dropped at any point!**
 
 ## References
 

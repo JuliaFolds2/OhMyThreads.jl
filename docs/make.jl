@@ -24,6 +24,7 @@ makedocs(;
         # ],
         "API" => [
             "Public API" => "refs/api.md",
+            "Experimental" => "refs/experimental.md",
             "Internal" => "refs/internal.md"
         ]
     ],
