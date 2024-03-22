@@ -64,7 +64,7 @@ end
 ```
 """
 macro tasks(args...)
-    Implementation.tasks_macro(args...)
+    Implementation.tasks_macro(args...; __module__)
 end
 
 """

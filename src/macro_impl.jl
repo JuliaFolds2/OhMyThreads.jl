@@ -1,6 +1,8 @@
 using OhMyThreads.Tools: OnlyOneRegion, try_enter!
+using OhMyThreads.Tools: SimpleBarrier
+using OhMyThreads: OhMyThreads
 
-function tasks_macro(forex)
+function tasks_macro(forex; __module__)
     if forex.head != :for
         throw(ErrorException("Expected a for loop after `@tasks`."))
     else
@@ -28,7 +30,8 @@ function tasks_macro(forex)
             !(arg isa Expr && arg.head == :macrocall &&
               arg.args[1] == Symbol("@only_one")) &&
             !(arg isa Expr && arg.head == :macrocall &&
-              arg.args[1] == Symbol("@one_by_one"))
+              arg.args[1] == Symbol("@one_by_one")) &&
+            !(arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@barrier"))
     end
         forbody.args[i] = esc(forbody.args[i])
     end
@@ -38,6 +41,14 @@ function tasks_macro(forex)
     _maybe_handle_atset_block!(settings, forbody.args)
     setup_onlyone_blocks = _maybe_handle_atonlyone_blocks!(forbody.args)
     setup_onebyone_blocks = _maybe_handle_atonebyone_blocks!(forbody.args)
+    if isdefined(__module__, Symbol("@barrier"))
+        if __module__.var"@barrier" != OhMyThreads.Experimental.var"@barrier"
+            error("There seems to be a macro `@barrier` around which isn't `OhMyThreads.Experimental.@barrier`. This isn't supported.")
+        end
+        setup_barriers = _maybe_handle_atbarriers!(forbody.args, settings)
+    else
+        setup_barriers = nothing
+    end
 
     itrng = esc(itrng)
     itvar = esc(itvar)
@@ -58,6 +69,7 @@ function tasks_macro(forex)
         quote
             $setup_onlyone_blocks
             $setup_onebyone_blocks
+            $setup_barriers
             $make_mapping_function
             tmapreduce(mapping_function, $(settings.reducer),
                 $(itrng))
@@ -67,6 +79,7 @@ function tasks_macro(forex)
         quote
             $setup_onlyone_blocks
             $setup_onebyone_blocks
+            $setup_barriers
             $make_mapping_function
             tmap(mapping_function, $(itrng))
         end
@@ -75,6 +88,7 @@ function tasks_macro(forex)
         quote
             $setup_onlyone_blocks
             $setup_onebyone_blocks
+            $setup_barriers
             $make_mapping_function
             tforeach(mapping_function, $(itrng))
         end
@@ -91,7 +105,7 @@ function tasks_macro(forex)
     for (k, v) in settings.kwargs
         push!(kwexpr.args, Expr(:kw, k, v))
     end
-    insert!(q.args[8].args, 2, kwexpr)
+    insert!(q.args[10].args, 2, kwexpr)
 
     # wrap everything in a let ... end block
     # and, potentially, define the `TaskLocalValue`s.
@@ -113,12 +127,11 @@ function maybe_warn_useless_init(settings)
 end
 
 Base.@kwdef mutable struct Settings
-    # scheduler::Expr = :(DynamicScheduler())
     scheduler::Union{Expr, QuoteNode, NotGiven} = NotGiven()
     reducer::Union{Expr, Symbol, NotGiven} = NotGiven()
     collect::Union{Bool, NotGiven} = NotGiven()
     init::Union{Expr, Symbol, NotGiven} = NotGiven()
-    kwargs::Vector{Pair{Symbol, Any}} = Pair{Symbol, Any}[]
+    kwargs::Dict{Symbol, Any} = Dict{Symbol, Any}()
 end
 
 function _maybe_handle_atlocal_block!(args)
@@ -220,7 +233,8 @@ function _handle_atset_single_assign!(settings, ex)
         def = def isa Bool ? def : esc(def)
         setfield!(settings, sym, def)
     else
-        push!(settings.kwargs, sym => esc(def))
+        # push!(settings.kwargs, sym => esc(def))
+        settings.kwargs[sym] = esc(def)
     end
 end
 
@@ -262,4 +276,22 @@ function _maybe_handle_atonebyone_blocks!(args)
         end
     end
     return setup_onebyone_blocks
+end
+
+function _maybe_handle_atbarriers!(args, settings)
+    idcs = findall(args) do arg
+        arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@barrier")
+    end
+    isnothing(idcs) && return # no @barrier found
+    setup_barriers = quote end
+    for i in idcs
+        !haskey(settings.kwargs, :ntasks) &&
+            throw(ErrorException("When using `@barrier`, the number of tasks must be " *
+                                 "specified explicitly, e.g. via `@set ntasks=...`. "))
+        ntasks = settings.kwargs[:ntasks]
+        @gensym barrier
+        push!(setup_barriers.args, :($(barrier) = $(SimpleBarrier)($ntasks)))
+        args[i] = :($(esc(:wait))($(barrier)))
+    end
+    return setup_barriers
 end
