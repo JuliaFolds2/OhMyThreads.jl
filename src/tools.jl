@@ -138,9 +138,10 @@ Specifically, a task can only pass the `@barrier` if `n-1` other tasks have reac
 as well. The value of `n` is determined from `@set ntasks=...`, which
 is required if one wants to use `@barrier`.
 
-**WARNING:** It is the responsibility of the user to ensure that the number of iterations
-is a multiple of `n`. Otherwise, for the last few iterations (remainder) not enough
-tasks will reach the `@barrier` leading to a **deadlock**.
+**WARNING:** It is the responsibility of the user to ensure that the right number of tasks
+actually reach the barrier. Otherwise, a **deadlock** can occur. In partictular, if the
+number of iterations is not a multiple of `n`, the last few iterations (remainder) will be
+run by less than `n` tasks which will never be able to pass a `@barrier`.
 
 ## Example
 
