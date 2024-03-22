@@ -1,5 +1,6 @@
 using Test, OhMyThreads
 using OhMyThreads: TaskLocalValue, WithTaskLocals, @fetch, promise_task_local
+using OhMyThreads.Experimental: @barrier
 
 include("Aqua.jl")
 

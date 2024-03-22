@@ -1,7 +1,8 @@
 using OhMyThreads.Tools: OnlyOneRegion, try_enter!
 using OhMyThreads.Tools: SimpleBarrier
+using OhMyThreads: OhMyThreads
 
-function tasks_macro(forex)
+function tasks_macro(forex; __module__)
     if forex.head != :for
         throw(ErrorException("Expected a for loop after `@tasks`."))
     else
@@ -40,7 +41,14 @@ function tasks_macro(forex)
     _maybe_handle_atset_block!(settings, forbody.args)
     setup_onlyone_blocks = _maybe_handle_atonlyone_blocks!(forbody.args)
     setup_onebyone_blocks = _maybe_handle_atonebyone_blocks!(forbody.args)
-    setup_barriers = _maybe_handle_atbarriers!(forbody.args, settings)
+    if isdefined(__module__, Symbol("@barrier"))
+        if __module__.var"@barrier" != OhMyThreads.Experimental.var"@barrier"
+            error("There seems to be a macro `@barrier` around which isn't `OhMyThreads.Experimental.@barrier`. This isn't supported.")
+        end
+        setup_barriers = _maybe_handle_atbarriers!(forbody.args, settings)
+    else
+        setup_barriers = nothing
+    end
 
     itrng = esc(itrng)
     itvar = esc(itvar)

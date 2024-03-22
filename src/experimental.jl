@@ -22,6 +22,7 @@ using OhMyThreads: @tasks
 @tasks for i in 1:20
     @set ntasks = 20
 
+    sleep(i * 0.2)
     println(i, ": before")
     @barrier
     println(i, ": after")
