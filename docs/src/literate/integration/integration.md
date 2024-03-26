@@ -80,7 +80,7 @@ function trapezoidal_parallel(a, b, N)
     n = N ÷ nthreads()
     h = (b - a) / N
     return tmapreduce(+, 1:nthreads()) do i
-        local α = a + (i - 1) * n * h
+        local α = a + (i - 1) * n * h # the local keywords aren't necessary but good practice
         local β = α + n * h
         trapezoidal(α, β, n; h)
     end
