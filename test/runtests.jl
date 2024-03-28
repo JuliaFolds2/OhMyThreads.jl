@@ -436,6 +436,24 @@ end
         catch ErrorException
             @test false
         end
+
+        test_f = () -> begin
+            x = 0
+            y = 0
+            @tasks for i in 1:10
+                @set ntasks = 10
+
+                y += 1 # not safe (race condition)
+                @one_by_one begin
+                    x += 1 # parallel-safe because inside of one_by_one region
+                    acquire(sao) do
+                        sleep(0.01)
+                    end
+                end
+            end
+            return x
+        end
+        @test test_f() == 10
     end
 
     @testset "@only_one" begin
@@ -470,6 +488,21 @@ end
         catch ErrorException
             @test false
         end
+
+        test_f = () -> begin
+            x = 0
+            y = 0
+            @tasks for i in 1:10
+                @set ntasks = 2
+
+                y += 1 # not safe (race condition)
+                @only_one begin
+                    x += 1 # parallel-safe because only a single task will execute this
+                end
+            end
+            return x
+        end
+        @test test_f() == 5
     end
 
     @testset "@only_one + @one_by_one" begin
