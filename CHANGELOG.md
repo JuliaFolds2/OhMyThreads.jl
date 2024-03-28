@@ -6,6 +6,7 @@ Version 0.5.1
 - ![Feature][badge-feature] Within a parallel `@tasks` block one can now mark a region with `@one_by_one`. This region will be run by one task at a time ("critical region").
 - ![Feature][badge-feature] Within a `@tasks` block one can now mark a region as with `@only_one`. This region will be run by a single parallel task only (other tasks will skip over it).
 - ![Experimental][badge-experimental] Added tentative support for `@barrier` in `@tasks` blocks. See `?OhMyThreads.Tools.@barrier` for more information. Note that this feature is experimental and **not** part of the public API (i.e. doesn't fall under SemVer).
+- ![Info][badge-info] Compat bounds for [BangBang.jl](https://github.com/JuliaFolds2/BangBang.jl) have been relaxed to include v0.3.40
 
 Version 0.5.0
 -------------
