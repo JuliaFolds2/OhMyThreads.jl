@@ -247,7 +247,7 @@ function _maybe_handle_atonlyone_blocks!(args)
     for i in idcs
         body = args[i].args[3]
         @gensym onlyone
-        init_onlyone_ex = :($(onlyone) = $(OnlyOneRegion()))
+        init_onlyone_ex = :($(onlyone) = Tools.OnlyOneRegion())
         push!(setup_onlyone_blocks.args, init_onlyone_ex)
         args[i] = quote
             Tools.try_enter!($(onlyone)) do
@@ -267,7 +267,7 @@ function _maybe_handle_atonebyone_blocks!(args)
     for i in idcs
         body = args[i].args[3]
         @gensym onebyone
-        init_lock_ex = :($(onebyone) = $(Base.ReentrantLock()))
+        init_lock_ex = :($(onebyone) = Base.ReentrantLock())
         push!(setup_onebyone_blocks.args, init_lock_ex)
         args[i] = quote
             $(esc(:lock))($(onebyone)) do
