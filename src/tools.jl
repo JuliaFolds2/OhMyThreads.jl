@@ -31,8 +31,8 @@ May be used to mark a region in parallel code to be executed by a single task on
 See [`try_enter!`](@ref) and [`reset!`](@ref).
 """
 mutable struct OnlyOneRegion
-    @atomic latch::Bool
-    OnlyOneRegion() = new(false)
+    @atomic task::Union{Task, Nothing}
+    OnlyOneRegion() = new(nothing)
 end
 
 """
@@ -62,15 +62,14 @@ end
 ```
 """
 function try_enter!(f, s::OnlyOneRegion)
-    latch = @atomic :monotonic s.latch
-    if latch
+    ct = current_task()
+    t = @atomic :monotonic s.task
+    if !isnothing(t) && ct != t
         return
     end
-    (_, success) = @atomicreplace s.latch false=>true
-    if !success
-        return
+    if ct == t || (@atomicreplace s.task nothing=>ct).success
+        f()
     end
-    f()
     return
 end
 
@@ -78,8 +77,8 @@ end
 Reset the `OnlyOneRegion` (so that it can be used again).
 """
 function reset!(s::OnlyOneRegion)
-    @atomicreplace s.latch true=>false
-    nothing
+    @atomic s.task = nothing
+    return
 end
 
 """

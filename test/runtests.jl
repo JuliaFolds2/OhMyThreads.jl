@@ -454,6 +454,22 @@ end
         catch ErrorException
             @test false
         end
+
+        x = 0
+        y = 0
+        try
+            @tasks for i in 1:10
+                @set ntasks = 2
+
+                y += 1 # not safe (race condition)
+                @only_one begin
+                    x += 1 # parallel-safe because only a single task will execute this
+                end
+            end
+            @test x == 5 # a single task should have incremented x 5 times
+        catch ErrorException
+            @test false
+        end
     end
 
     @testset "@only_one + @one_by_one" begin
