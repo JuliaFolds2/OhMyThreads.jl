@@ -1,6 +1,10 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.5.2
+-------------
+- ![Enhancement][badge-enhancement] For empty input (e.g. `Float64[]` or `11:10`) behavior is now aligned with the serial functions in `Base`.
+
 Version 0.5.1
 -------------
 - ![Feature][badge-feature] Within a parallel `@tasks` block one can now mark a region with `@one_by_one`. This region will be run by one task at a time ("critical region").
