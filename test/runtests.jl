@@ -364,6 +364,11 @@ end;
 end;
 
 @testset "empty collections" begin
+    @static if VERSION < v"1.11.0-"
+        err = MethodError
+    else
+        err = ArgumentError
+    end
     for empty_coll in (11:9, Float64[])
         for f in (sin, x -> im * x, identity)
             for op in (+, *, min)
@@ -377,7 +382,7 @@ end;
                 if op != min
                     @test treduce(op, empty_coll) == reduce(op, empty_coll)
                 else
-                    @test_throws MethodError treduce(op, empty_coll)
+                    @test_throws err treduce(op, empty_coll)
                 end
                 # map
                 @test tmap(f, empty_coll) == map(f, empty_coll)
