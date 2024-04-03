@@ -364,14 +364,30 @@ end;
 end;
 
 @testset "empty collections" begin
+    @static if VERSION < v"1.11.0-"
+        err = MethodError
+    else
+        err = ArgumentError
+    end
     for empty_coll in (11:9, Float64[])
         for f in (sin, x -> im * x, identity)
             for op in (+, *, min)
-                @test_throws ArgumentError tmapreduce(f, op, empty_coll)
+                # mapreduce
                 for init in (0.0, 0, 0.0 * im, 0.0f0)
                     @test tmapreduce(f, op, empty_coll; init) == init
                 end
+                # foreach
                 @test tforeach(f, empty_coll) |> isnothing
+                # reduce
+                if op != min
+                    @test treduce(op, empty_coll) == reduce(op, empty_coll)
+                else
+                    @test_throws err treduce(op, empty_coll)
+                end
+                # map
+                @test tmap(f, empty_coll) == map(f, empty_coll)
+                # collect
+                @test tcollect(empty_coll) == collect(empty_coll)
             end
         end
     end

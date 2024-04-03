@@ -60,13 +60,9 @@ function tmapreduce(f, op, Arrs...;
         kwargs...)
     mapreduce_kwargs = isgiven(init) ? (; init) : (;)
     _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
-    if isempty(first(Arrs))
-        isempty(mapreduce_kwargs) && reduce_empty_err()
-        return mapreduce_kwargs.init
-    end
 
-    # @show _scheduler
-    if _scheduler isa SerialScheduler
+    if _scheduler isa SerialScheduler || isempty(first(Arrs))
+        # empty input collection → align with Base.mapreduce behavior
         mapreduce(f, op, Arrs...; mapreduce_kwargs...)
     else
         @noinline _tmapreduce(f, op, Arrs, outputtype, _scheduler, mapreduce_kwargs)
@@ -76,10 +72,6 @@ end
 @noinline function scheduler_and_kwargs_err(; kwargs...)
     kwargstr = join(string.(keys(kwargs)), ", ")
     throw(ArgumentError("Providing an explicit scheduler as well as direct keyword arguments (e.g. $(kwargstr)) is currently not supported."))
-end
-
-@noinline function reduce_empty_err()
-    throw(ArgumentError("reducing over an empty collection is not allowed; consider supplying `init`"))
 end
 
 treducemap(op, f, A...; kwargs...) = tmapreduce(f, op, A...; kwargs...)
@@ -357,7 +349,8 @@ function tmap(f,
     end
 
     Arrs = (A, _Arrs...)
-    if _scheduler isa SerialScheduler
+    if _scheduler isa SerialScheduler || isempty(A)
+        # empty input collection → align with Base.map behavior
         map(f, Arrs...; kwargs...)
     else
         check_all_have_same_indices(Arrs)
