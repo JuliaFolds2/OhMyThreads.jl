@@ -19,12 +19,12 @@ which we'll sum up, and benchmark Julia's built-in, non-parallel `sum` function.
 using Base.Threads: nthreads
 using BenchmarkTools
 
-data = rand(1_000_000 * nthreads());
+data = rand(10_000_000 * nthreads());
 @btime sum($data);
 ````
 
 ````
-  1.641 ms (0 allocations: 0 bytes)
+  27.834 ms (0 allocations: 0 bytes)
 
 ````
 
@@ -34,7 +34,7 @@ A conceptually simple (and valid) approach to parallelizing the summation is to 
 the full computation into parts. Specifically, the idea is to divide the data into chunks,
 compute the partial sums of these chunks in parallel, and finally sum up the partial
 results. (Note that we will not concern ourselves with potential minor or
-catastrophic numerical errors due to potential rearrangements of terms in the summation.)
+catastrophic numerical errors due to potential rearrangements of terms in the summation here.)
 
 A common, manual implementation of this idea might look like this:
 
@@ -77,7 +77,7 @@ This is just a reflection of the fact that there is no logical sharing of data -
 each parallel tasks modifies a different element of `psums` - implying the absence of
 race conditions.
 
-**What's the issue then?!** Well, the sole purpose of parallelization is to reduce runtime.
+What's the issue then?! Well, the sole purpose of parallelization is to reduce runtime.
 So let's see how well we're doing in this respect.
 
 ````julia
@@ -93,20 +93,20 @@ nthreads()
 ````
 
 ````
-  7.530 ms (221 allocations: 18.47 KiB)
+  348.539 ms (221 allocations: 18.47 KiB)
 
 ````
 
-Clearly, that's the opposite of what we tried to achieve!
+A **slowdown**?! Clearly, that's the opposite of what we tried to achieve!
 
-## The issue: False sharing.
+## The issue: False sharing
 
 Although our parallel summation above is semantically correct, it has a
 big **performance issue**: *False sharing*. To understand false sharing, we have to think
 a little bit about how computers work. Specifically, we need to realize that processors
-cache memory in lines (rather than individual elements) and that caches of processors
+cache memory in lines (rather than individual elements) and that caches of different processors
 are kept coherent.
-When two (or more) different CPU cores operate on **independent data elements that fall
+When two (or more) different CPU cores operate on independent data elements that **fall
 into the same cache line** (i.e. they are part of the same memory address region)
 the **cache coherency mechanism leads to costly synchronization** between cores.
 
@@ -114,9 +114,7 @@ In our case, this happens despite the fact that different parallel tasks
 (on different CPU cores) *logically* don't care about the rest of the data in the cache line
 at all.
 
-<!-- ![](false_sharing.svg) -->
-
-<img src="false_sharing.svg" width=800px>
+![](false_sharing.svg)
 
 Given these insights, we can come up with a few workarounds that mitigate the issue.
 The most prominent is probably padding, where one simply adds sufficiently many unused
@@ -128,7 +126,7 @@ line. However, let's discuss a more fundamental, more efficient, and more elegan
 The key mistake in `parallel_sum_falsesharing` above is the non-local modification of
 (implicitly) shared state (cache lines of `psums`) very frequently (in the innermost loop).
 We can simply avoid this by making the code more task-local. To this end, we introduce a
-task-local accumulator variable, which we use to perform the task-local partial sums.
+**task-local accumulator variable**, which we use to perform the task-local partial sums.
 Only at the very end do we communicate the result to the main thread, e.g. by writing it
 into `psums` (once!).
 
@@ -152,7 +150,7 @@ end
 ````
 
 ````
-  1.407 ms (221 allocations: 18.55 KiB)
+  50.021 ms (221 allocations: 18.55 KiB)
 
 ````
 
@@ -182,7 +180,7 @@ end
 ````
 
 ````
-  1.370 ms (64 allocations: 5.72 KiB)
+  51.305 ms (64 allocations: 5.72 KiB)
 
 ````
 
@@ -203,7 +201,7 @@ using OhMyThreads: treduce
 ````
 
 ````
-  1.386 ms (68 allocations: 5.92 KiB)
+  50.873 ms (68 allocations: 5.92 KiB)
 
 ````
 

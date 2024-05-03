@@ -14,7 +14,7 @@
 using Base.Threads: nthreads
 using BenchmarkTools
 
-data = rand(1_000_000 * nthreads());
+data = rand(10_000_000 * nthreads());
 @btime sum($data);
 
 #
