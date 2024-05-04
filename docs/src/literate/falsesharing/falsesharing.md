@@ -39,8 +39,7 @@ catastrophic numerical errors due to potential rearrangements of terms in the su
 A common, manual implementation of this idea might look like this:
 
 ````julia
-using OhMyThreads: @spawn
-using ChunkSplitters: chunks
+using OhMyThreads: @spawn, chunks
 
 function parallel_sum_falsesharing(data; nchunks = nthreads())
     psums = zeros(eltype(data), nchunks)
