@@ -28,8 +28,7 @@ data = rand(10_000_000 * nthreads());
 #
 # A common, manual implementation of this idea might look like this:
 
-using OhMyThreads: @spawn
-using ChunkSplitters: chunks
+using OhMyThreads: @spawn, chunks
 
 function parallel_sum_falsesharing(data; nchunks = nthreads())
     psums = zeros(eltype(data), nchunks)
