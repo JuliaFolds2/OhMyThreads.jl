@@ -12,13 +12,14 @@ makedocs(;
     doctest = false,
     pages = [
         "OhMyThreads" => "index.md",
-        "Translation Guide" => "translation.md",
-        "Thread-Safe Storage" => "literate/tls/tls.md",
         "Examples" => [
             "Parallel Monte Carlo" => "literate/mc/mc.md",
             "Julia Set" => "literate/juliaset/juliaset.md",
             "Trapezoidal Integration" => "literate/integration/integration.md"
         ],
+        "Translation Guide" => "translation.md",
+        "Thread-Safe Storage" => "literate/tls/tls.md",
+        "False Sharing" => "literate/falsesharing/falsesharing.md",
         # "Explanations" => [
         #     "Task-Based Multithreading" => "explain/taskbasedmt.md",
         # ],
