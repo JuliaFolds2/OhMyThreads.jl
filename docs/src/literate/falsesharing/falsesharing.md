@@ -19,12 +19,12 @@ which we'll sum up, and benchmark Julia's built-in, non-parallel `sum` function.
 using Base.Threads: nthreads
 using BenchmarkTools
 
-data = rand(10_000_000 * nthreads());
+data = rand(1_000_000 * nthreads());
 @btime sum($data);
 ````
 
 ````
-  27.834 ms (0 allocations: 0 bytes)
+  2.327 ms (0 allocations: 0 bytes)
 
 ````
 
@@ -92,11 +92,11 @@ nthreads()
 ````
 
 ````
-  348.539 ms (221 allocations: 18.47 KiB)
+  52.919 ms (221 allocations: 18.47 KiB)
 
 ````
 
-A **slowdown**?! Clearly, that's the opposite of what we tried to achieve!
+A (huge) **slowdown**?! Clearly, that's the opposite of what we tried to achieve!
 
 ## The issue: False sharing
 
@@ -135,8 +135,8 @@ function parallel_sum_tasklocal(data; nchunks = nthreads())
     @sync for (c, idcs) in enumerate(chunks(data; n = nchunks))
         @spawn begin
             local s = zero(eltype(data))
-            @simd for i in idcs
-                @inbounds s += data[i]
+            for i in idcs
+                s += data[i]
             end
             psums[c] = s
         end
@@ -149,11 +149,11 @@ end
 ````
 
 ````
-  50.021 ms (221 allocations: 18.55 KiB)
+  1.120 ms (221 allocations: 18.55 KiB)
 
 ````
 
-Finally, there is our expected speed up! 🎉
+Finally, there is a speed up! 🎉
 
 Two comments are in order.
 
@@ -179,13 +179,17 @@ end
 ````
 
 ````
-  51.305 ms (64 allocations: 5.72 KiB)
+  893.396 μs (64 allocations: 5.72 KiB)
 
 ````
 
-This implementation has comparable performance and, more importantly, is conceptually
+This implementation is conceptually
 clearer in that there is no explicit modification of shared state, i.e. no `pums[c] = s`,
 anywhere at all. We can't run into false sharing if we don't modify shared state 😉.
+
+Note that since we use the built-in `sum` function, which is highly optimized, we might see
+better runtimes due to other effects - like SIMD and the absence of bounds checks - compared
+to the simple for-loop accumulation in `parallel_sum_tasklocal` above.
 
 ## Parallel summation with OhMyThreads
 
@@ -200,7 +204,7 @@ using OhMyThreads: treduce
 ````
 
 ````
-  50.873 ms (68 allocations: 5.92 KiB)
+  899.097 μs (68 allocations: 5.92 KiB)
 
 ````
 

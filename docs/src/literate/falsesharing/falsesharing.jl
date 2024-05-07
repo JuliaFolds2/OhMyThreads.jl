@@ -13,8 +13,10 @@
 
 using Base.Threads: nthreads
 using BenchmarkTools
+using ThreadPinning #hide
+pinthreads(:cores) #hide
 
-data = rand(10_000_000 * nthreads());
+data = rand(1_000_000 * nthreads());
 @btime sum($data);
 
 #
@@ -103,8 +105,8 @@ function parallel_sum_tasklocal(data; nchunks = nthreads())
     @sync for (c, idcs) in enumerate(chunks(data; n = nchunks))
         @spawn begin
             local s = zero(eltype(data))
-            @simd for i in idcs
-                @inbounds s += data[i]
+            for i in idcs
+                s += data[i]
             end
             psums[c] = s
         end
@@ -115,7 +117,7 @@ end
 @test sum(data) ≈ parallel_sum_tasklocal(data)
 @btime parallel_sum_tasklocal($data);
 
-# Finally, there is our expected speed up! 🎉
+# Finally, there is a speed up! 🎉
 #
 # Two comments are in order.
 #
@@ -138,9 +140,13 @@ end
 @test sum(data) ≈ parallel_sum_map(data)
 @btime parallel_sum_map($data);
 
-# This implementation has comparable performance and, more importantly, is conceptually
+# This implementation is conceptually
 # clearer in that there is no explicit modification of shared state, i.e. no `pums[c] = s`,
 # anywhere at all. We can't run into false sharing if we don't modify shared state 😉.
+#
+# Note that since we use the built-in `sum` function, which is highly optimized, we might see
+# better runtimes due to other effects - like SIMD and the absence of bounds checks - compared
+# to the simple for-loop accumulation in `parallel_sum_tasklocal` above.
 
 #
 # ## Parallel summation with OhMyThreads
