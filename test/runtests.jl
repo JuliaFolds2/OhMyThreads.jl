@@ -611,7 +611,7 @@ end
     end) == 6
     # OhMyThreads.@local
     ntd = 2 * Threads.nthreads()
-    @tasks(for i in 1:ntd
+    @test @tasks(for i in 1:ntd
         OhMyThreads.@local x::Ref{Int64} = Ref(0)
         OhMyThreads.@set begin
             reducer = (+)
