@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Parallel Monte Carlo · OhMyThreads.jl</title><meta name="title" content="Parallel Monte Carlo · OhMyThreads.jl"/><meta property="og:title" content="Parallel Monte Carlo · OhMyThreads.jl"/><meta property="twitter:title" content="Parallel Monte Carlo · OhMyThreads.jl"/><meta name="description" content="Documentation for OhMyThreads.jl."/><meta property="og:description" content="Documentation for OhMyThreads.jl."/><meta property="twitter:description" content="Documentation for OhMyThreads.jl."/><script data-outdated-warner src="../../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../../assets/documenter.js"></script><script src="../../../search_index.js"></script><script src="../../../siteinfo.js"></script><script src="../../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../../">OhMyThreads.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../../">OhMyThreads</a></li><li><input class="collapse-toggle" id="menuitem-2" type="checkbox" checked/><label class="tocitem" for="menuitem-2"><span class="docs-label">Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li class="is-active"><a class="tocitem" href>Parallel Monte Carlo</a><ul class="internal"><li><a class="tocitem" href="#Sequential-implementation:"><span>Sequential implementation:</span></a></li><li><a class="tocitem" href="#Parallelization-with-tmapreduce"><span>Parallelization with <code>tmapreduce</code></span></a></li><li><a class="tocitem" href="#Manual-parallelization"><span>Manual parallelization</span></a></li></ul></li><li><a class="tocitem" href="../../juliaset/juliaset/">Julia Set</a></li><li><a class="tocitem" href="../../integration/integration/">Trapezoidal Integration</a></li></ul></li><li><a class="tocitem" href="../../../translation/">Translation Guide</a></li><li><a class="tocitem" href="../../tls/tls/">Thread-Safe Storage</a></li><li><a class="tocitem" href="../../falsesharing/falsesharing/">False Sharing</a></li><li><input class="collapse-toggle" id="menuitem-6" type="checkbox"/><label class="tocitem" for="menuitem-6"><span class="docs-label">API</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../../refs/api/">Public API</a></li><li><a class="tocitem" href="../../../refs/experimental/">Experimental</a></li><li><a class="tocitem" href="../../../refs/internal/">Internal</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li class="is-active"><a href>Parallel Monte Carlo</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Parallel Monte Carlo</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/JuliaFolds2/OhMyThreads.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/JuliaFolds2/OhMyThreads.jl/blob/master/docs/src/literate/mc/mc.jl#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Parallel-Monte-Carlo"><a class="docs-heading-anchor" href="#Parallel-Monte-Carlo">Parallel Monte Carlo</a><a id="Parallel-Monte-Carlo-1"></a><a class="docs-heading-anchor-permalink" href="#Parallel-Monte-Carlo" title="Permalink"></a></h1><p>Calculate the value of <span>$\pi$</span> through parallel direct Monte Carlo.</p><p>A unit circle is inscribed inside a unit square with side length 2 (from -1 to 1). The area of the circle is <span>$\pi$</span>, the area of the square is 4, and the ratio is <span>$\pi/4$</span>. This means that, if you throw <span>$N$</span> darts randomly at the square, approximately <span>$M=N\pi/4$</span> of those darts will land inside the unit circle.</p><p>Throw darts randomly at a unit square and count how many of them (<span>$M$</span>) landed inside of a unit circle. Approximate <span>$\pi \approx 4M/N$</span>.</p><h2 id="Sequential-implementation:"><a class="docs-heading-anchor" href="#Sequential-implementation:">Sequential implementation:</a><a id="Sequential-implementation:-1"></a><a class="docs-heading-anchor-permalink" href="#Sequential-implementation:" title="Permalink"></a></h2><pre><code class="language-julia hljs">function mc(N)
+    M = 0 # number of darts that landed in the circle
+    for i in 1:N
+        if rand()^2 + rand()^2 &lt; 1.0
+            M += 1
+        end
+    end
+    pi = 4 * M / N
+    return pi
+end
+
+N = 100_000_000
+
+mc(N)</code></pre><pre><code class="nohighlight hljs">3.14171236</code></pre><h2 id="Parallelization-with-tmapreduce"><a class="docs-heading-anchor" href="#Parallelization-with-tmapreduce">Parallelization with <code>tmapreduce</code></a><a id="Parallelization-with-tmapreduce-1"></a><a class="docs-heading-anchor-permalink" href="#Parallelization-with-tmapreduce" title="Permalink"></a></h2><p>To parallelize the Monte Carlo simulation, we use <a href="../../../refs/api/#OhMyThreads.tmapreduce"><code>tmapreduce</code></a> with <code>+</code> as the reduction operator. For the map part, we take <code>1:N</code> as our input collection and &quot;throw one dart&quot; per element.</p><pre><code class="language-julia hljs">using OhMyThreads
+
+function mc_parallel(N; kwargs...)
+    M = tmapreduce(+, 1:N; kwargs...) do i
+        rand()^2 + rand()^2 &lt; 1.0
+    end
+    pi = 4 * M / N
+    return pi
+end
+
+# or alternatively
+#
+# function mc_parallel(N)
+#     M = @tasks for _ in 1:N
+#         @set reducer = +
+#         rand()^2 + rand()^2 &lt; 1.0
+#     end
+#     pi = 4 * M / N
+#     return pi
+# end
+
+mc_parallel(N)</code></pre><pre><code class="nohighlight hljs">3.14156496</code></pre><p>Let&#39;s run a quick benchmark.</p><pre><code class="language-julia hljs">using BenchmarkTools
+using Base.Threads: nthreads
+
+@assert nthreads() &gt; 1 # make sure we have multiple Julia threads
+@show nthreads()       # print out the number of threads
+
+@btime mc($N) samples=10 evals=3;
+@btime mc_parallel($N) samples=10 evals=3;</code></pre><pre><code class="nohighlight hljs">nthreads() = 10
+  301.636 ms (0 allocations: 0 bytes)
+  41.864 ms (68 allocations: 5.81 KiB)
+</code></pre><h3 id="Static-scheduling"><a class="docs-heading-anchor" href="#Static-scheduling">Static scheduling</a><a id="Static-scheduling-1"></a><a class="docs-heading-anchor-permalink" href="#Static-scheduling" title="Permalink"></a></h3><p>Because the workload is highly uniform, it makes sense to also try the <code>StaticScheduler</code> and compare the performance of static and dynamic scheduling (with default parameters).</p><pre><code class="language-julia hljs">using OhMyThreads: StaticScheduler
+
+@btime mc_parallel($N; scheduler=:dynamic) samples=10 evals=3; # default
+@btime mc_parallel($N; scheduler=:static) samples=10 evals=3;</code></pre><pre><code class="nohighlight hljs">  41.839 ms (68 allocations: 5.81 KiB)
+  41.838 ms (68 allocations: 5.81 KiB)
+</code></pre><h2 id="Manual-parallelization"><a class="docs-heading-anchor" href="#Manual-parallelization">Manual parallelization</a><a id="Manual-parallelization-1"></a><a class="docs-heading-anchor-permalink" href="#Manual-parallelization" title="Permalink"></a></h2><p>First, using the <code>chunks</code> function, we divide the iteration interval <code>1:N</code> into <code>nthreads()</code> parts. Then, we apply a regular (sequential) <code>map</code> to spawn a Julia task per chunk. Each task will locally and independently perform a sequential Monte Carlo simulation. Finally, we fetch the results and compute the average estimate for <span>$\pi$</span>.</p><pre><code class="language-julia hljs">using OhMyThreads: @spawn, chunks
+
+function mc_parallel_manual(N; nchunks = nthreads())
+    tasks = map(chunks(1:N; n = nchunks)) do idcs
+        @spawn mc(length(idcs))
+    end
+    pi = sum(fetch, tasks) / nchunks
+    return pi
+end
+
+mc_parallel_manual(N)</code></pre><pre><code class="nohighlight hljs">3.14180504</code></pre><p>And this is the performance:</p><pre><code class="language-julia hljs">@btime mc_parallel_manual($N) samples=10 evals=3;</code></pre><pre><code class="nohighlight hljs">  30.224 ms (65 allocations: 5.70 KiB)
+</code></pre><p>It is faster than <code>mc_parallel</code> above because the task-local computation <code>mc(length(idcs))</code> is faster than the implicit task-local computation within <code>tmapreduce</code> (which itself is a <code>mapreduce</code>).</p><pre><code class="language-julia hljs">idcs = first(chunks(1:N; n = nthreads()))
+
+@btime mapreduce($+, $idcs) do i
+    rand()^2 + rand()^2 &lt; 1.0
+end samples=10 evals=3;
+
+@btime mc($(length(idcs))) samples=10 evals=3;</code></pre><pre><code class="nohighlight hljs">  41.750 ms (0 allocations: 0 bytes)
+  30.148 ms (0 allocations: 0 bytes)
+</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../../">« OhMyThreads</a><a class="docs-footer-nextpage" href="../../juliaset/juliaset/">Julia Set »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.4.1 on <span class="colophon-date" title="Wednesday 29 May 2024 09:23">Wednesday 29 May 2024</span>. Using Julia version 1.10.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
