@@ -1,7 +1,7 @@
 OhMyThreads.jl Changelog
 =========================
 
-Version 0.5.2
+Version 0.5.3
 -------------
 - ![Enhancement][badge-enhancement] For the special/fake "macros" like, e.g., `@set`, support the verbose form `OhMyThreads.@set` within a `@tasks` for-loop (#107).
 
