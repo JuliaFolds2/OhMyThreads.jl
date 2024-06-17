@@ -1,6 +1,10 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.5.3
+-------------
+- ![Enhancement][badge-enhancement] For the special/fake "macros" like, e.g., `@set`, support the verbose form `OhMyThreads.@set` within a `@tasks` for-loop (#107).
+
 Version 0.5.2
 -------------
 - ![Enhancement][badge-enhancement] For empty input (e.g. `Float64[]` or `11:10`) behavior is now aligned with the serial functions in `Base`.

@@ -597,4 +597,72 @@ end;
     end
 end
 
+@testset "verbose special macro usage" begin
+    # OhMyThreads.@set
+    @test @tasks(for i in 1:3
+        OhMyThreads.@set reducer = (+)
+        i
+    end) == 6
+    @test @tasks(for i in 1:3
+        OhMyThreads.@set begin
+            reducer = (+)
+        end
+        i
+    end) == 6
+    # OhMyThreads.@local
+    ntd = 2 * Threads.nthreads()
+    @test @tasks(for i in 1:ntd
+        OhMyThreads.@local x::Ref{Int64} = Ref(0)
+        OhMyThreads.@set begin
+            reducer = (+)
+            scheduler = :static
+        end
+        x[] += 1
+        x[]
+    end) == @tasks(for i in 1:ntd
+        @local x::Ref{Int64} = Ref(0)
+        @set begin
+            reducer = (+)
+            scheduler = :static
+        end
+        x[] += 1
+        x[]
+    end)
+    # OhMyThreads.@only_one
+    x = 0
+    y = 0
+    try
+        @tasks for i in 1:10
+            OhMyThreads.@set ntasks = 10
+
+            y += 1 # not safe (race condition)
+            OhMyThreads.@only_one begin
+                x += 1 # parallel-safe because only a single task will execute this
+            end
+        end
+        @test x == 1 # only a single task should have incremented x
+    catch ErrorException
+        @test false
+    end
+    # OhMyThreads.@one_by_one
+    test_f = () -> begin
+        sao = SingleAccessOnly()
+        x = 0
+        y = 0
+        @tasks for i in 1:10
+            OhMyThreads.@set ntasks = 10
+
+            y += 1 # not safe (race condition)
+            OhMyThreads.@one_by_one begin
+                x += 1 # parallel-safe because inside of one_by_one region
+                acquire(sao) do
+                    sleep(0.01)
+                end
+            end
+        end
+        return x
+    end
+    @test test_f() == 10
+end
+
 # Todo way more testing, and easier tests to deal with
