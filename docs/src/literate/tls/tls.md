@@ -499,8 +499,8 @@ dynamically allocate memory to, and reset them at the end of a code block, just 
 Julia's stack.
 Be warned though that Bumper.jl is (1) a rather young package with (likely) some bugs
 and (2) can easily lead to segfaults when used incorrectly. If you can live with the
-risk, Bumper.jl is especially useful for causes  we don't know ahead of time how large
-a matrix to pre-allocate, and even more useful if we want to do many intermediate
+risk, Bumper.jl is especially useful for cases where the size of the preallocated matrix
+isn't known ahead of time, and even more useful if we want to do many intermediate
 allocations on the task, not just one. For our example, this isn't the case but let's
 nonetheless how one would use Bumper.jl here.
 
