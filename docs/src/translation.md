@@ -175,7 +175,7 @@ end
 using Base.Threads: @threads
 
 data = Vector{Float64}(undef, 10)
-@threads for i in 1:10
+@threads for i in eachindex(data)
     data[i] = calc(i)
 end
 ```
