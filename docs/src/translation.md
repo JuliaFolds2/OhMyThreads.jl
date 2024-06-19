@@ -136,7 +136,7 @@ treduce(+, data)
 using Base.Threads: @threads
 data = rand(10)
 
-@threads for i in 1:10
+@threads for i in eachindex(data)
     data[i] = calc(i)
 end
 ```
@@ -146,21 +146,21 @@ end
 using OhMyThreads: @tasks
 data = rand(10)
 
-@tasks for i in 1:10
+@tasks for i in eachindex(data)
     data[i] = calc(i)
 end
 
 # or
 using OhMyThreads: tforeach
 
-tforeach(data) do i
+tforeach(eachindex(data)) do i
     data[i] = calc(i)
 end
 
 # or
 using OhMyThreads: tmap!
 
-tmap!(data, data) do i # this kind of aliasing is fine
+tmap!(data, eachindex(data)) do i
     calc(i)
 end
 ```
@@ -175,7 +175,7 @@ end
 using Base.Threads: @threads
 
 data = Vector{Float64}(undef, 10)
-@threads for i in 1:10
+@threads for i in eachindex(data)
     data[i] = calc(i)
 end
 ```
