@@ -1,7 +1,7 @@
 name = "OhMyThreads"
 uuid = "67456a42-1dca-4109-a031-0a68de7e3ad5"
 authors = ["Carsten Bauer <mail@carstenbauer.eu>", "Mason Protter <mason.protter@icloud.com>"]
-version = "0.5.3"
+version = "0.6.0"
 
 [deps]
 BangBang = "198e06fe-97b7-11e9-32a5-e1d131e6ad66"
@@ -16,7 +16,7 @@ ChunkSplitters = "2.4"
 StableTasks = "0.1.5"
 TaskLocalValues = "0.1"
 Test = "1"
-julia = "1.6"
+julia = "1.10"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
