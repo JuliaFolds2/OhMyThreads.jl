@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Thread-Safe Storage · OhMyThreads.jl</title><meta name="title" content="Thread-Safe Storage · OhMyThreads.jl"/><meta property="og:title" content="Thread-Safe Storage · OhMyThreads.jl"/><meta property="twitter:title" content="Thread-Safe Storage · OhMyThreads.jl"/><meta name="description" content="Documentation for OhMyThreads.jl."/><meta property="og:description" content="Documentation for OhMyThreads.jl."/><meta property="twitter:description" content="Documentation for OhMyThreads.jl."/><script data-outdated-warner src="../../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../../assets/documenter.js"></script><script src="../../../search_index.js"></script><script src="../../../siteinfo.js"></script><script src="../../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../../">OhMyThreads.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../../">OhMyThreads</a></li><li><input class="collapse-toggle" id="menuitem-2" type="checkbox"/><label class="tocitem" for="menuitem-2"><span class="docs-label">Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../mc/mc/">Parallel Monte Carlo</a></li><li><a class="tocitem" href="../../juliaset/juliaset/">Julia Set</a></li><li><a class="tocitem" href="../../integration/integration/">Trapezoidal Integration</a></li></ul></li><li><a class="tocitem" href="../../../translation/">Translation Guide</a></li><li class="is-active"><a class="tocitem" href>Thread-Safe Storage</a><ul class="internal"><li><a class="tocitem" href="#Test-case-(sequential)"><span>Test case (sequential)</span></a></li><li><a class="tocitem" href="#How-to-not-parallelize"><span>How to not parallelize</span></a></li><li><a class="tocitem" href="#TLS"><span>Task-local storage</span></a></li><li><a class="tocitem" href="#Per-thread-allocation"><span>Per-thread allocation</span></a></li><li><a class="tocitem" href="#Bumper.jl-(only-for-the-brave)"><span>Bumper.jl (only for the brave)</span></a></li></ul></li><li><a class="tocitem" href="../../falsesharing/falsesharing/">False Sharing</a></li><li><input class="collapse-toggle" id="menuitem-6" type="checkbox"/><label class="tocitem" for="menuitem-6"><span class="docs-label">API</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../../refs/api/">Public API</a></li><li><a class="tocitem" href="../../../refs/experimental/">Experimental</a></li><li><a class="tocitem" href="../../../refs/internal/">Internal</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Thread-Safe Storage</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Thread-Safe Storage</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/JuliaFolds2/OhMyThreads.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/JuliaFolds2/OhMyThreads.jl/blob/master/docs/src/literate/tls/tls.jl#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="TSS"><a class="docs-heading-anchor" href="#TSS">Thread-Safe Storage</a><a id="TSS-1"></a><a class="docs-heading-anchor-permalink" href="#TSS" title="Permalink"></a></h1><p>For some programs, it can be useful or even necessary to allocate and (re-)use memory in your parallel code (e.g. your computation might require temporary buffers). The following section demonstrates common issues that can arise in such a scenario and, by means of a simple example, explains techniques to handle such cases safely. Specifically, we&#39;ll dicuss (1) how task-local storage (TLS) can be used efficiently and (2) how channels can be used to organize per-task buffer allocation in a thread-safe manner.</p><h2 id="Test-case-(sequential)"><a class="docs-heading-anchor" href="#Test-case-(sequential)">Test case (sequential)</a><a id="Test-case-(sequential)-1"></a><a class="docs-heading-anchor-permalink" href="#Test-case-(sequential)" title="Permalink"></a></h2><p>Let&#39;s say that we are given two arrays of matrices, <code>As</code> and <code>Bs</code>, and let&#39;s further assume that our goal is to compute the total sum of all pairwise matrix products. We can readily implement a (sequential) function that performs the necessary computations.</p><pre><code class="language-julia hljs">using LinearAlgebra: mul!, BLAS
+BLAS.set_num_threads(1) #  for simplicity, we turn off OpenBLAS multithreading
+
+function matmulsums(As, Bs)
+    N = size(first(As), 1)
+    C = Matrix{Float64}(undef, N, N)
+    map(As, Bs) do A, B
+        mul!(C, A, B)
+        sum(C)
+    end
+end</code></pre><pre><code class="nohighlight hljs">matmulsums (generic function with 1 method)</code></pre><p>Here, we use <code>map</code> to perform the desired operation for each pair of matrices, <code>A</code> and <code>B</code>. However, the crucial point for our discussion is that we want to use the in-place matrix multiplication <code>LinearAlgebra.mul!</code> in conjunction with a pre-allocated temporary buffer, the output matrix <code>C</code>. This is to avoid the temporary allocation per &quot;iteration&quot; (i.e. per matrix pair) that we would get with <code>C = A*B</code>.</p><p>For later comparison, we generate some random input data and store the result.</p><pre><code class="language-julia hljs">As = [rand(256, 16) for _ in 1:768]
+Bs = [rand(16, 256) for _ in 1:768]
+
+res = matmulsums(As, Bs);</code></pre><h2 id="How-to-not-parallelize"><a class="docs-heading-anchor" href="#How-to-not-parallelize">How to not parallelize</a><a id="How-to-not-parallelize-1"></a><a class="docs-heading-anchor-permalink" href="#How-to-not-parallelize" title="Permalink"></a></h2><p>The key idea for creating a parallel version of <code>matmulsums</code> is to replace the <code>map</code> by OhMyThreads&#39; parallel <a href="../../../refs/api/#OhMyThreads.tmap"><code>tmap</code></a> function. However, because we re-use <code>C</code>, this isn&#39;t entirely trivial. Someone new to parallel computing might be tempted to parallelize <code>matmulsums</code> like this:</p><pre><code class="language-julia hljs">using OhMyThreads: tmap
+
+function matmulsums_race(As, Bs)
+    N = size(first(As), 1)
+    C = Matrix{Float64}(undef, N, N)
+    tmap(As, Bs) do A, B
+        mul!(C, A, B)
+        sum(C)
+    end
+end</code></pre><pre><code class="nohighlight hljs">matmulsums_race (generic function with 1 method)</code></pre><p>Unfortunately, this doesn&#39;t produce the correct result.</p><pre><code class="language-julia hljs">res_race = matmulsums_race(As, Bs)
+res ≈ res_race</code></pre><pre><code class="nohighlight hljs">false</code></pre><p>In fact, it doesn&#39;t even always produce the same result (check for yourself)! The reason is that there is a race condition: different parallel tasks are trying to use the shared variable <code>C</code> simultaneously leading to non-deterministic behavior. Let&#39;s see how we can fix this.</p><h3 id="The-naive-(and-inefficient)-fix"><a class="docs-heading-anchor" href="#The-naive-(and-inefficient)-fix">The naive (and inefficient) fix</a><a id="The-naive-(and-inefficient)-fix-1"></a><a class="docs-heading-anchor-permalink" href="#The-naive-(and-inefficient)-fix" title="Permalink"></a></h3><p>A simple solution for the race condition issue above is to move the allocation of <code>C</code> into the body of the parallel <code>tmap</code>:</p><pre><code class="language-julia hljs">function matmulsums_naive(As, Bs)
+    N = size(first(As), 1)
+    tmap(As, Bs) do A, B
+        C = Matrix{Float64}(undef, N, N)
+        mul!(C, A, B)
+        sum(C)
+    end
+end</code></pre><pre><code class="nohighlight hljs">matmulsums_naive (generic function with 1 method)</code></pre><p>In this case, a separate <code>C</code> will be allocated for each iteration such that parallel tasks no longer mutate shared state. Hence, we&#39;ll get the desired result.</p><pre><code class="language-julia hljs">res_naive = matmulsums_naive(As, Bs)
+res ≈ res_naive</code></pre><pre><code class="nohighlight hljs">true</code></pre><p>However, this variant is obviously inefficient because it is no better than just writing <code>C = A*B</code> and thus leads to one allocation per matrix pair. We need a different way of allocating and re-using <code>C</code> for an efficient parallel version.</p><h2 id="TLS"><a class="docs-heading-anchor" href="#TLS">Task-local storage</a><a id="TLS-1"></a><a class="docs-heading-anchor-permalink" href="#TLS" title="Permalink"></a></h2><h3 id="The-manual-(and-cumbersome)-way"><a class="docs-heading-anchor" href="#The-manual-(and-cumbersome)-way">The manual (and cumbersome) way</a><a id="The-manual-(and-cumbersome)-way-1"></a><a class="docs-heading-anchor-permalink" href="#The-manual-(and-cumbersome)-way" title="Permalink"></a></h3><p>We&#39;ve seen that we can&#39;t allocate <code>C</code> once up-front (→ race condition) and also shouldn&#39;t allocate it within the <code>tmap</code> (→ one allocation per iteration). Instead, we can assign a separate &quot;C&quot; on each parallel task once and then use this task-local &quot;C&quot; for all iterations (i.e. matrix pairs) for which this task is responsible. Before we learn how to do this more conveniently, let&#39;s implement this idea of a task-local temporary buffer (for each parallel task) manually.</p><pre><code class="language-julia hljs">using OhMyThreads: chunks, @spawn
+using Base.Threads: nthreads
+
+function matmulsums_manual(As, Bs)
+    N = size(first(As), 1)
+    tasks = map(chunks(As; n = 2 * nthreads())) do idcs
+        @spawn begin
+            local C = Matrix{Float64}(undef, N, N)
+            map(idcs) do i
+                A = As[i]
+                B = Bs[i]
+
+                mul!(C, A, B)
+                sum(C)
+            end
+        end
+    end
+    mapreduce(fetch, vcat, tasks)
+end
+
+res_manual = matmulsums_manual(As, Bs)
+res ≈ res_manual</code></pre><pre><code class="nohighlight hljs">true</code></pre><p>We note that this is rather cumbersome and you might not want to write it (repeatedly). But let&#39;s take a closer look and see what&#39;s happening here. First, we divide the number of matrix pairs into <code>2 * nthreads()</code> chunks. Then, for each of those chunks, we spawn a parallel task that (1) allocates a task-local <code>C</code> matrix (and a <code>results</code> vector) and (2) performs the actual computations using these pre-allocated buffers. Finally, we <code>fetch</code> the results of the tasks and combine them. This variant works just fine and the good news is that we can get the same behavior with less manual work.</p><h3 id="TLV"><a class="docs-heading-anchor" href="#TLV">The shortcut: <code>TaskLocalValue</code></a><a id="TLV-1"></a><a class="docs-heading-anchor-permalink" href="#TLV" title="Permalink"></a></h3><p>The desire for task-local storage is quite natural with task-based multithreading. For this reason, Julia supports this out of the box with <a href="https://docs.julialang.org/en/v1/base/parallel/#Base.task_local_storage-Tuple{Any}"><code>Base.task_local_storage</code></a>. But instead of using this directly (which you could), we will use a convenience wrapper around it called <a href="https://github.com/vchuravy/TaskLocalValues.jl"><code>TaskLocalValue</code></a>. This allows us to express the idea from above in few lines of code:</p><pre><code class="language-julia hljs">using OhMyThreads: TaskLocalValue
+
+function matmulsums_tlv(As, Bs; kwargs...)
+    N = size(first(As), 1)
+    tlv = TaskLocalValue{Matrix{Float64}}(() -&gt; Matrix{Float64}(undef, N, N))
+    tmap(As, Bs; kwargs...) do A, B
+        C = tlv[]
+        mul!(C, A, B)
+        sum(C)
+    end
+end
+
+res_tlv = matmulsums_tlv(As, Bs)
+res ≈ res_tlv</code></pre><pre><code class="nohighlight hljs">true</code></pre><p>Here, <code>TaskLocalValue{Matrix{Float64}}(() -&gt; Matrix{Float64}(undef, N, N))</code> creates a task-local value - essentially a reference to a value in the task-local storage - that behaves like this: The first time the task-local value is accessed from a task (<code>tls[]</code>) it is initialized according to the provided anonymous function. Afterwards, every following query (from the same task!) will simply lookup and return the task-local value. This solves our issues above and leads to <span>$O(\textrm{parallel tasks})$</span> (instead of <span>$O(\textrm{iterations})$</span>) allocations.</p><p>Note that if you use our <code>@tasks</code> macro API, there is built-in support for task-local values via <code>@local</code>.</p><pre><code class="language-julia hljs">using OhMyThreads: @tasks
+
+function matmulsums_tlv_macro(As, Bs; kwargs...)
+    N = size(first(As), 1)
+    @tasks for i in eachindex(As, Bs)
+        @set collect = true
+        @local C = Matrix{Float64}(undef, N, N)
+        mul!(C, As[i], Bs[i])
+        sum(C)
+    end
+end
+
+res_tlv_macro = matmulsums_tlv_macro(As, Bs)
+res ≈ res_tlv_macro</code></pre><pre><code class="nohighlight hljs">true</code></pre><p>Here, <code>@local</code> expands to a pattern similar to the <code>TaskLocalValue</code> one above, although automatically infers that the object&#39;s type is <code>Matrix{Float64}</code>, and it carries some optimizations (see <a href="../../../refs/api/#OhMyThreads.WithTaskLocals"><code>OhMyThreads.WithTaskLocals</code></a>) which can make accessing task local values more efficient in loops which take on the order of 100ns to complete.</p><h3 id="Benchmark"><a class="docs-heading-anchor" href="#Benchmark">Benchmark</a><a id="Benchmark-1"></a><a class="docs-heading-anchor-permalink" href="#Benchmark" title="Permalink"></a></h3><p>The whole point of parallelization is increasing performance, so let&#39;s benchmark and compare the performance of the variants that we&#39;ve discussed so far.</p><pre><code class="language-julia hljs">using BenchmarkTools
+
+@show nthreads()
+
+@btime matmulsums($As, $Bs);
+@btime matmulsums_naive($As, $Bs);
+@btime matmulsums_manual($As, $Bs);
+@btime matmulsums_tlv($As, $Bs);
+@btime matmulsums_tlv_macro($As, $Bs);</code></pre><pre><code class="nohighlight hljs">nthreads() = 10
+  61.314 ms (3 allocations: 518.17 KiB)
+  22.122 ms (1621 allocations: 384.06 MiB)
+  7.620 ms (204 allocations: 10.08 MiB)
+  7.702 ms (126 allocations: 5.03 MiB)
+  7.600 ms (127 allocations: 5.03 MiB)
+</code></pre><p>As we can see, <code>matmulsums_tlv</code> (and <code>matmulsums_tlv_macro</code>) isn&#39;t only convenient but also efficient: It allocates much less memory than <code>matmulsums_naive</code> and is about on par with the manual implementation.</p><h2 id="Per-thread-allocation"><a class="docs-heading-anchor" href="#Per-thread-allocation">Per-thread allocation</a><a id="Per-thread-allocation-1"></a><a class="docs-heading-anchor-permalink" href="#Per-thread-allocation" title="Permalink"></a></h2><p>The task-local solution above has one potential caveat: If we spawn many parallel tasks (e.g. for load-balancing reasons) we need just as many task-local buffers. This can clearly be suboptimal because only <code>nthreads()</code> tasks can run simultaneously. Hence, one buffer per thread should actually suffice. Of course, this raises the question of how to organize a pool of &quot;per-thread&quot; buffers such that each running task always has exclusive (temporary) access to a buffer (we need to make sure to avoid races).</p><h3 id="The-naive-(and-incorrect)-approach"><a class="docs-heading-anchor" href="#The-naive-(and-incorrect)-approach">The naive (and incorrect) approach</a><a id="The-naive-(and-incorrect)-approach-1"></a><a class="docs-heading-anchor-permalink" href="#The-naive-(and-incorrect)-approach" title="Permalink"></a></h3><p>A naive approach to implementing this idea is to pre-allocate an array of buffers and then to use the <code>threadid()</code> to select a buffer for a running task.</p><pre><code class="language-julia hljs">using Base.Threads: threadid
+
+function matmulsums_perthread_naive(As, Bs)
+    N = size(first(As), 1)
+    Cs = [Matrix{Float64}(undef, N, N) for _ in 1:nthreads()]
+    tmap(As, Bs) do A, B
+        C = Cs[threadid()]
+        mul!(C, A, B)
+        sum(C)
+    end
+end
+
+# non uniform workload
+As_nu = [rand(256, isqrt(i)^2) for i in 1:768];
+Bs_nu = [rand(isqrt(i)^2, 256) for i in 1:768];
+res_nu = matmulsums(As_nu, Bs_nu);
+
+res_pt_naive = matmulsums_perthread_naive(As_nu, Bs_nu)
+res_nu ≈ res_pt_naive</code></pre><pre><code class="nohighlight hljs">true</code></pre><p>Unfortunately, this approach is <a href="https://julialang.org/blog/2023/07/PSA-dont-use-threadid/"><strong>generally wrong</strong></a>. The first issue is that <code>threadid()</code> doesn&#39;t necessarily start at 1 (and thus might return a value <code>&gt; nthreads()</code>), in which case <code>Cs[threadid()]</code> would be an out-of-bounds access attempt. This might be surprising but is a simple consequence of the ordering of different kinds of Julia threads: If Julia is started with a non-zero number of interactive threads, e.g. <code>--threads 5,2</code>, the interactive threads come first (look at <code>Threads.threadpool.(1:Threads.maxthreadid())</code>).</p><p>But even if we account for this offset there is another, more fundamental problem, namely <strong>task-migration</strong>. By default, all spawned parallel tasks are &quot;non-sticky&quot; and can dynamically migrate between different Julia threads (loosely speaking, at any point in time). This means nothing other than that <strong><code>threadid()</code> is not necessarily constant for a task</strong>! For example, imagine that task A starts on thread 4, loads the buffer <code>Cs[4]</code>, but then gets paused, migrated, and continues executation on, say, thread 5. Afterwards, while task A is performing <code>mul!(Cs[4], ...)</code>, a different task B might start on (the now available) thread 4 and also read and use <code>Cs[4]</code>. This would lead to a race condition because both tasks are mutating the same buffer. (Note that, in practice, this - most likely 😉 - doesn&#39;t happen for the very simple example above, but you can&#39;t rely on it!)</p><h3 id="The-quick-fix-(with-caveats)"><a class="docs-heading-anchor" href="#The-quick-fix-(with-caveats)">The quick fix (with caveats)</a><a id="The-quick-fix-(with-caveats)-1"></a><a class="docs-heading-anchor-permalink" href="#The-quick-fix-(with-caveats)" title="Permalink"></a></h3><p>A simple solution for the task-migration issue is to opt-out of dynamic scheduling with <code>scheduler=:static</code> (or <code>scheduler=StaticScheduler()</code>). This scheduler statically assigns tasks to threads upfront without any dynamic rescheduling (the tasks are sticky and won&#39;t migrate).</p><pre><code class="language-julia hljs">function matmulsums_perthread_static(As, Bs)
+    N = size(first(As), 1)
+    Cs = [Matrix{Float64}(undef, N, N) for _ in 1:nthreads()]
+    tmap(As, Bs; scheduler = :static) do A, B
+        C = Cs[threadid()]
+        mul!(C, A, B)
+        sum(C)
+    end
+end
+
+res_pt_static = matmulsums_perthread_static(As_nu, Bs_nu)
+res_nu ≈ res_pt_static</code></pre><pre><code class="nohighlight hljs">true</code></pre><p>However, this approach doesn&#39;t solve the offset issue and, even worse, makes the parallel code non-composable: If we call other multithreaded functions within the <code>tmap</code> or if our parallel <code>matmulsums_perthread_static</code> itself gets called from another parallel region we will likely oversubscribe the Julia threads and get subpar performance. Given these caveats, we should therefore generally take a different approach.</p><h3 id="The-safe-way:-Channel"><a class="docs-heading-anchor" href="#The-safe-way:-Channel">The safe way: <code>Channel</code></a><a id="The-safe-way:-Channel-1"></a><a class="docs-heading-anchor-permalink" href="#The-safe-way:-Channel" title="Permalink"></a></h3><p>Instead of storing the pre-allocated buffers in an array, we can put them into a <code>Channel</code> which internally ensures that parallel access is safe. In this scenario, we simply <code>take!</code> a buffer from the channel whenever we need it and <code>put!</code> it back after our computation is done.</p><pre><code class="language-julia hljs">function matmulsums_perthread_channel(As, Bs; nbuffers = nthreads(), kwargs...)
+    N = size(first(As), 1)
+    chnl = Channel{Matrix{Float64}}(nbuffers)
+    foreach(1:nbuffers) do _
+        put!(chnl, Matrix{Float64}(undef, N, N))
+    end
+    tmap(As, Bs; kwargs...) do A, B
+        C = take!(chnl)
+        mul!(C, A, B)
+        result = sum(C)
+        put!(chnl, C)
+        result
+    end
+end
+
+res_pt_channel = matmulsums_perthread_channel(As_nu, Bs_nu)
+res_nu ≈ res_pt_channel</code></pre><pre><code class="nohighlight hljs">true</code></pre><h3 id="Benchmark-2"><a class="docs-heading-anchor" href="#Benchmark-2">Benchmark</a><a class="docs-heading-anchor-permalink" href="#Benchmark-2" title="Permalink"></a></h3><p>Let&#39;s benchmark the variants above and compare them to the task-local implementation. We want to look at both <code>ntasks = nthreads()</code> and <code>ntasks &gt; nthreads()</code>, the latter of which gives us dynamic load balancing.</p><pre><code class="language-julia hljs"># no load balancing because ntasks == nthreads()
+@btime matmulsums_tlv($As_nu, $Bs_nu);
+@btime matmulsums_perthread_static($As_nu, $Bs_nu);
+@btime matmulsums_perthread_channel($As_nu, $Bs_nu);
+
+# load balancing because ntasks &gt; nthreads()
+@btime matmulsums_tlv($As_nu, $Bs_nu; ntasks = 2 * nthreads());
+@btime matmulsums_perthread_channel($As_nu, $Bs_nu; ntasks = 2 * nthreads());
+
+@btime matmulsums_tlv($As_nu, $Bs_nu; ntasks = 10 * nthreads());
+@btime matmulsums_perthread_channel($As_nu, $Bs_nu; ntasks = 10 * nthreads());</code></pre><pre><code class="nohighlight hljs">  170.563 ms (126 allocations: 5.03 MiB)
+  165.647 ms (108 allocations: 5.02 MiB)
+  172.216 ms (114 allocations: 5.02 MiB)
+  108.662 ms (237 allocations: 10.05 MiB)
+  114.673 ms (185 allocations: 5.04 MiB)
+  97.933 ms (1118 allocations: 50.13 MiB)
+  96.868 ms (746 allocations: 5.10 MiB)
+</code></pre><p>Note that the runtime of <code>matmulsums_perthread_channel</code> improves with increasing number of chunks/tasks (due to load balancing) while the amount of allocated memory doesn&#39;t increase much. Contrast this with the drastic memory increase with <code>matmulsums_tlv</code>.</p><h3 id="Another-safe-way-based-on-Channel"><a class="docs-heading-anchor" href="#Another-safe-way-based-on-Channel">Another safe way based on <code>Channel</code></a><a id="Another-safe-way-based-on-Channel-1"></a><a class="docs-heading-anchor-permalink" href="#Another-safe-way-based-on-Channel" title="Permalink"></a></h3><p>Above, we chose to put a limited number of buffers (e.g. <code>nthreads()</code>) into the channel and then spawn many tasks (one per input element). Sometimes it can make sense to flip things around and put the (many) input elements into a channel and only spawn a limited number of tasks (e.g. <code>nthreads()</code>) with task-local buffers.</p><pre><code class="language-julia hljs">using OhMyThreads: tmapreduce
+
+function matmulsums_perthread_channel_flipped(As, Bs; ntasks = nthreads())
+    N = size(first(As), 1)
+    chnl = Channel{Int}(length(As); spawn = true) do chnl
+        for i in 1:length(As)
+            put!(chnl, i)
+        end
+    end
+    tmapreduce(vcat, 1:ntasks; chunking=false) do _ # we turn chunking off
+        local C = Matrix{Float64}(undef, N, N)
+        map(chnl) do i # implicitly takes the values from the channel (parallel safe)
+            A = As[i]
+            B = Bs[i]
+            mul!(C, A, B)
+            sum(C)
+        end
+    end
+end;</code></pre><p>Note that one caveat of this approach is that the input → task assignment, and thus the order of the output, is <strong>non-deterministic</strong>. For this reason, we sort the output to check for correctness.</p><pre><code class="language-julia hljs">res_channel_flipped = matmulsums_perthread_channel_flipped(As_nu, Bs_nu)
+sort(res_nu) ≈ sort(res_channel_flipped)</code></pre><pre><code class="nohighlight hljs">true</code></pre><p>Quick benchmark:</p><pre><code class="language-julia hljs">@btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu);
+@btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu; ntasks = 2 * nthreads());
+@btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu; ntasks = 10 * nthreads());</code></pre><pre><code class="nohighlight hljs">  94.389 ms (170 allocations: 5.07 MiB)
+  94.580 ms (271 allocations: 10.10 MiB)
+  94.768 ms (1071 allocations: 50.41 MiB)
+</code></pre><h2 id="Bumper.jl-(only-for-the-brave)"><a class="docs-heading-anchor" href="#Bumper.jl-(only-for-the-brave)">Bumper.jl (only for the brave)</a><a id="Bumper.jl-(only-for-the-brave)-1"></a><a class="docs-heading-anchor-permalink" href="#Bumper.jl-(only-for-the-brave)" title="Permalink"></a></h2><p>If you are bold and want to cut down temporary allocations even more you can give <a href="https://github.com/MasonProtter/Bumper.jl">Bumper.jl</a> a try. Essentially, it allows you to <em>bring your own stacks</em>, that is, task-local bump allocators which you can dynamically allocate memory to, and reset them at the end of a code block, just like Julia&#39;s stack. Be warned though that Bumper.jl is (1) a rather young package with (likely) some bugs and (2) can easily lead to segfaults when used incorrectly. If you can live with the risk, Bumper.jl is especially useful for cases where the size of the preallocated matrix isn&#39;t known ahead of time, and even more useful if we want to do many intermediate allocations on the task, not just one. For our example, this isn&#39;t the case but let&#39;s nonetheless how one would use Bumper.jl here.</p><pre><code class="language-julia hljs">using Bumper
+
+function matmulsums_bumper(As, Bs)
+    tmap(As, Bs) do A, B
+        @no_escape begin # promising that no memory will escape
+            N = size(A, 1)
+            C = @alloc(Float64, N, N) # from bump allocater (fake &quot;stack&quot;)
+            mul!(C, A, B)
+            sum(C)
+        end
+    end
+end
+
+res_bumper = matmulsums_bumper(As, Bs);
+sort(res) ≈ sort(res_bumper)
+
+@btime matmulsums_bumper($As, $Bs);</code></pre><pre><code class="nohighlight hljs">  7.814 ms (134 allocations: 27.92 KiB)
+</code></pre><p>Note that the benchmark is lying here about the total memory allocation, because it doesn&#39;t show the allocation of the task-local bump allocators themselves (the reason is that <code>SlabBuffer</code> uses <code>malloc</code> directly).</p><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../../translation/">« Translation Guide</a><a class="docs-footer-nextpage" href="../../falsesharing/falsesharing/">False Sharing »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.7.0 on <span class="colophon-date" title="Tuesday 17 September 2024 17:50">Tuesday 17 September 2024</span>. Using Julia version 1.10.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
