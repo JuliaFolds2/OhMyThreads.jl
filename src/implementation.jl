@@ -22,8 +22,7 @@ include("macro_impl.jl")
 function auto_disable_chunking_warning()
     @warn("You passed in a `ChunkSplitters.Chunk` but also a scheduler that has "*
           "chunking enabled. Will turn off internal chunking to proceed.\n"*
-          "To avoid this warning, try to turn off chunking (`nchunks=0` and `chunksize=0`) "*
-          "or pass in `collect(chunks(...))`.")
+          "To avoid this warning, turn off chunking (`chunking=false`).")
 end
 
 function _chunks(sched, arg)
