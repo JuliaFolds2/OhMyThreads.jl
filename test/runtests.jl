@@ -86,13 +86,13 @@ end;
 
     # enumerate(chunks)
     data = 1:100
-    @test tmapreduce(+, enumerate(chunks(data; n=5)); chunking=false) do (i, idcs)
+    @test tmapreduce(+, enumerate(OhMyThreads.chunks(data; n=5)); chunking=false) do (i, idcs)
         [i, sum(@view(data[idcs]))]
     end == [sum(1:5), sum(data)]
-    @test tmapreduce(+, enumerate(chunks(data; size=5)); chunking=false) do (i, idcs)
+    @test tmapreduce(+, enumerate(OhMyThreads.chunks(data; size=5)); chunking=false) do (i, idcs)
         [i, sum(@view(data[idcs]))]
     end == [sum(1:20), sum(data)]
-    @test tmap(enumerate(chunks(data; n=5)); chunking=false) do (i, idcs)
+    @test tmap(enumerate(OhMyThreads.chunks(data; n=5)); chunking=false) do (i, idcs)
         [i, idcs]
     end == [[1, 1:20], [2, 21:40], [3, 41:60], [4, 61:80], [5, 81:100]]
 end;
@@ -261,16 +261,16 @@ end;
 
     # enumerate(chunks)
     data = collect(1:100)
-    @test @tasks(for (i, idcs) in enumerate(chunks(data; n=5))
+    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.chunks(data; n=5))
         @set reducer = +
         @set chunking = false
         [i, sum(@view(data[idcs]))]
     end) == [sum(1:5), sum(data)]
-    @test @tasks(for (i, idcs) in enumerate(chunks(data; size=5))
+    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.chunks(data; size=5))
         @set reducer = +
         [i, sum(@view(data[idcs]))]
     end) == [sum(1:20), sum(data)]
-    @test @tasks(for (i, idcs) in enumerate(chunks(1:100; n=5))
+    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.chunks(1:100; n=5))
         @set chunking=false
         @set collect=true
         [i, idcs]

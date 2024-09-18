@@ -1,6 +1,13 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.6.2
+-------------
+- ![Enhancement][badge-enhancement] Added API support for `enumerate(chunks(...))`. Best used in combination with `chunking=false`.
+
+Version 0.6.1
+-------------
+
 Version 0.6.0
 -------------
 - ![BREAKING][badge-breaking] Drop support for Julia < 1.10.
