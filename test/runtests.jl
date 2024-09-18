@@ -83,6 +83,18 @@ end;
             @test isnothing(tforeach(x -> sin.(x), chnks; scheduler))
         end
     end
+
+    # enumerate(chunks)
+    data = 1:100
+    @test tmapreduce(+, enumerate(OhMyThreads.chunks(data; n=5)); chunking=false) do (i, idcs)
+        [i, sum(@view(data[idcs]))]
+    end == [sum(1:5), sum(data)]
+    @test tmapreduce(+, enumerate(OhMyThreads.chunks(data; size=5)); chunking=false) do (i, idcs)
+        [i, sum(@view(data[idcs]))]
+    end == [sum(1:20), sum(data)]
+    @test tmap(enumerate(OhMyThreads.chunks(data; n=5)); chunking=false) do (i, idcs)
+        [i, idcs]
+    end == [[1, 1:20], [2, 21:40], [3, 41:60], [4, 61:80], [5, 81:100]]
 end;
 
 @testset "macro API" begin
@@ -246,6 +258,23 @@ end;
         @set reducer = +
         C.x
     end) == 10 * var
+
+    # enumerate(chunks)
+    data = collect(1:100)
+    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.chunks(data; n=5))
+        @set reducer = +
+        @set chunking = false
+        [i, sum(@view(data[idcs]))]
+    end) == [sum(1:5), sum(data)]
+    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.chunks(data; size=5))
+        @set reducer = +
+        [i, sum(@view(data[idcs]))]
+    end) == [sum(1:20), sum(data)]
+    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.chunks(1:100; n=5))
+        @set chunking=false
+        @set collect=true
+        [i, idcs]
+    end) == [[1, 1:20], [2, 21:40], [3, 41:60], [4, 61:80], [5, 81:100]]
 end;
 
 @testset "WithTaskLocals" begin
