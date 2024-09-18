@@ -320,7 +320,7 @@ function tmap(f, ::Type{T}, A::AbstractArray, _Arrs::AbstractArray...; kwargs...
 end
 
 function tmap(f,
-        A::Union{AbstractArray, ChunkSplitters.Chunk},
+        A::Union{AbstractArray, ChunkSplitters.Chunk, ChunkSplitters.Enumerate},
         _Arrs::AbstractArray...;
         scheduler::MaybeScheduler = NotGiven(),
         kwargs...)
@@ -333,7 +333,8 @@ function tmap(f,
        _scheduler.split != :batch
         error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $_scheduler)")
     end
-    if A isa ChunkSplitters.Chunk && chunking_enabled(_scheduler)
+    if (A isa ChunkSplitters.Chunk || A isa ChunkSplitters.Enumerate) &&
+       chunking_enabled(_scheduler)
         auto_disable_chunking_warning()
         if _scheduler isa DynamicScheduler
             _scheduler = DynamicScheduler(;
@@ -377,7 +378,7 @@ end
 # w/o chunking (DynamicScheduler{NoChunking}): ChunkSplitters.Chunk
 function _tmap(scheduler::DynamicScheduler{NoChunking},
         f,
-        A::ChunkSplitters.Chunk,
+        A::Union{ChunkSplitters.Chunk, ChunkSplitters.Enumerate},
         _Arrs::AbstractArray...)
     (; threadpool) = scheduler
     tasks = map(A) do idcs
