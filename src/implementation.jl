@@ -105,11 +105,11 @@ end
 # DynamicScheduler: ChunkSplitters.Chunk
 function _tmapreduce(f,
         op,
-        Arrs::Tuple{ChunkSplitters.Chunk{T}}, # we don't support multiple chunks for now
+        Arrs::Union{Tuple{ChunkSplitters.Chunk{T}}, Tuple{ChunkSplitters.Enumerate{T}}},
         ::Type{OutputType},
         scheduler::DynamicScheduler,
         mapreduce_kwargs)::OutputType where {OutputType, T}
-    (; nchunks, split, threadpool) = scheduler
+    (; threadpool) = scheduler
     chunking_enabled(scheduler) && auto_disable_chunking_warning()
     tasks = map(only(Arrs)) do idcs
         @spawn threadpool promise_task_local(f)(idcs)

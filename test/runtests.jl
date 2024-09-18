@@ -83,6 +83,15 @@ end;
             @test isnothing(tforeach(x -> sin.(x), chnks; scheduler))
         end
     end
+
+    # enumerate(chunks)
+    data = 1:100
+    @test tmapreduce(+, enumerate(chunks(data; n=5)); chunking=false) do (i, idcs)
+        [i, sum(@view(data[idcs]))]
+    end == [sum(1:5), sum(data)]
+    @test tmapreduce(+, enumerate(chunks(data; size=5)); chunking=false) do (i, idcs)
+        [i, sum(@view(data[idcs]))]
+    end == [sum(1:20), sum(data)]
 end;
 
 @testset "macro API" begin
@@ -246,6 +255,18 @@ end;
         @set reducer = +
         C.x
     end) == 10 * var
+
+    # enumerate(chunks)
+    data = collect(1:100)
+    @test @tasks(for (i, idcs) in enumerate(chunks(data; n=5))
+        @set reducer = +
+        @set chunking = false
+        [i, sum(@view(data[idcs]))]
+    end) == [sum(1:5), sum(data)]
+    @test @tasks(for (i, idcs) in enumerate(chunks(data; size=5))
+        @set reducer = +
+        [i, sum(@view(data[idcs]))]
+    end) == [sum(1:20), sum(data)]
 end;
 
 @testset "WithTaskLocals" begin
