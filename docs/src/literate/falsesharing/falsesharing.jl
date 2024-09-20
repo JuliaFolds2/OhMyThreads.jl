@@ -30,11 +30,11 @@ data = rand(1_000_000 * nthreads());
 #
 # A common, manual implementation of this idea might look like this:
 
-using OhMyThreads: @spawn, chunks
+using OhMyThreads: @spawn, chunk_indices
 
 function parallel_sum_falsesharing(data; nchunks = nthreads())
     psums = zeros(eltype(data), nchunks)
-    @sync for (c, idcs) in enumerate(chunks(data; n = nchunks))
+    @sync for (c, idcs) in enumerate(chunk_indices(data; n = nchunks))
         @spawn begin
             for i in idcs
                 psums[c] += data[i]
@@ -102,7 +102,7 @@ nthreads()
 
 function parallel_sum_tasklocal(data; nchunks = nthreads())
     psums = zeros(eltype(data), nchunks)
-    @sync for (c, idcs) in enumerate(chunks(data; n = nchunks))
+    @sync for (c, idcs) in enumerate(chunk_indices(data; n = nchunks))
         @spawn begin
             local s = zero(eltype(data))
             for i in idcs
@@ -131,7 +131,7 @@ end
 # using `map` and reusing the built-in (sequential) `sum` function on each parallel task:
 
 function parallel_sum_map(data; nchunks = nthreads())
-    ts = map(chunks(data, n = nchunks)) do idcs
+    ts = map(chunk_indices(data, n = nchunks)) do idcs
         @spawn @views sum(data[idcs])
     end
     return sum(fetch.(ts))

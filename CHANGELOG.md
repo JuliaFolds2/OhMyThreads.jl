@@ -1,9 +1,14 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.7.0
+-------------
+- ![BREAKING][badge-breaking] We now use ChunkSplitters version 3.0. The `split` keyword argument now requires a `::Split` rather than a `::Symbol`. Replace `:batch` by `BatchSplit()` and `:scatter` by `ScatterSplit()`. Moreover, the function `OhMyThreads.chunks` has been renamed to `OhMyThreads.chunk_indices`.
+- ![Feature][badge-feature] We now re-export the functions `chunk_indices` and `chunk` from ChunkSplitters.jl.
+
 Version 0.6.2
 -------------
-- ![Enhancement][badge-enhancement] Added API support for `enumerate(chunks(...))`. Best used in combination with `chunking=false`.
+- ![Enhancement][badge-enhancement] Added API support for `enumerate(chunks(...))`. Best used in combination with `chunking=false`
 
 Version 0.6.1
 -------------

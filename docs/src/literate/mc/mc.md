@@ -112,16 +112,16 @@ using OhMyThreads: StaticScheduler
 
 ## Manual parallelization
 
-First, using the `chunks` function, we divide the iteration interval `1:N` into
+First, using the `chunk_indices` function, we divide the iteration interval `1:N` into
 `nthreads()` parts. Then, we apply a regular (sequential) `map` to spawn a Julia task
 per chunk. Each task will locally and independently perform a sequential Monte Carlo
 simulation. Finally, we fetch the results and compute the average estimate for $\pi$.
 
 ````julia
-using OhMyThreads: @spawn, chunks
+using OhMyThreads: @spawn, chunk_indices
 
 function mc_parallel_manual(N; nchunks = nthreads())
-    tasks = map(chunks(1:N; n = nchunks)) do idcs
+    tasks = map(chunk_indices(1:N; n = nchunks)) do idcs
         @spawn mc(length(idcs))
     end
     pi = sum(fetch, tasks) / nchunks
@@ -151,7 +151,7 @@ It is faster than `mc_parallel` above because the task-local computation
 `tmapreduce` (which itself is a `mapreduce`).
 
 ````julia
-idcs = first(chunks(1:N; n = nthreads()))
+idcs = first(chunk_indices(1:N; n = nthreads()))
 
 @btime mapreduce($+, $idcs) do i
     rand()^2 + rand()^2 < 1.0
