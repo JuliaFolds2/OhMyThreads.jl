@@ -382,6 +382,13 @@ sort(res_nu) ≈ sort(res_channel_flipped)
 @btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu; ntasks = 2 * nthreads());
 @btime matmulsums_perthread_channel_flipped($As_nu, $Bs_nu; ntasks = 10 * nthreads());
 
+# In addition, OhMyThreads provides an iterator-wrapper type
+# [`OhMyThreads.ChannelLike`](@ref) which can be used in place of a `Channel`. If
+# the number of elements is large this can be more efficient since there is no
+# need to copy the elements into the `Channel`. Concretely, in the example above,
+# we could replace `Channel() do .. end` with
+# `OhMyThreads.ChannelLike(1:length(As))`.
+
 # ## Bumper.jl (only for the brave)
 #
 # If you are bold and want to cut down temporary allocations even more you can

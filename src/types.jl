@@ -71,3 +71,66 @@ promise_task_local(f::Any) = f
 function (f::WithTaskLocals{F})(args...; kwargs...) where {F}
     promise_task_local(f)(args...; kwargs...)
 end
+
+"""
+    ChannelLike(itr)
+
+This struct wraps an indexable object such that it can be iterated by concurrent tasks in a
+safe manner similar to a `Channel`.
+
+`ChannelLike(itr)` is conceptually similar to:
+```julia
+Channel{eltype(itr)}(length(itr)) do ch
+    foreach(i -> put!(ch, i), itr)
+end
+```
+i.e. creating a channel, `put!`ing all elements of `itr` into it and closing it. The
+advantage is that `ChannelLike` doesn't copy the data.
+
+# Examples
+```julia
+ch = OhMyThreads.ChannelLike(1:5)
+
+@sync for taskid in 1:2
+    Threads.@spawn begin
+        for i in ch
+            println("Task #\$taskid processing item \$i")
+            sleep(1 / i)
+        end
+    end
+end
+
+# output
+
+Task #1 processing item 1
+Task #2 processing item 2
+Task #2 processing item 3
+Task #2 processing item 4
+Task #1 processing item 5
+```
+
+Note that `ChannelLike` is stateful (just like a `Channel`), so you can't iterate over it
+twice.
+
+The wrapped iterator must support `firstindex(itr)::Int`, `lastindex(itr)::Int` and
+`getindex(itr, ::Int)`.
+"""
+mutable struct ChannelLike{T}
+    const itr::T
+    @atomic idx::Int
+    function ChannelLike(itr::T) where {T}
+        return new{T}(itr, firstindex(itr) - 1)
+    end
+end
+
+Base.length(ch::ChannelLike) = length(ch.itr)
+Base.eltype(ch::ChannelLike) = eltype(ch.itr)
+
+function Base.iterate(ch::ChannelLike, ::Nothing = nothing)
+    this = @atomic ch.idx += 1
+    if this <= lastindex(ch.itr)
+        return (@inbounds(ch.itr[this]), nothing)
+    else
+        return nothing
+    end
+end

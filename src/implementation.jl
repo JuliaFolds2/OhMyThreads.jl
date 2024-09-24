@@ -1,7 +1,7 @@
 module Implementation
 
 import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
-using OhMyThreads: @spawn, @spawnat, WithTaskLocals, promise_task_local
+using OhMyThreads: @spawn, @spawnat, WithTaskLocals, promise_task_local, ChannelLike
 using OhMyThreads.Tools: nthtid
 using OhMyThreads: Scheduler,
                    DynamicScheduler, StaticScheduler, GreedyScheduler,
@@ -207,6 +207,7 @@ function _tmapreduce(f,
         ntasks = min(length(first(Arrs)), ntasks_desired)
         ch_len = length(first(Arrs))
     end
+    # TODO: Use ChannelLike for iterators that support it. Dispatch on IndexLinear?
     ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn = true) do ch
         for args in zip(Arrs...)
             put!(ch, args)
@@ -255,11 +256,9 @@ function _tmapreduce(f,
     ntasks_desired = scheduler.ntasks
     ntasks = min(length(chnks), ntasks_desired)
 
-    ch = Channel{typeof(first(chnks))}(length(chnks); spawn = true) do ch
-        for args in chnks
-            put!(ch, args)
-        end
-    end
+    # ChunkSplitters.IndexChunks support everything needed for ChannelLike
+    ch = ChannelLike(chnks)
+
     tasks = map(1:ntasks) do _
         # Note, calling `promise_task_local` here is only safe because we're assuming that
         # Base.mapreduce isn't going to magically try to do multithreading on us...
