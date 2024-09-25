@@ -20,12 +20,6 @@ const MaybeScheduler = Union{NotGiven, Scheduler, Symbol}
 
 include("macro_impl.jl")
 
-# function auto_disable_chunking_warning()
-#     @warn("You passed in a `<:AbstractChunks` but also a scheduler that has "*
-#           "chunking enabled. Will turn off internal chunking to proceed.\n"*
-#           "To avoid this warning, turn off chunking (`chunking=false`).")
-# end
-
 function _index_chunks(sched, arg)
     C = chunking_mode(sched)
     @assert C != NoChunking
@@ -53,6 +47,18 @@ function _scheduler_from_userinput(scheduler::MaybeScheduler; kwargs...)
     end
 end
 
+function _check_chunks_incompatible_kwargs(; kwargs...)
+    ks = keys(kwargs)
+    if :ntasks in ks || :nchunks in ks || :chunksize in ks || :split in ks ||
+       :chunking in ks
+        @warn("You've provided `chunks` or `index_chunks` as input and, at the same time, "*
+              "chunking related keyword arguments (e.g. `ntasks`, `chunksize`, or `split`). "*
+              "The latter will be ignored. "*
+              "You can set them directly in the `chunks` or `index_chunks` call.")
+    end
+    return nothing
+end
+
 function tmapreduce(f, op, Arrs...;
         scheduler::MaybeScheduler = NotGiven(),
         outputtype::Type = Any,
@@ -61,6 +67,10 @@ function tmapreduce(f, op, Arrs...;
     mapreduce_kwargs = isgiven(init) ? (; init) : (;)
     _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
+    A = first(Arrs)
+    if A isa AbstractChunks || A isa ChunkSplitters.Internals.Enumerate
+        _check_chunks_incompatible_kwargs(; kwargs...)
+    end
     if _scheduler isa SerialScheduler || isempty(first(Arrs))
         # empty input collection → align with Base.mapreduce behavior
         mapreduce(f, op, Arrs...; mapreduce_kwargs...)
@@ -332,17 +342,19 @@ function tmap(f,
        _scheduler.split != Consecutive()
         error("Only `split == Consecutive()` is supported because the parallel operation isn't commutative. (Scheduler: $_scheduler)")
     end
-    if (A isa AbstractChunks || A isa ChunkSplitters.Internals.Enumerate) &&
-       chunking_enabled(_scheduler)
-        if _scheduler isa DynamicScheduler
-            _scheduler = DynamicScheduler(;
-                threadpool = _scheduler.threadpool,
-                chunking = false)
-        elseif _scheduler isa StaticScheduler
-            _scheduler = StaticScheduler(; chunking = false)
-        else
-            error("Can't disable chunking for this scheduler?! Shouldn't be reached.",
-                _scheduler)
+    if (A isa AbstractChunks || A isa ChunkSplitters.Internals.Enumerate)
+        _check_chunks_incompatible_kwargs(; kwargs...)
+        if chunking_enabled(_scheduler)
+            if _scheduler isa DynamicScheduler
+                _scheduler = DynamicScheduler(;
+                    threadpool = _scheduler.threadpool,
+                    chunking = false)
+            elseif _scheduler isa StaticScheduler
+                _scheduler = StaticScheduler(; chunking = false)
+            else
+                error("Can't disable chunking for this scheduler?! Shouldn't be reached.",
+                    _scheduler)
+            end
         end
     end
 
