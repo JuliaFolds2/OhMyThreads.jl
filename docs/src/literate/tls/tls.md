@@ -140,12 +140,12 @@ Before we learn how to do this more conveniently, let's implement this idea of a
 task-local temporary buffer (for each parallel task) manually.
 
 ````julia
-using OhMyThreads: chunk_indices, @spawn
+using OhMyThreads: index_chunks, @spawn
 using Base.Threads: nthreads
 
 function matmulsums_manual(As, Bs)
     N = size(first(As), 1)
-    tasks = map(chunk_indices(As; n = 2 * nthreads())) do idcs
+    tasks = map(index_chunks(As; n = 2 * nthreads())) do idcs
         @spawn begin
             local C = Matrix{Float64}(undef, N, N)
             map(idcs) do i

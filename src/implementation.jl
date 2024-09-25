@@ -50,10 +50,10 @@ end
 function _check_chunks_incompatible_kwargs(; kwargs...)
     ks = keys(kwargs)
     if :ntasks in ks || :nchunks in ks || :chunksize in ks || :split in ks
-        @warn("You've provided `chunks` or `index_chunks` as input and, at the same time, "*
+        error("You've provided `chunks` or `index_chunks` as input and, at the same time, "*
               "chunking related keyword arguments (e.g. `ntasks`, `chunksize`, or `split`). "*
-              "The latter will be ignored. "*
-              "You can set them directly in the `chunks` or `index_chunks` call.")
+              "This isn't supported. "*
+              "Set the chunking options directly in the `chunks` or `index_chunks` call or drop the latter.")
     end
     if :chunking in ks
         for (k, v) in kwargs
