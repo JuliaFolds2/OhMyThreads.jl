@@ -6,7 +6,7 @@ Version 0.7.0
 - ![BREAKING][badge-breaking] We now use ChunkSplitters version 3.0. The function `OhMyThreads.chunks` has been renamed to `OhMyThreads.index_chunks`. The new functions `index_chunks` and `chunks` (different from the old one with the same name!) are now exported. See ChunkSplitters.jl for more information.
 - ![BREAKING][badge-breaking] If you provide a `chunks` or `index_chunks` as input we now disable the internal chunking without a warning. Previously, we did show a warning unless you had set `chunking=false`. In contrast, we now throw an error when you set any incompatible chunking related keyword arguments.
 - ![Deprecation][badge-deprecation] The `split` options `:batch` and `:scatter` are now deprecated (they still work but will be dropped at some point). Use `:consecutive` and `:roundrobin`, respectively, instead.
-- ![Enhancement][badge-enhancement] The `split` keyword argument can now also be a `<: Split`. Compared to providing a `Symbol`, the former can potentially give better performance. For example, you can replace `:consecutive` by `Consecutive()` and `:roundrobin` by `RoundRobin()`.
+- ![Enhancement][badge-enhancement] The `split` keyword argument can now also be a `<: OhMyThreads.Split`. Compared to providing a `Symbol`, the former can potentially give better performance. For example, you can replace `:consecutive` by `OhMyThreads.Consecutive()` and `:roundrobin` by `OhMyThreads.RoundRobin()`.
 
 Version 0.6.2
 -------------

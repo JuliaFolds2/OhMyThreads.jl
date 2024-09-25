@@ -43,9 +43,6 @@ SerialScheduler
 |------------------------|---------------------------------------------------------------------|
 | `OhMyThreads.chunks`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/stable/references/#ChunkSplitters.chunks) |
 | `OhMyThreads.index_chunks`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/stable/references/#ChunkSplitters.index_chunks) |
-| `OhMyThreads.Split`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/stable/references/#ChunkSplitters.Split) |
-| `OhMyThreads.Consecutive`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/stable/references/#ChunkSplitters.Consecutive) |
-| `OhMyThreads.RoundRobin`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/stable/references/#ChunkSplitters.RoundRobin) |
 
 ## Public but not exported
 
@@ -56,6 +53,9 @@ SerialScheduler
 | `OhMyThreads.@fetch`   | see [StableTasks.jl](https://github.com/JuliaFolds2/StableTasks.jl) |
 | `OhMyThreads.@fetchfrom` | see [StableTasks.jl](https://github.com/JuliaFolds2/StableTasks.jl) |
 | `OhMyThreads.TaskLocalValue`   | see [TaskLocalValues.jl](https://github.com/vchuravy/TaskLocalValues.jl) |
+| `OhMyThreads.Split`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/stable/references/#ChunkSplitters.Split) |
+| `OhMyThreads.Consecutive`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/stable/references/#ChunkSplitters.Consecutive) |
+| `OhMyThreads.RoundRobin`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/stable/references/#ChunkSplitters.RoundRobin) |
 
 
 ```@docs
