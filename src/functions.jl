@@ -135,7 +135,7 @@ function treduce end
 
 """
     tforeach(f, A::AbstractArray...;
-             [schedule::Union{Scheduler, Symbol} = :dynamic]) :: Nothing
+             [scheduler::Union{Scheduler, Symbol} = :dynamic]) :: Nothing
 
 A multithreaded function like `Base.foreach`. Apply `f` to each element of `A` on
 multiple parallel tasks, and return `nothing`. I.e. it is the parallel equivalent of
@@ -174,7 +174,7 @@ function tforeach end
 
 """
     tmap(f, [OutputElementType], A::AbstractArray...;
-         [schedule::Union{Scheduler, Symbol} = :dynamic])
+         [scheduler::Union{Scheduler, Symbol} = :dynamic])
 
 A multithreaded function like `Base.map`. Create a new container `similar` to `A` and fills
 it in parallel such that the `i`th element is equal to `f(A[i])`.
@@ -207,7 +207,7 @@ function tmap end
 
 """
     tmap!(f, out, A::AbstractArray...;
-          [schedule::Union{Scheduler, Symbol} = :dynamic])
+          [scheduler::Union{Scheduler, Symbol} = :dynamic])
 
 A multithreaded function like `Base.map!`. In parallel on multiple tasks, this function
 assigns each element of `out[i] = f(A[i])` for each index `i` of `A` and `out`.
@@ -225,7 +225,7 @@ function tmap! end
 
 """
     tcollect([OutputElementType], gen::Union{AbstractArray, Generator{<:AbstractArray}};
-             [schedule::Union{Scheduler, Symbol} = :dynamic])
+             [scheduler::Union{Scheduler, Symbol} = :dynamic])
 
 A multithreaded function like `Base.collect`. Essentially just calls `tmap` on the
 generator function and inputs.
