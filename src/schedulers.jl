@@ -281,12 +281,13 @@ function GreedyScheduler(;
     else
         # only choose nchunks default if chunksize hasn't been specified
         if !isgiven(nchunks) && !isgiven(chunksize)
+            # neither nchunks nor chunksize has been specified but chunking = true
             nchunks = 10 * nthreads(:default)
             chunksize = -1
-        else
-            nchunks = isgiven(nchunks) ? nchunks :
-                      isgiven(ntasks) ? ntasks : -1
-            chunksize = isgiven(chunksize) ? chunksize : -1
+        elseif !isgiven(nchunks)
+            nchunks = -1
+        elseif !isgiven(chunksize)
+            chunksize = -1
         end
     end
     GreedyScheduler(ntasks, nchunks, chunksize, split; chunking)
