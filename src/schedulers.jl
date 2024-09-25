@@ -1,7 +1,7 @@
 module Schedulers
 
 using Base.Threads: nthreads
-using ChunkSplitters: Split, BatchSplit, ScatterSplit
+using ChunkSplitters: Split, Consecutive, RoundRobin
 
 # Used to indicate that a keyword argument has not been set by the user.
 # We don't use Nothing because nothing maybe sometimes be a valid user input (e.g. for init)
@@ -57,10 +57,10 @@ with other multithreaded code.
 - `chunksize::Integer` (default not set)
     * Specifies the desired chunk size (instead of the number of chunks).
     * The options `chunksize` and `nchunks`/`ntasks` are **mutually exclusive** (only one may be a positive integer).
-- `split::Split` (default `BatchSplit()`):
+- `split::OhMyThreads.Split` (default `OhMyThreads.Consecutive()`):
     * Determines how the collection is divided into chunks (if chunking=true). By default, each chunk consists of contiguous elements and order is maintained.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
-    * Beware that for `split=ScatterSplit()` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
+    * Beware that for `split=OhMyThreads.RoundRobin()` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 - `chunking::Bool` (default `true`):
     * Controls whether input elements are grouped into chunks (`true`) or not (`false`).
     * For `chunking=false`, the arguments `nchunks`/`ntasks`, `chunksize`, and `split` are ignored and input elements are regarded as "chunks" as is. Hence, there will be one parallel task spawned per input element. Note that, depending on the input, this **might spawn many(!) tasks** and can be costly!
@@ -100,7 +100,7 @@ function DynamicScheduler(;
         ntasks::MaybeInteger = NotGiven(), # "alias" for nchunks
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = true,
-        split::Split = BatchSplit())
+        split::Split = Consecutive())
     if !chunking
         nchunks = -1
         chunksize = -1
@@ -152,10 +152,10 @@ Isn't well composable with other multithreaded code though.
 - `chunking::Bool` (default `true`):
     * Controls whether input elements are grouped into chunks (`true`) or not (`false`).
     * For `chunking=false`, the arguments `nchunks`/`ntasks`, `chunksize`, and `split` are ignored and input elements are regarded as "chunks" as is. Hence, there will be one parallel task spawned per input element. Note that, depending on the input, this **might spawn many(!) tasks** and can be costly!
-- `split::Split` (default `BatchSplit()`):
+- `split::OhMyThreads.Split` (default `OhMyThreads.Consecutive()`):
     * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements and order is maintained.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
-    * Beware that for `split=ScatterSplit()` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
+    * Beware that for `split=OhMyThreads.RoundRobin()` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 """
 struct StaticScheduler{C <: ChunkingMode} <: Scheduler
     nchunks::Int
@@ -184,7 +184,7 @@ function StaticScheduler(;
         ntasks::MaybeInteger = NotGiven(), # "alias" for nchunks
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = true,
-        split::Split = BatchSplit())
+        split::Split = Consecutive())
     if !chunking
         nchunks = -1
         chunksize = -1
@@ -239,7 +239,7 @@ some additional overhead.
 - `chunksize::Integer` (default not set)
     * Specifies the desired chunk size (instead of the number of chunks).
     * The options `chunksize` and `nchunks` are **mutually exclusive** (only one may be a positive integer).
-- `split::Split` (default `ScatterSplit()`):
+- `split::OhMyThreads.Split` (default `OhMyThreads.RoundRobin()`):
     * Determines how the collection is divided into chunks (if chunking=true).
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
 """
@@ -272,7 +272,7 @@ function GreedyScheduler(;
         nchunks::MaybeInteger = NotGiven(),
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = false,
-        split::Split = ScatterSplit())
+        split::Split = RoundRobin())
     if isgiven(nchunks) || isgiven(chunksize)
         chunking = true
     end

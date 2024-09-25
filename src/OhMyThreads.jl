@@ -6,12 +6,13 @@ for mac in Symbol.(["@spawn", "@spawnat", "@fetch", "@fetchfrom"])
 end
 
 using ChunkSplitters: ChunkSplitters
-const chunk_indices = ChunkSplitters.chunk_indices
-const chunk = ChunkSplitters.chunk
+const index_chunks = ChunkSplitters.index_chunks
+const chunks = ChunkSplitters.chunks
 const Split = ChunkSplitters.Split
-const BatchSplit = ChunkSplitters.BatchSplit
-const ScatterSplit = ChunkSplitters.ScatterSplit
-export ScatterSplit, BatchSplit, Split, chunk, chunk_indices
+const Consecutive = ChunkSplitters.Consecutive
+const RoundRobin = ChunkSplitters.RoundRobin
+export chunks, index_chunks
+# export RoundRobin, Consecutive, Split # TODO: should we export this?
 
 using TaskLocalValues: TaskLocalValues
 const TaskLocalValue = TaskLocalValues.TaskLocalValue
