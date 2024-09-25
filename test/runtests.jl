@@ -335,7 +335,7 @@ end;
             @test OhMyThreads.Schedulers.chunking_mode(sched(;
                 nchunks = 2, chunksize = 4, chunking = false)) ==
                   OhMyThreads.Schedulers.NoChunking
-            @test OhMyThreads.Schedulers.chunking_mode(sched(;
+            @test_throws ErrorException OhMyThreads.Schedulers.chunking_mode(sched(;
                 nchunks = -2, chunksize = -4, split = :whatever, chunking = false)) ==
                   OhMyThreads.Schedulers.NoChunking
             @test OhMyThreads.Schedulers.chunking_enabled(sched(;

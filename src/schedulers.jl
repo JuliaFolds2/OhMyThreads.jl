@@ -95,6 +95,8 @@ struct DynamicScheduler{C <: ChunkingMode} <: Scheduler
                 split = Consecutive()
             elseif split in (:roundrobin, :scatter)
                 split = RoundRobin()
+            else
+                error("You've provided an unsupported value for `split`.")
             end
         end
         new{C}(threadpool, nchunks, chunksize, split)
@@ -187,6 +189,8 @@ struct StaticScheduler{C <: ChunkingMode} <: Scheduler
                 split = Consecutive()
             elseif split in (:roundrobin, :scatter)
                 split = RoundRobin()
+            else
+                error("You've provided an unsupported value for `split`.")
             end
         end
         new{C}(nchunks, chunksize, split)
@@ -282,6 +286,8 @@ struct GreedyScheduler{C <: ChunkingMode} <: Scheduler
                 split = Consecutive()
             elseif split in (:roundrobin, :scatter)
                 split = RoundRobin()
+            else
+                error("You've provided an unsupported value for `split`.")
             end
         end
         new{C}(ntasks, nchunks, chunksize, split)
