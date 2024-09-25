@@ -12,7 +12,7 @@ const Split = ChunkSplitters.Split
 const Consecutive = ChunkSplitters.Consecutive
 const RoundRobin = ChunkSplitters.RoundRobin
 export chunks, index_chunks
-# export RoundRobin, Consecutive, Split # TODO: should we export this?
+export RoundRobin, Consecutive, Split
 
 using TaskLocalValues: TaskLocalValues
 const TaskLocalValue = TaskLocalValues.TaskLocalValue

@@ -23,7 +23,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                 StaticScheduler, DynamicScheduler, GreedyScheduler,
                 DynamicScheduler{OhMyThreads.Schedulers.NoChunking},
                 SerialScheduler, ChunkedGreedy)
-                @testset for split in (Consecutive(), RoundRobin())
+                @testset for split in (Consecutive(), RoundRobin(), :consecutive, :roundrobin)
                     for nchunks in (1, 2, 6)
                         if sched == GreedyScheduler
                             scheduler = sched(; ntasks = nchunks)
@@ -36,7 +36,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                         end
 
                         kwargs = (; scheduler)
-                        if (split == RoundRobin() ||
+                        if (split in (RoundRobin(), :roundrobin) ||
                             sched ∈ (GreedyScheduler, ChunkedGreedy)) || op ∉ (vcat, *)
                             # scatter and greedy only works for commutative operators!
                         else
@@ -46,7 +46,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                             @test treduce(op, f.(itrs...); init, kwargs...) ~ mapreduce_f_op_itr
                         end
 
-                        split == RoundRobin() && continue
+                        split in (RoundRobin(), :roundrobin) && continue
                         map_f_itr = map(f, itrs...)
                         @test all(tmap(f, Any, itrs...; kwargs...) .~ map_f_itr)
                         @test all(tcollect(Any, (f(x...) for x in collect(zip(itrs...))); kwargs...) .~ map_f_itr)
