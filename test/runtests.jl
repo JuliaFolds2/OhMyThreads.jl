@@ -1,5 +1,6 @@
 using Test, OhMyThreads
 using OhMyThreads: TaskLocalValue, WithTaskLocals, @fetch, promise_task_local
+using OhMyThreads: Consecutive, RoundRobin
 using OhMyThreads.Experimental: @barrier
 
 include("Aqua.jl")
@@ -22,7 +23,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                 StaticScheduler, DynamicScheduler, GreedyScheduler,
                 DynamicScheduler{OhMyThreads.Schedulers.NoChunking},
                 SerialScheduler, ChunkedGreedy)
-                @testset for split in (:batch, :scatter)
+                @testset for split in (Consecutive(), RoundRobin(), :consecutive, :roundrobin)
                     for nchunks in (1, 2, 6)
                         if sched == GreedyScheduler
                             scheduler = sched(; ntasks = nchunks)
@@ -35,7 +36,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                         end
 
                         kwargs = (; scheduler)
-                        if (split == :scatter ||
+                        if (split in (RoundRobin(), :roundrobin) ||
                             sched ∈ (GreedyScheduler, ChunkedGreedy)) || op ∉ (vcat, *)
                             # scatter and greedy only works for commutative operators!
                         else
@@ -45,7 +46,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                             @test treduce(op, f.(itrs...); init, kwargs...) ~ mapreduce_f_op_itr
                         end
 
-                        split == :scatter && continue
+                        split in (RoundRobin(), :roundrobin) && continue
                         map_f_itr = map(f, itrs...)
                         @test all(tmap(f, Any, itrs...; kwargs...) .~ map_f_itr)
                         @test all(tcollect(Any, (f(x...) for x in collect(zip(itrs...))); kwargs...) .~ map_f_itr)
@@ -71,7 +72,7 @@ end;
 
 @testset "ChunkSplitters.Chunk" begin
     x = rand(100)
-    chnks = OhMyThreads.chunks(x; n = Threads.nthreads())
+    chnks = OhMyThreads.index_chunks(x; n = Threads.nthreads())
     for scheduler in (
         DynamicScheduler(; chunking = false), StaticScheduler(; chunking = false))
         @testset "$scheduler" begin
@@ -86,13 +87,13 @@ end;
 
     # enumerate(chunks)
     data = 1:100
-    @test tmapreduce(+, enumerate(OhMyThreads.chunks(data; n=5)); chunking=false) do (i, idcs)
+    @test tmapreduce(+, enumerate(OhMyThreads.index_chunks(data; n=5)); chunking=false) do (i, idcs)
         [i, sum(@view(data[idcs]))]
     end == [sum(1:5), sum(data)]
-    @test tmapreduce(+, enumerate(OhMyThreads.chunks(data; size=5)); chunking=false) do (i, idcs)
+    @test tmapreduce(+, enumerate(OhMyThreads.index_chunks(data; size=5)); chunking=false) do (i, idcs)
         [i, sum(@view(data[idcs]))]
     end == [sum(1:20), sum(data)]
-    @test tmap(enumerate(OhMyThreads.chunks(data; n=5)); chunking=false) do (i, idcs)
+    @test tmap(enumerate(OhMyThreads.index_chunks(data; n=5)); chunking=false) do (i, idcs)
         [i, idcs]
     end == [[1, 1:20], [2, 21:40], [3, 41:60], [4, 61:80], [5, 81:100]]
 end;
@@ -261,16 +262,16 @@ end;
 
     # enumerate(chunks)
     data = collect(1:100)
-    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.chunks(data; n=5))
+    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.index_chunks(data; n=5))
         @set reducer = +
         @set chunking = false
         [i, sum(@view(data[idcs]))]
     end) == [sum(1:5), sum(data)]
-    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.chunks(data; size=5))
+    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.index_chunks(data; size=5))
         @set reducer = +
         [i, sum(@view(data[idcs]))]
     end) == [sum(1:20), sum(data)]
-    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.chunks(1:100; n=5))
+    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.index_chunks(1:100; n=5))
         @set chunking=false
         @set collect=true
         [i, idcs]
@@ -334,7 +335,7 @@ end;
             @test OhMyThreads.Schedulers.chunking_mode(sched(;
                 nchunks = 2, chunksize = 4, chunking = false)) ==
                   OhMyThreads.Schedulers.NoChunking
-            @test OhMyThreads.Schedulers.chunking_mode(sched(;
+            @test_throws ErrorException OhMyThreads.Schedulers.chunking_mode(sched(;
                 nchunks = -2, chunksize = -4, split = :whatever, chunking = false)) ==
                   OhMyThreads.Schedulers.NoChunking
             @test OhMyThreads.Schedulers.chunking_enabled(sched(;
@@ -375,7 +376,7 @@ end;
     # scheduler not given
     @test tmapreduce(sin, +, 1:10000; ntasks = 2) ≈ res_tmr
     @test tmapreduce(sin, +, 1:10000; nchunks = 2) ≈ res_tmr
-    @test tmapreduce(sin, +, 1:10000; split = :scatter) ≈ res_tmr
+    @test tmapreduce(sin, +, 1:10000; split = RoundRobin()) ≈ res_tmr
     @test tmapreduce(sin, +, 1:10000; chunksize = 2) ≈ res_tmr
     @test tmapreduce(sin, +, 1:10000; chunking = false) ≈ res_tmr
 
@@ -386,7 +387,7 @@ end;
     @test_throws ArgumentError tmapreduce(
         sin, +, 1:10000; chunksize = 2, scheduler = DynamicScheduler())
     @test_throws ArgumentError tmapreduce(
-        sin, +, 1:10000; split = :scatter, scheduler = StaticScheduler())
+        sin, +, 1:10000; split = RoundRobin(), scheduler = StaticScheduler())
     @test_throws ArgumentError tmapreduce(
         sin, +, 1:10000; ntasks = 3, scheduler = SerialScheduler())
 

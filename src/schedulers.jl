@@ -1,6 +1,7 @@
 module Schedulers
 
 using Base.Threads: nthreads
+using ChunkSplitters: Split, Consecutive, RoundRobin
 
 # Used to indicate that a keyword argument has not been set by the user.
 # We don't use Nothing because nothing maybe sometimes be a valid user input (e.g. for init)
@@ -56,10 +57,10 @@ with other multithreaded code.
 - `chunksize::Integer` (default not set)
     * Specifies the desired chunk size (instead of the number of chunks).
     * The options `chunksize` and `nchunks`/`ntasks` are **mutually exclusive** (only one may be a positive integer).
-- `split::Symbol` (default `:batch`):
+- `split::Union{Symbol, OhMyThreads.Split}` (default `OhMyThreads.Consecutive()`):
     * Determines how the collection is divided into chunks (if chunking=true). By default, each chunk consists of contiguous elements and order is maintained.
-    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
-    * Beware that for `split=:scatter` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
+    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` in place of `Consecutive()`, and `:roundrobin` in place of `RoundRobin()`
+    * Beware that for `split=OhMyThreads.RoundRobin()` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 - `chunking::Bool` (default `true`):
     * Controls whether input elements are grouped into chunks (`true`) or not (`false`).
     * For `chunking=false`, the arguments `nchunks`/`ntasks`, `chunksize`, and `split` are ignored and input elements are regarded as "chunks" as is. Hence, there will be one parallel task spawned per input element. Note that, depending on the input, this **might spawn many(!) tasks** and can be costly!
@@ -67,14 +68,14 @@ with other multithreaded code.
     * Possible options are `:default` and `:interactive`.
     * The high-priority pool `:interactive` should be used very carefully since tasks on this threadpool should not be allowed to run for a long time without `yield`ing as it can interfere with [heartbeat](https://en.wikipedia.org/wiki/Heartbeat_(computing)) processes.
 """
-struct DynamicScheduler{C <: ChunkingMode} <: Scheduler
+struct DynamicScheduler{C <: ChunkingMode, S <: Split} <: Scheduler
     threadpool::Symbol
     nchunks::Int
     chunksize::Int
-    split::Symbol
+    split::S
 
     function DynamicScheduler(threadpool::Symbol, nchunks::Integer, chunksize::Integer,
-            split::Symbol; chunking::Bool = true)
+            split::Union{Split, Symbol}; chunking::Bool = true)
         if !(threadpool in (:default, :interactive))
             throw(ArgumentError("threadpool must be either :default or :interactive"))
         end
@@ -89,7 +90,16 @@ struct DynamicScheduler{C <: ChunkingMode} <: Scheduler
             end
             C = chunksize > 0 ? FixedSize : FixedCount
         end
-        new{C}(threadpool, nchunks, chunksize, split)
+        if split isa Symbol
+            if split in (:consecutive, :batch)
+                split = Consecutive()
+            elseif split in (:roundrobin, :scatter)
+                split = RoundRobin()
+            else
+                error("You've provided an unsupported value for `split`.")
+            end
+        end
+        new{C, typeof(split)}(threadpool, nchunks, chunksize, split)
     end
 end
 
@@ -99,7 +109,7 @@ function DynamicScheduler(;
         ntasks::MaybeInteger = NotGiven(), # "alias" for nchunks
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = true,
-        split::Symbol = :batch)
+        split::Union{Split, Symbol} = Consecutive())
     if !chunking
         nchunks = -1
         chunksize = -1
@@ -110,7 +120,7 @@ function DynamicScheduler(;
             chunksize = -1
         else
             if isgiven(nchunks) && isgiven(ntasks)
-                throw(ArgumentError("nchunks and ntasks are aliases and only one may be provided"))
+                throw(ArgumentError("For the dynamic scheduler, nchunks and ntasks are aliases and only one may be provided"))
             end
             nchunks = isgiven(nchunks) ? nchunks :
                       isgiven(ntasks) ? ntasks : -1
@@ -151,17 +161,17 @@ Isn't well composable with other multithreaded code though.
 - `chunking::Bool` (default `true`):
     * Controls whether input elements are grouped into chunks (`true`) or not (`false`).
     * For `chunking=false`, the arguments `nchunks`/`ntasks`, `chunksize`, and `split` are ignored and input elements are regarded as "chunks" as is. Hence, there will be one parallel task spawned per input element. Note that, depending on the input, this **might spawn many(!) tasks** and can be costly!
-- `split::Symbol` (default `:batch`):
+- `split::Union{Symbol, OhMyThreads.Split}` (default `OhMyThreads.Consecutive()`):
     * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements and order is maintained.
-    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
-    * Beware that for `split=:scatter` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
+    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` in place of `Consecutive()`, and `:roundrobin` in place of `RoundRobin()`
+    * Beware that for `split=OhMyThreads.RoundRobin()` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 """
-struct StaticScheduler{C <: ChunkingMode} <: Scheduler
+struct StaticScheduler{C <: ChunkingMode, S <: Split} <: Scheduler
     nchunks::Int
     chunksize::Int
-    split::Symbol
+    split::S
 
-    function StaticScheduler(nchunks::Integer, chunksize::Integer, split::Symbol;
+    function StaticScheduler(nchunks::Integer, chunksize::Integer, split::Union{Split, Symbol};
             chunking::Bool = true)
         if !chunking
             C = NoChunking
@@ -174,7 +184,16 @@ struct StaticScheduler{C <: ChunkingMode} <: Scheduler
             end
             C = chunksize > 0 ? FixedSize : FixedCount
         end
-        new{C}(nchunks, chunksize, split)
+        if split isa Symbol
+            if split in (:consecutive, :batch)
+                split = Consecutive()
+            elseif split in (:roundrobin, :scatter)
+                split = RoundRobin()
+            else
+                error("You've provided an unsupported value for `split`.")
+            end
+        end
+        new{C, typeof(split)}(nchunks, chunksize, split)
     end
 end
 
@@ -183,7 +202,7 @@ function StaticScheduler(;
         ntasks::MaybeInteger = NotGiven(), # "alias" for nchunks
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = true,
-        split::Symbol = :batch)
+        split::Union{Split, Symbol} = Consecutive())
     if !chunking
         nchunks = -1
         chunksize = -1
@@ -194,7 +213,7 @@ function StaticScheduler(;
             chunksize = -1
         else
             if isgiven(nchunks) && isgiven(ntasks)
-                throw(ArgumentError("nchunks and ntasks are aliases and only one may be provided"))
+                throw(ArgumentError("For the static scheduler, nchunks and ntasks are aliases and only one may be provided"))
             end
             nchunks = isgiven(nchunks) ? nchunks :
                       isgiven(ntasks) ? ntasks : -1
@@ -238,18 +257,18 @@ some additional overhead.
 - `chunksize::Integer` (default not set)
     * Specifies the desired chunk size (instead of the number of chunks).
     * The options `chunksize` and `nchunks` are **mutually exclusive** (only one may be a positive integer).
-- `split::Symbol` (default `:scatter`):
+- `split::Union{Symbol, OhMyThreads.Split}` (default `OhMyThreads.RoundRobin()`):
     * Determines how the collection is divided into chunks (if chunking=true).
-    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
+    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` in place of `Consecutive()`, and `:roundrobin` in place of `RoundRobin()`
 """
-struct GreedyScheduler{C <: ChunkingMode} <: Scheduler
+struct GreedyScheduler{C <: ChunkingMode, S <: Split} <: Scheduler
     ntasks::Int
     nchunks::Int
     chunksize::Int
-    split::Symbol
+    split::S
 
     function GreedyScheduler(ntasks::Int, nchunks::Integer, chunksize::Integer,
-            split::Symbol; chunking::Bool = false)
+            split::Union{Split, Symbol}; chunking::Bool = false)
         ntasks > 0 || throw(ArgumentError("ntasks must be a positive integer"))
         if !chunking
             C = NoChunking
@@ -262,7 +281,16 @@ struct GreedyScheduler{C <: ChunkingMode} <: Scheduler
             end
             C = chunksize > 0 ? FixedSize : FixedCount
         end
-        new{C}(ntasks, nchunks, chunksize, split)
+        if split isa Symbol
+            if split in (:consecutive, :batch)
+                split = Consecutive()
+            elseif split in (:roundrobin, :scatter)
+                split = RoundRobin()
+            else
+                error("You've provided an unsupported value for `split`.")
+            end
+        end
+        new{C, typeof(split)}(ntasks, nchunks, chunksize, split)
     end
 end
 
@@ -271,7 +299,7 @@ function GreedyScheduler(;
         nchunks::MaybeInteger = NotGiven(),
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = false,
-        split::Symbol = :scatter)
+        split::Union{Split, Symbol} = RoundRobin())
     if isgiven(nchunks) || isgiven(chunksize)
         chunking = true
     end
@@ -312,9 +340,9 @@ struct SerialScheduler <: Scheduler
 end
 
 chunking_mode(s::Scheduler) = chunking_mode(typeof(s))
-chunking_mode(::Type{DynamicScheduler{C}}) where {C} = C
-chunking_mode(::Type{StaticScheduler{C}}) where {C} = C
-chunking_mode(::Type{GreedyScheduler{C}}) where {C} = C
+chunking_mode(::Type{DynamicScheduler{C,S}}) where {C,S} = C
+chunking_mode(::Type{StaticScheduler{C,S}}) where {C,S} = C
+chunking_mode(::Type{GreedyScheduler{C,S}}) where {C,S} = C
 chunking_mode(::Type{SerialScheduler}) = NoChunking
 
 chunking_enabled(s::Scheduler) = chunking_enabled(typeof(s))

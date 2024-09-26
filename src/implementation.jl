@@ -1,7 +1,7 @@
 module Implementation
 
 import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
-using OhMyThreads: chunks, @spawn, @spawnat, WithTaskLocals, promise_task_local
+using OhMyThreads: @spawn, @spawnat, WithTaskLocals, promise_task_local
 using OhMyThreads.Tools: nthtid
 using OhMyThreads: Scheduler,
                    DynamicScheduler, StaticScheduler, GreedyScheduler,
@@ -13,31 +13,26 @@ using OhMyThreads.Schedulers: chunking_enabled,
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 using BangBang: append!!
-using ChunkSplitters: ChunkSplitters
+using ChunkSplitters: ChunkSplitters, index_chunks, Consecutive
+using ChunkSplitters.Internals: AbstractChunks, IndexChunks
 
 const MaybeScheduler = Union{NotGiven, Scheduler, Symbol}
 
 include("macro_impl.jl")
 
-function auto_disable_chunking_warning()
-    @warn("You passed in a `ChunkSplitters.Chunk` but also a scheduler that has "*
-          "chunking enabled. Will turn off internal chunking to proceed.\n"*
-          "To avoid this warning, turn off chunking (`chunking=false`).")
-end
-
-function _chunks(sched, arg)
+function _index_chunks(sched, arg)
     C = chunking_mode(sched)
     @assert C != NoChunking
     if C == FixedCount
-        chunks(arg;
+        index_chunks(arg;
             n = sched.nchunks,
-            split = sched.split)::ChunkSplitters.Chunk{
-            typeof(arg), ChunkSplitters.FixedCount}
+            split = sched.split)::IndexChunks{
+            typeof(arg), ChunkSplitters.Internals.FixedCount}
     elseif C == FixedSize
-        chunks(arg;
+        index_chunks(arg;
             size = sched.chunksize,
-            split = sched.split)::ChunkSplitters.Chunk{
-            typeof(arg), ChunkSplitters.FixedSize}
+            split = sched.split)::IndexChunks{
+            typeof(arg), ChunkSplitters.Internals.FixedSize}
     end
 end
 
@@ -52,6 +47,25 @@ function _scheduler_from_userinput(scheduler::MaybeScheduler; kwargs...)
     end
 end
 
+function _check_chunks_incompatible_kwargs(; kwargs...)
+    ks = keys(kwargs)
+    if :ntasks in ks || :nchunks in ks || :chunksize in ks || :split in ks
+        error("You've provided `chunks` or `index_chunks` as input and, at the same time, "*
+              "chunking related keyword arguments (e.g. `ntasks`, `chunksize`, or `split`). "*
+              "This isn't supported. "*
+              "Set the chunking options directly in the `chunks` or `index_chunks` call or drop the latter.")
+    end
+    if :chunking in ks
+        for (k, v) in kwargs
+            if k == :chunking && v == true
+                error("You've provided `chunks` or `index_chunks` as input and, at the same time, " *
+                      "have set chunking=true. This isn't supported.")
+            end
+        end
+    end
+    return nothing
+end
+
 function tmapreduce(f, op, Arrs...;
         scheduler::MaybeScheduler = NotGiven(),
         outputtype::Type = Any,
@@ -60,6 +74,10 @@ function tmapreduce(f, op, Arrs...;
     mapreduce_kwargs = isgiven(init) ? (; init) : (;)
     _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
+    A = first(Arrs)
+    if A isa AbstractChunks || A isa ChunkSplitters.Internals.Enumerate
+        _check_chunks_incompatible_kwargs(; kwargs...)
+    end
     if _scheduler isa SerialScheduler || isempty(first(Arrs))
         # empty input collection → align with Base.mapreduce behavior
         mapreduce(f, op, Arrs...; mapreduce_kwargs...)
@@ -85,7 +103,7 @@ function _tmapreduce(f,
     (; threadpool) = scheduler
     check_all_have_same_indices(Arrs)
     if chunking_enabled(scheduler)
-        tasks = map(_chunks(scheduler, first(Arrs))) do inds
+        tasks = map(_index_chunks(scheduler, first(Arrs))) do inds
             args = map(A -> view(A, inds), Arrs)
             # Note, calling `promise_task_local` here is only safe because we're assuming that
             # Base.mapreduce isn't going to magically try to do multithreading on us...
@@ -102,15 +120,14 @@ function _tmapreduce(f,
     end
 end
 
-# DynamicScheduler: ChunkSplitters.Chunk
+# DynamicScheduler: AbstractChunks
 function _tmapreduce(f,
         op,
-        Arrs::Union{Tuple{ChunkSplitters.Chunk{T}}, Tuple{ChunkSplitters.Enumerate{T}}},
+        Arrs::Union{Tuple{AbstractChunks{T}}, Tuple{ChunkSplitters.Internals.Enumerate{T}}},
         ::Type{OutputType},
         scheduler::DynamicScheduler,
         mapreduce_kwargs)::OutputType where {OutputType, T}
     (; threadpool) = scheduler
-    chunking_enabled(scheduler) && auto_disable_chunking_warning()
     tasks = map(only(Arrs)) do idcs
         @spawn threadpool promise_task_local(f)(idcs)
     end
@@ -127,7 +144,7 @@ function _tmapreduce(f,
     nt = nthreads()
     check_all_have_same_indices(Arrs)
     if chunking_enabled(scheduler)
-        tasks = map(enumerate(_chunks(scheduler, first(Arrs)))) do (c, inds)
+        tasks = map(enumerate(_index_chunks(scheduler, first(Arrs)))) do (c, inds)
             tid = @inbounds nthtid(mod1(c, nt))
             args = map(A -> view(A, inds), Arrs)
             # Note, calling `promise_task_local` here is only safe because we're assuming that
@@ -150,14 +167,13 @@ function _tmapreduce(f,
     end
 end
 
-# StaticScheduler: ChunkSplitters.Chunk
+# StaticScheduler: AbstractChunks
 function _tmapreduce(f,
         op,
-        Arrs::Tuple{ChunkSplitters.Chunk{T}}, # we don't support multiple chunks for now
+        Arrs::Tuple{AbstractChunks{T}}, # we don't support multiple chunks for now
         ::Type{OutputType},
         scheduler::StaticScheduler,
         mapreduce_kwargs)::OutputType where {OutputType, T}
-    chunking_enabled(scheduler) && auto_disable_chunking_warning()
     check_all_have_same_indices(Arrs)
     chnks = only(Arrs)
     nt = nthreads()
@@ -235,7 +251,7 @@ function _tmapreduce(f,
         throw(ArgumentError("SizeUnkown iterators in combination with a greedy scheduler and chunking are currently not supported."))
     end
     check_all_have_same_indices(Arrs)
-    chnks = _chunks(scheduler, first(Arrs))
+    chnks = _index_chunks(scheduler, first(Arrs))
     ntasks_desired = scheduler.ntasks
     ntasks = min(length(chnks), ntasks_desired)
 
@@ -320,7 +336,7 @@ function tmap(f, ::Type{T}, A::AbstractArray, _Arrs::AbstractArray...; kwargs...
 end
 
 function tmap(f,
-        A::Union{AbstractArray, ChunkSplitters.Chunk, ChunkSplitters.Enumerate},
+        A::Union{AbstractArray, AbstractChunks, ChunkSplitters.Internals.Enumerate},
         _Arrs::AbstractArray...;
         scheduler::MaybeScheduler = NotGiven(),
         kwargs...)
@@ -330,21 +346,22 @@ function tmap(f,
         error("Greedy scheduler isn't supported with `tmap` unless you provide an `OutputElementType` argument, since the greedy schedule requires a commutative reducing operator.")
     end
     if chunking_enabled(_scheduler) && hasfield(typeof(_scheduler), :split) &&
-       _scheduler.split != :batch
-        error("Only `split == :batch` is supported because the parallel operation isn't commutative. (Scheduler: $_scheduler)")
+       _scheduler.split != Consecutive()
+        error("Only `split == Consecutive()` is supported because the parallel operation isn't commutative. (Scheduler: $_scheduler)")
     end
-    if (A isa ChunkSplitters.Chunk || A isa ChunkSplitters.Enumerate) &&
-       chunking_enabled(_scheduler)
-        auto_disable_chunking_warning()
-        if _scheduler isa DynamicScheduler
-            _scheduler = DynamicScheduler(;
-                threadpool = _scheduler.threadpool,
-                chunking = false)
-        elseif _scheduler isa StaticScheduler
-            _scheduler = StaticScheduler(; chunking = false)
-        else
-            error("Can't disable chunking for this scheduler?! Shouldn't be reached.",
-                _scheduler)
+    if (A isa AbstractChunks || A isa ChunkSplitters.Internals.Enumerate)
+        _check_chunks_incompatible_kwargs(; kwargs...)
+        if chunking_enabled(_scheduler)
+            if _scheduler isa DynamicScheduler
+                _scheduler = DynamicScheduler(;
+                    threadpool = _scheduler.threadpool,
+                    chunking = false)
+            elseif _scheduler isa StaticScheduler
+                _scheduler = StaticScheduler(; chunking = false)
+            else
+                error("Can't disable chunking for this scheduler?! Shouldn't be reached.",
+                    _scheduler)
+            end
         end
     end
 
@@ -375,10 +392,10 @@ function _tmap(scheduler::DynamicScheduler{NoChunking},
     reshape(v, size(A)...)
 end
 
-# w/o chunking (DynamicScheduler{NoChunking}): ChunkSplitters.Chunk
+# w/o chunking (DynamicScheduler{NoChunking}): AbstractChunks
 function _tmap(scheduler::DynamicScheduler{NoChunking},
         f,
-        A::Union{ChunkSplitters.Chunk, ChunkSplitters.Enumerate},
+        A::Union{AbstractChunks, ChunkSplitters.Internals.Enumerate},
         _Arrs::AbstractArray...)
     (; threadpool) = scheduler
     tasks = map(A) do idcs
@@ -387,10 +404,10 @@ function _tmap(scheduler::DynamicScheduler{NoChunking},
     map(fetch, tasks)
 end
 
-# w/o chunking (StaticScheduler{NoChunking}): ChunkSplitters.Chunk
+# w/o chunking (StaticScheduler{NoChunking}): AbstractChunks
 function _tmap(scheduler::StaticScheduler{NoChunking},
         f,
-        A::ChunkSplitters.Chunk,
+        A::AbstractChunks,
         _Arrs::AbstractArray...)
     nt = nthreads()
     tasks = map(enumerate(A)) do (c, idcs)
@@ -424,7 +441,7 @@ function _tmap(scheduler::Scheduler,
         A::AbstractArray,
         _Arrs::AbstractArray...)
     Arrs = (A, _Arrs...)
-    idcs = collect(_chunks(scheduler, A))
+    idcs = collect(_index_chunks(scheduler, A))
     reduction_f = append!!
     mapping_f = maybe_rewrap(f) do f
         (inds) -> begin

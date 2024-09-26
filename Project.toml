@@ -12,7 +12,7 @@ TaskLocalValues = "ed4db957-447d-4319-bfb6-7fa9ae7ecf34"
 [compat]
 Aqua = "0.8"
 BangBang = "0.3.40, 0.4"
-ChunkSplitters = "2.4"
+ChunkSplitters = "3"
 StableTasks = "0.1.5"
 TaskLocalValues = "0.1"
 Test = "1"
