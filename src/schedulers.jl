@@ -259,7 +259,7 @@ some additional overhead.
     * The options `chunksize` and `nchunks` are **mutually exclusive** (only one may be a positive integer).
 - `split::Union{Symbol, OhMyThreads.Split}` (default `OhMyThreads.RoundRobin()`):
     * Determines how the collection is divided into chunks (if chunking=true).
-    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` or `:batch` (deprecated) in place of `Consecutive()`, and `:roundrobin` or `:scatter`  (deprecated) in place of `RoundRobin()`
+    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` in place of `Consecutive()`, and `:roundrobin` in place of `RoundRobin()`
 """
 struct GreedyScheduler{C <: ChunkingMode} <: Scheduler
     ntasks::Int
