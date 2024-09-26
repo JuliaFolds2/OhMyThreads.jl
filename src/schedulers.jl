@@ -57,7 +57,7 @@ with other multithreaded code.
 - `chunksize::Integer` (default not set)
     * Specifies the desired chunk size (instead of the number of chunks).
     * The options `chunksize` and `nchunks`/`ntasks` are **mutually exclusive** (only one may be a positive integer).
-- `split::OhMyThreads.Split` (default `OhMyThreads.Consecutive()`):
+- `split::Union{Symbol, OhMyThreads.Split}` (default `OhMyThreads.Consecutive()`):
     * Determines how the collection is divided into chunks (if chunking=true). By default, each chunk consists of contiguous elements and order is maintained.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
     * Beware that for `split=OhMyThreads.RoundRobin()` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
