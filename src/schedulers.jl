@@ -163,7 +163,7 @@ Isn't well composable with other multithreaded code though.
     * For `chunking=false`, the arguments `nchunks`/`ntasks`, `chunksize`, and `split` are ignored and input elements are regarded as "chunks" as is. Hence, there will be one parallel task spawned per input element. Note that, depending on the input, this **might spawn many(!) tasks** and can be costly!
 - `split::Union{Symbol, OhMyThreads.Split}` (default `OhMyThreads.Consecutive()`):
     * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements and order is maintained.
-    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` or `:batch` (deprecated) in place of `Consecutive()`, and `:roundrobin` or `:scatter`  (deprecated) in place of `RoundRobin()`
+    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` in place of `Consecutive()`, and `:roundrobin` in place of `RoundRobin()`
     * Beware that for `split=OhMyThreads.RoundRobin()` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 """
 struct StaticScheduler{C <: ChunkingMode} <: Scheduler
