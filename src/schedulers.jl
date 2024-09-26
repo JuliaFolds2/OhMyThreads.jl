@@ -68,11 +68,11 @@ with other multithreaded code.
     * Possible options are `:default` and `:interactive`.
     * The high-priority pool `:interactive` should be used very carefully since tasks on this threadpool should not be allowed to run for a long time without `yield`ing as it can interfere with [heartbeat](https://en.wikipedia.org/wiki/Heartbeat_(computing)) processes.
 """
-struct DynamicScheduler{C <: ChunkingMode} <: Scheduler
+struct DynamicScheduler{C <: ChunkingMode, S <: Split} <: Scheduler
     threadpool::Symbol
     nchunks::Int
     chunksize::Int
-    split::Split
+    split::S
 
     function DynamicScheduler(threadpool::Symbol, nchunks::Integer, chunksize::Integer,
             split::Union{Split, Symbol}; chunking::Bool = true)
@@ -99,7 +99,7 @@ struct DynamicScheduler{C <: ChunkingMode} <: Scheduler
                 error("You've provided an unsupported value for `split`.")
             end
         end
-        new{C}(threadpool, nchunks, chunksize, split)
+        new{C, typeof(split)}(threadpool, nchunks, chunksize, split)
     end
 end
 
@@ -166,10 +166,10 @@ Isn't well composable with other multithreaded code though.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` in place of `Consecutive()`, and `:roundrobin` in place of `RoundRobin()`
     * Beware that for `split=OhMyThreads.RoundRobin()` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 """
-struct StaticScheduler{C <: ChunkingMode} <: Scheduler
+struct StaticScheduler{C <: ChunkingMode, S <: Split} <: Scheduler
     nchunks::Int
     chunksize::Int
-    split::Split
+    split::S
 
     function StaticScheduler(nchunks::Integer, chunksize::Integer, split::Union{Split, Symbol};
             chunking::Bool = true)
@@ -193,7 +193,7 @@ struct StaticScheduler{C <: ChunkingMode} <: Scheduler
                 error("You've provided an unsupported value for `split`.")
             end
         end
-        new{C}(nchunks, chunksize, split)
+        new{C, typeof(split)}(nchunks, chunksize, split)
     end
 end
 
@@ -261,11 +261,11 @@ some additional overhead.
     * Determines how the collection is divided into chunks (if chunking=true).
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` in place of `Consecutive()`, and `:roundrobin` in place of `RoundRobin()`
 """
-struct GreedyScheduler{C <: ChunkingMode} <: Scheduler
+struct GreedyScheduler{C <: ChunkingMode, S <: Split} <: Scheduler
     ntasks::Int
     nchunks::Int
     chunksize::Int
-    split::Split
+    split::S
 
     function GreedyScheduler(ntasks::Int, nchunks::Integer, chunksize::Integer,
             split::Union{Split, Symbol}; chunking::Bool = false)
@@ -290,7 +290,7 @@ struct GreedyScheduler{C <: ChunkingMode} <: Scheduler
                 error("You've provided an unsupported value for `split`.")
             end
         end
-        new{C}(ntasks, nchunks, chunksize, split)
+        new{C, typeof(split)}(ntasks, nchunks, chunksize, split)
     end
 end
 
@@ -340,9 +340,9 @@ struct SerialScheduler <: Scheduler
 end
 
 chunking_mode(s::Scheduler) = chunking_mode(typeof(s))
-chunking_mode(::Type{DynamicScheduler{C}}) where {C} = C
-chunking_mode(::Type{StaticScheduler{C}}) where {C} = C
-chunking_mode(::Type{GreedyScheduler{C}}) where {C} = C
+chunking_mode(::Type{DynamicScheduler{C,S}}) where {C,S} = C
+chunking_mode(::Type{StaticScheduler{C,S}}) where {C,S} = C
+chunking_mode(::Type{GreedyScheduler{C,S}}) where {C,S} = C
 chunking_mode(::Type{SerialScheduler}) = NoChunking
 
 chunking_enabled(s::Scheduler) = chunking_enabled(typeof(s))
