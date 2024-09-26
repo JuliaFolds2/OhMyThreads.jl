@@ -59,7 +59,7 @@ with other multithreaded code.
     * The options `chunksize` and `nchunks`/`ntasks` are **mutually exclusive** (only one may be a positive integer).
 - `split::Union{Symbol, OhMyThreads.Split}` (default `OhMyThreads.Consecutive()`):
     * Determines how the collection is divided into chunks (if chunking=true). By default, each chunk consists of contiguous elements and order is maintained.
-    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` or `:batch` in place of `Consecutive()`, and `:roundrobin` or `:scatter` in place of `RoundRobin()`
+    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` or `:batch` (deprecated) in place of `Consecutive()`, and `:roundrobin` or `:scatter`  (deprecated) in place of `RoundRobin()`
     * Beware that for `split=OhMyThreads.RoundRobin()` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 - `chunking::Bool` (default `true`):
     * Controls whether input elements are grouped into chunks (`true`) or not (`false`).
@@ -120,7 +120,7 @@ function DynamicScheduler(;
             chunksize = -1
         else
             if isgiven(nchunks) && isgiven(ntasks)
-                throw(ArgumentError("nchunks and ntasks are aliases and only one may be provided"))
+                throw(ArgumentError("For the dynamic scheduler, nchunks and ntasks are aliases and only one may be provided"))
             end
             nchunks = isgiven(nchunks) ? nchunks :
                       isgiven(ntasks) ? ntasks : -1
@@ -161,9 +161,9 @@ Isn't well composable with other multithreaded code though.
 - `chunking::Bool` (default `true`):
     * Controls whether input elements are grouped into chunks (`true`) or not (`false`).
     * For `chunking=false`, the arguments `nchunks`/`ntasks`, `chunksize`, and `split` are ignored and input elements are regarded as "chunks" as is. Hence, there will be one parallel task spawned per input element. Note that, depending on the input, this **might spawn many(!) tasks** and can be costly!
-- `split::OhMyThreads.Split` (default `OhMyThreads.Consecutive()`):
+- `split::Union{Symbol, OhMyThreads.Split}` (default `OhMyThreads.Consecutive()`):
     * Determines how the collection is divided into chunks. By default, each chunk consists of contiguous elements and order is maintained.
-    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
+    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` or `:batch` (deprecated) in place of `Consecutive()`, and `:roundrobin` or `:scatter`  (deprecated) in place of `RoundRobin()`
     * Beware that for `split=OhMyThreads.RoundRobin()` the order of elements isn't maintained and a reducer function must not only be associative but also **commutative**!
 """
 struct StaticScheduler{C <: ChunkingMode} <: Scheduler
@@ -213,7 +213,7 @@ function StaticScheduler(;
             chunksize = -1
         else
             if isgiven(nchunks) && isgiven(ntasks)
-                throw(ArgumentError("nchunks and ntasks are aliases and only one may be provided"))
+                throw(ArgumentError("For the static scheduler, nchunks and ntasks are aliases and only one may be provided"))
             end
             nchunks = isgiven(nchunks) ? nchunks :
                       isgiven(ntasks) ? ntasks : -1
@@ -257,9 +257,9 @@ some additional overhead.
 - `chunksize::Integer` (default not set)
     * Specifies the desired chunk size (instead of the number of chunks).
     * The options `chunksize` and `nchunks` are **mutually exclusive** (only one may be a positive integer).
-- `split::OhMyThreads.Split` (default `OhMyThreads.RoundRobin()`):
+- `split::Union{Symbol, OhMyThreads.Split}` (default `OhMyThreads.RoundRobin()`):
     * Determines how the collection is divided into chunks (if chunking=true).
-    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options.
+    * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` or `:batch` (deprecated) in place of `Consecutive()`, and `:roundrobin` or `:scatter`  (deprecated) in place of `RoundRobin()`
 """
 struct GreedyScheduler{C <: ChunkingMode} <: Scheduler
     ntasks::Int
