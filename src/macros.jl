@@ -90,6 +90,10 @@ keyword arguments. Among others, this includes
 
 Settings like `ntasks`, `chunksize`, and `split` etc. can be used to tune the scheduling policy (if the selected scheduler supports it).
 
+Note that the assignment is hoisted above the loop body which means that the scope is *not*
+the scope of the loop (even though it looks like it) but rather the scope *surrounding* the
+loop body. (`@macroexpand` is a useful tool to inspect the generated code of the `@tasks`
+block.)
 """
 macro set(args...)
     error("The @set macro may only be used inside of a @tasks block.")
@@ -146,6 +150,12 @@ end
         # ...
     end
     ```
+
+    The right hand side of the assignment is hoisted outside of the loop body and captured
+    as a closure used to initialize the task local value. This means that the scope of the
+    closure is *not* the scope of the loop (even though it looks like it) but rather the
+    scope *surrounding* the loop body. (`@macroexpand` is a useful tool to inspect the
+    generated code of the `@tasks` block.)
     """
     macro $(Symbol("local"))(args...)
         error("The @local macro may only be used inside of a @tasks block.")
