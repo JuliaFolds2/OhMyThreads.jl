@@ -7,6 +7,8 @@ Version 0.7.0
 - ![BREAKING][badge-breaking] If you provide a `chunks` or `index_chunks` as input we now disable the internal chunking without a warning. Previously, we did show a warning unless you had set `chunking=false`. In contrast, we now throw an error when you set any incompatible chunking related keyword arguments.
 - ![Deprecation][badge-deprecation] The `split` options `:batch` and `:scatter` are now deprecated (they still work but will be dropped at some point). Use `:consecutive` and `:roundrobin`, respectively, instead.
 - ![Enhancement][badge-enhancement] The `split` keyword argument can now also be a `<: OhMyThreads.Split`. Compared to providing a `Symbol`, the former can potentially give better performance. For example, you can replace `:consecutive` by `OhMyThreads.Consecutive()` and `:roundrobin` by `OhMyThreads.RoundRobin()`.
+- ![Feature][badge-feature] `ChannelLike` is a new public (but not exported) type. `ChannelLike(itr)` provide a way to iterate over `itr` in a concurrency safe manner similar to `Channel`. See the docstring for more details. ([#121][gh-pr-121])
+- ![Enhancement][badge-enhancement] `ChannelLike` is used internally for the `GreedyScheduler` when `chunking=true`. This improves performance overall but it is especially noticeable when the number of chunks is large. ([#121][gh-pr-121])
 
 Version 0.6.2
 -------------
@@ -136,3 +138,4 @@ Version 0.2.0
 [gh-issue-25]: https://github.com/JuliaFolds2/OhMyThreads.jl/issues/25
 
 [gh-pr-5]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/5
+[gh-pr-121]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/121
