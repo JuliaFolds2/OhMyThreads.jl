@@ -1,7 +1,7 @@
 name = "OhMyThreads"
 uuid = "67456a42-1dca-4109-a031-0a68de7e3ad5"
 authors = ["Carsten Bauer <mail@carstenbauer.eu>", "Mason Protter <mason.protter@icloud.com>"]
-version = "0.6.2"
+version = "0.7.0"
 
 [deps]
 BangBang = "198e06fe-97b7-11e9-32a5-e1d131e6ad66"
