@@ -1,7 +1,16 @@
 using Documenter
+using DocumenterInterLinks
 using OhMyThreads
 
 const ci = get(ENV, "CI", "") == "true"
+
+links = InterLinks(
+    "ChunkSplitters" => (
+        "https://juliafolds2.github.io/ChunkSplitters.jl/stable/",
+        "https://juliafolds2.github.io/ChunkSplitters.jl/stable/objects.inv",
+        joinpath(@__DIR__, "inventories", "ChunkSplitters.toml")
+    ),
+);
 
 @info "Generating Documenter.jl site"
 makedocs(;
@@ -30,7 +39,8 @@ makedocs(;
         ]
     ],
     repo = "https://github.com/JuliaFolds2/OhMyThreads.jl/blob/{commit}{path}#{line}",
-    format = Documenter.HTML(repolink = "https://github.com/JuliaFolds2/OhMyThreads.jl"; collapselevel = 1))
+    format = Documenter.HTML(repolink = "https://github.com/JuliaFolds2/OhMyThreads.jl"; collapselevel = 1),
+    plugins = [links],)
 
 if ci
     @info "Deploying documentation to GitHub"

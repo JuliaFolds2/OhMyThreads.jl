@@ -41,21 +41,21 @@ SerialScheduler
 
 |                        |                                                                     |
 |------------------------|---------------------------------------------------------------------|
-| `OhMyThreads.chunks`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/stable/references/#ChunkSplitters.chunks) |
-| `OhMyThreads.index_chunks`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/stable/references/#ChunkSplitters.index_chunks) |
+| `OhMyThreads.chunks`   | see [`ChunkSplitters.chunks`](@extref) |
+| `OhMyThreads.index_chunks`   | see [`ChunkSplitters.index_chunks`](@extref) |
 
 ## Public but not exported
 
 |                        |                                                                     |
 |------------------------|---------------------------------------------------------------------|
-| `OhMyThreads.@spawn`   | see [StableTasks.jl](https://github.com/JuliaFolds2/StableTasks.jl) |
-| `OhMyThreads.@spawnat` | see [StableTasks.jl](https://github.com/JuliaFolds2/StableTasks.jl) |
-| `OhMyThreads.@fetch`   | see [StableTasks.jl](https://github.com/JuliaFolds2/StableTasks.jl) |
-| `OhMyThreads.@fetchfrom` | see [StableTasks.jl](https://github.com/JuliaFolds2/StableTasks.jl) |
-| `OhMyThreads.TaskLocalValue`   | see [TaskLocalValues.jl](https://github.com/vchuravy/TaskLocalValues.jl) |
-| `OhMyThreads.Split`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/stable/references/#ChunkSplitters.Split) |
-| `OhMyThreads.Consecutive`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/stable/references/#ChunkSplitters.Consecutive) |
-| `OhMyThreads.RoundRobin`   | see [ChunkSplitters.jl](https://juliafolds2.github.io/ChunkSplitters.jl/stable/references/#ChunkSplitters.RoundRobin) |
+| `OhMyThreads.@spawn`   | see [`StableTasks.@spawn`](https://github.com/JuliaFolds2/StableTasks.jl) |
+| `OhMyThreads.@spawnat` | see [`StableTasks.@spawnat`](https://github.com/JuliaFolds2/StableTasks.jl) |
+| `OhMyThreads.@fetch`   | see [`StableTasks.@fetch`](https://github.com/JuliaFolds2/StableTasks.jl) |
+| `OhMyThreads.@fetchfrom` | see [`StableTasks.@fetchfrom`](https://github.com/JuliaFolds2/StableTasks.jl) |
+| `OhMyThreads.TaskLocalValue`   | see [TaskLocalValues.TaskLocalValue](https://github.com/vchuravy/TaskLocalValues.jl) |
+| `OhMyThreads.Split`   | see [`ChunkSplitters.Split`](@extref) |
+| `OhMyThreads.Consecutive`   | see [`ChunkSplitters.Consecutive`](@extref) |
+| `OhMyThreads.RoundRobin`   | see [`ChunkSplitters.RoundRobin`](@extref) |
 
 
 ```@docs
