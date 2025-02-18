@@ -7,7 +7,7 @@ using OhMyThreads: Scheduler,
                    DynamicScheduler, StaticScheduler, GreedyScheduler,
                    SerialScheduler
 using OhMyThreads.Schedulers: chunking_enabled,
-                              nchunks, chunksize, chunksplit,
+                              nchunks, chunksize, chunksplit, has_chunksplit,
                               chunking_mode, ChunkingMode, NoChunking,
                               FixedSize, FixedCount, scheduler_from_symbol, NotGiven,
                               isgiven
@@ -345,7 +345,7 @@ function tmap(f,
     if _scheduler isa GreedyScheduler
         error("Greedy scheduler isn't supported with `tmap` unless you provide an `OutputElementType` argument, since the greedy schedule requires a commutative reducing operator.")
     end
-    if chunking_enabled(_scheduler) && hasfield(typeof(_scheduler), :split) &&
+    if chunking_enabled(_scheduler) && has_chunksplit(_scheduler) &&
        chunksplit(_scheduler) != Consecutive()
         error("Only `split == Consecutive()` is supported because the parallel operation isn't commutative. (Scheduler: $_scheduler)")
     end

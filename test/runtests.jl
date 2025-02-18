@@ -410,6 +410,8 @@ end;
             sin, +, 1:10000; ntasks = 3, nchunks = 2, scheduler = s)≈res_tmr
     end
     @test_throws ArgumentError tmapreduce(sin, +, 1:10000; scheduler = :whatever)
+    @test_throws ArgumentError tmapreduce(
+        sin, +, 1:10000; threadpool = :whatever, chunking = false)
 end;
 
 @testset "empty collections" begin

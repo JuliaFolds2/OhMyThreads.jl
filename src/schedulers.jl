@@ -111,9 +111,6 @@ function ChunkingArgs(
     # argument names in error messages are those of the scheduler constructor instead
     # of ChunkingArgs because the user should not be aware of the ChunkingArgs type
     # (e.g. `nchunks` instead of `n`)
-    if !(has_split(result))
-        throw(ArgumentError("split must be a valid Split type or Symbol"))
-    end
     if !(has_n(result) || has_size(result))
         throw(ArgumentError("Either `nchunks` or `chunksize` must be a positive integer (or chunking=false)."))
     end
@@ -141,9 +138,15 @@ end
 # The first and only the first method must be overloaded for each scheduler
 # that supports chunking.
 chunking_args(::Scheduler) = ChunkingArgs(NoChunking)
+
 nchunks(sched::Scheduler) = chunking_args(sched).n
 chunksize(sched::Scheduler) = chunking_args(sched).size
 chunksplit(sched::Scheduler) = chunking_args(sched).split
+
+has_nchunks(sched::Scheduler) = has_n(chunking_args(sched))
+has_chunksize(sched::Scheduler) = has_size(chunking_args(sched))
+has_chunksplit(sched::Scheduler) = has_split(chunking_args(sched))
+
 chunking_mode(sched::Scheduler) = chunking_mode(chunking_args(sched))
 chunking_enabled(sched::Scheduler) = chunking_enabled(chunking_args(sched))
 _chunkingstr(sched::Scheduler) = _chunkingstr(chunking_args(sched))
