@@ -229,7 +229,7 @@ sleep(2) #hide
 #
 using Base.Threads: threadid
 
-function matmulsums_perthread_naive(As, Bs)
+function matmulsums_perthread_incorrect(As, Bs)
     N = size(first(As), 1)
     Cs = [Matrix{Float64}(undef, N, N) for _ in 1:nthreads()]
     tmap(As, Bs) do A, B
@@ -239,20 +239,14 @@ function matmulsums_perthread_naive(As, Bs)
     end
 end
 
-## non uniform workload
-As_nu = [rand(256, isqrt(i)^2) for i in 1:768];
-Bs_nu = [rand(isqrt(i)^2, 256) for i in 1:768];
-res_nu = matmulsums(As_nu, Bs_nu);
-
-res_pt_naive = matmulsums_perthread_naive(As_nu, Bs_nu)
-res_nu ≈ res_pt_naive
-
-# Unfortunately, this approach is [**generally wrong**](https://julialang.org/blog/2023/07/PSA-dont-use-threadid/). The first issue is that `threadid()`
+# This approach is [**wrong**](https://julialang.org/blog/2023/07/PSA-dont-use-threadid/). The first issue is that `threadid()`
 # doesn't necessarily start at 1 (and thus might return a value `> nthreads()`), in which
 # case `Cs[threadid()]` would be an out-of-bounds access attempt. This might be surprising
 # but is a simple consequence of the ordering of different kinds of Julia threads: If Julia
 # is started with a non-zero number of interactive threads, e.g. `--threads 5,2`, the
 # interactive threads come first (look at `Threads.threadpool.(1:Threads.maxthreadid())`).
+# [Starting in julia v1.12, julia will launch with at one interactive thread](https://github.com/JuliaLang/julia/pull/57087),
+# and so the above code will error by default.
 #
 # But even if we account for this offset there is another, more fundamental problem, namely
 # **task-migration**. By default, all spawned parallel tasks are "non-sticky" and can
@@ -266,31 +260,6 @@ res_nu ≈ res_pt_naive
 # (Note that, in practice, this - most likely 😉 - doesn't happen for the very simple example
 # above, but you can't rely on it!)
 #
-# ### The quick fix (with caveats)
-#
-# A simple solution for the task-migration issue is to opt-out of dynamic scheduling with
-# `scheduler=:static` (or `scheduler=StaticScheduler()`). This scheduler statically
-# assigns tasks to threads upfront without any dynamic rescheduling
-# (the tasks are sticky and won't migrate).
-#
-function matmulsums_perthread_static(As, Bs)
-    N = size(first(As), 1)
-    Cs = [Matrix{Float64}(undef, N, N) for _ in 1:nthreads()]
-    tmap(As, Bs; scheduler = :static) do A, B
-        C = Cs[threadid()]
-        mul!(C, A, B)
-        sum(C)
-    end
-end
-
-res_pt_static = matmulsums_perthread_static(As_nu, Bs_nu)
-res_nu ≈ res_pt_static
-
-# However, this approach doesn't solve the offset issue and, even worse, makes the parallel code
-# non-composable: If we call other multithreaded functions within the `tmap` or if
-# our parallel `matmulsums_perthread_static` itself gets called from another parallel region
-# we will likely oversubscribe the Julia threads and get subpar performance. Given these
-# caveats, we should therefore generally take a different approach.
 #
 # ### The safe way: `Channel`
 #
@@ -389,7 +358,7 @@ sort(res_nu) ≈ sort(res_channel_flipped)
 # we could replace `Channel() do .. end` with
 # `OhMyThreads.ChannelLike(1:length(As))`.
 
-# ## Bumper.jl (only for the brave)
+# ### Bumper.jl (only for the brave)
 #
 # If you are bold and want to cut down temporary allocations even more you can
 # give [Bumper.jl](https://github.com/MasonProtter/Bumper.jl) a try. Essentially, it
