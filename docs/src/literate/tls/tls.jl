@@ -260,6 +260,50 @@ end
 # (Note that, in practice, this - most likely 😉 - doesn't happen for the very simple example
 # above, but you can't rely on it!)
 #
+# ### The quick (and non-recommended) fix
+#
+# A simple solution for the task-migration issue is to opt-out of dynamic scheduling with
+# `scheduler=:static` (or `scheduler=StaticScheduler()`). This scheduler statically
+# assigns tasks to threads upfront without any dynamic rescheduling
+# (the tasks are sticky and won't migrate).
+#
+# We'll also need to switch from `nthreads` to `maxthreadid`, since that can be greater than
+# `nthreads`, as described above.
+#
+num_to_store() = isdefine(Threads, :maxthreadid) ? Threads.maxthreadid() : Threads.nthreads()
+
+function matmulsums_perthread_static(As, Bs)
+    N = size(first(As), 1)
+    Cs = [Matrix{Float64}(undef, N, N) for _ in 1:num_to_store()]
+    # Note!!!
+    # This code is *incorrect* if used with a non-static scheduler. this
+    # isn't just true in OhMyThreads but also applies to `Threads.@threads`
+    # You *must* use `Threads.@threads :static` or `scheduler = :static` to
+    # avoid race-conditions caused by task migration.
+    tmap(As, Bs; scheduler = :static) do A, B
+        C = Cs[threadid()]
+        mul!(C, A, B)
+        sum(C)
+    end
+end
+
+res_pt_static = matmulsums_perthread_static(As_nu, Bs_nu)
+res_nu ≈ res_pt_static
+
+# However, this approach has serious shortcomings.
+#
+# 1. It can easily be broken if someone doesn't know that the `scheduler = :static`
+# option is required for correctness, and removes it in a refactor.
+# 2. It makes the parallel code  non-composable: If we call other multithreaded functions
+# within the `tmap` or if our parallel `matmulsums_perthread_static` itself gets called
+# from another parallel region we will likely oversubscribe the Julia threads and get subpar
+# performance.
+# 3. It can waste memory by creating too many temporary storage slots since `maxthreadid()`
+# can give an over-estimate of the number of slots needed for the computation.
+#
+# While the above pattern might be the easiest to migrate to from the incorrect pattern,
+# we do not recommend it. We instead urge you to use task-local-storages, or the `Channel`
+# based techniques described below:
 #
 # ### The safe way: `Channel`
 #
