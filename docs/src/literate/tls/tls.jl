@@ -237,7 +237,7 @@ function matmulsums_perthread_incorrect(As, Bs)
         mul!(C, A, B)
         sum(C)
     end
-end
+end;
 
 # This approach is [**wrong**](https://julialang.org/blog/2023/07/PSA-dont-use-threadid/). The first issue is that `threadid()`
 # doesn't necessarily start at 1 (and thus might return a value `> nthreads()`), in which
@@ -270,22 +270,27 @@ end
 # We'll also need to switch from `nthreads` to `maxthreadid`, since that can be greater than
 # `nthreads`, as described above.
 #
-num_to_store() = isdefine(Threads, :maxthreadid) ? Threads.maxthreadid() : Threads.nthreads()
+num_to_store() = isdefined(Threads, :maxthreadid) ? Threads.maxthreadid() : Threads.nthreads()
 
 function matmulsums_perthread_static(As, Bs)
     N = size(first(As), 1)
     Cs = [Matrix{Float64}(undef, N, N) for _ in 1:num_to_store()]
-    # Note!!!
-    # This code is *incorrect* if used with a non-static scheduler. this
-    # isn't just true in OhMyThreads but also applies to `Threads.@threads`
-    # You *must* use `Threads.@threads :static` or `scheduler = :static` to
-    # avoid race-conditions caused by task migration.
+    ## Note!!!
+    ## This code is *incorrect* if used with a non-static scheduler. this
+    ## isn't just true in OhMyThreads but also applies to `Threads.@threads`
+    ## You *must* use `Threads.@threads :static` or `scheduler = :static` to
+    ## avoid race-conditions caused by task migration.
     tmap(As, Bs; scheduler = :static) do A, B
         C = Cs[threadid()]
         mul!(C, A, B)
         sum(C)
     end
 end
+
+## non uniform workload
+As_nu = [rand(256, isqrt(i)^2) for i in 1:768];
+Bs_nu = [rand(isqrt(i)^2, 256) for i in 1:768];
+res_nu = matmulsums(As_nu, Bs_nu);
 
 res_pt_static = matmulsums_perthread_static(As_nu, Bs_nu)
 res_nu ≈ res_pt_static

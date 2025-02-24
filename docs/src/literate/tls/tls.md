@@ -262,12 +262,12 @@ using BenchmarkTools
 ````
 
 ````
-nthreads() = 10
-  61.314 ms (3 allocations: 518.17 KiB)
-  22.122 ms (1621 allocations: 384.06 MiB)
-  7.620 ms (204 allocations: 10.08 MiB)
-  7.702 ms (126 allocations: 5.03 MiB)
-  7.600 ms (127 allocations: 5.03 MiB)
+nthreads() = 6
+  50.439 ms (6 allocations: 518.14 KiB)
+  39.387 ms (2467 allocations: 384.09 MiB)
+  9.743 ms (165 allocations: 6.05 MiB)
+  9.749 ms (962 allocations: 3.05 MiB)
+  9.859 ms (199 allocations: 3.04 MiB)
 
 ````
 
@@ -293,7 +293,7 @@ and then to use the `threadid()` to select a buffer for a running task.
 ````julia
 using Base.Threads: threadid
 
-function matmulsums_perthread_naive(As, Bs)
+function matmulsums_perthread_incorrect(As, Bs)
     N = size(first(As), 1)
     Cs = [Matrix{Float64}(undef, N, N) for _ in 1:nthreads()]
     tmap(As, Bs) do A, B
@@ -301,27 +301,17 @@ function matmulsums_perthread_naive(As, Bs)
         mul!(C, A, B)
         sum(C)
     end
-end
-
-# non uniform workload
-As_nu = [rand(256, isqrt(i)^2) for i in 1:768];
-Bs_nu = [rand(isqrt(i)^2, 256) for i in 1:768];
-res_nu = matmulsums(As_nu, Bs_nu);
-
-res_pt_naive = matmulsums_perthread_naive(As_nu, Bs_nu)
-res_nu ≈ res_pt_naive
+end;
 ````
 
-````
-true
-````
-
-Unfortunately, this approach is [**generally wrong**](https://julialang.org/blog/2023/07/PSA-dont-use-threadid/). The first issue is that `threadid()`
+This approach is [**wrong**](https://julialang.org/blog/2023/07/PSA-dont-use-threadid/). The first issue is that `threadid()`
 doesn't necessarily start at 1 (and thus might return a value `> nthreads()`), in which
 case `Cs[threadid()]` would be an out-of-bounds access attempt. This might be surprising
 but is a simple consequence of the ordering of different kinds of Julia threads: If Julia
 is started with a non-zero number of interactive threads, e.g. `--threads 5,2`, the
 interactive threads come first (look at `Threads.threadpool.(1:Threads.maxthreadid())`).
+[Starting in julia v1.12, julia will launch with at one interactive thread](https://github.com/JuliaLang/julia/pull/57087),
+and so the above code will error by default.
 
 But even if we account for this offset there is another, more fundamental problem, namely
 **task-migration**. By default, all spawned parallel tasks are "non-sticky" and can
@@ -335,23 +325,38 @@ condition because both tasks are mutating the same buffer.
 (Note that, in practice, this - most likely 😉 - doesn't happen for the very simple example
 above, but you can't rely on it!)
 
-### The quick fix (with caveats)
+### The quick (and non-recommended) fix
 
 A simple solution for the task-migration issue is to opt-out of dynamic scheduling with
 `scheduler=:static` (or `scheduler=StaticScheduler()`). This scheduler statically
 assigns tasks to threads upfront without any dynamic rescheduling
 (the tasks are sticky and won't migrate).
 
+We'll also need to switch from `nthreads` to `maxthreadid`, since that can be greater than
+`nthreads`, as described above.
+
 ````julia
+num_to_store() = isdefined(Threads, :maxthreadid) ? Threads.maxthreadid() : Threads.nthreads()
+
 function matmulsums_perthread_static(As, Bs)
     N = size(first(As), 1)
-    Cs = [Matrix{Float64}(undef, N, N) for _ in 1:nthreads()]
+    Cs = [Matrix{Float64}(undef, N, N) for _ in 1:num_to_store()]
+    # Note!!!
+    # This code is *incorrect* if used with a non-static scheduler. this
+    # isn't just true in OhMyThreads but also applies to `Threads.@threads`
+    # You *must* use `Threads.@threads :static` or `scheduler = :static` to
+    # avoid race-conditions caused by task migration.
     tmap(As, Bs; scheduler = :static) do A, B
         C = Cs[threadid()]
         mul!(C, A, B)
         sum(C)
     end
 end
+
+# non uniform workload
+As_nu = [rand(256, isqrt(i)^2) for i in 1:768];
+Bs_nu = [rand(isqrt(i)^2, 256) for i in 1:768];
+res_nu = matmulsums(As_nu, Bs_nu);
 
 res_pt_static = matmulsums_perthread_static(As_nu, Bs_nu)
 res_nu ≈ res_pt_static
@@ -361,11 +366,20 @@ res_nu ≈ res_pt_static
 true
 ````
 
-However, this approach doesn't solve the offset issue and, even worse, makes the parallel code
-non-composable: If we call other multithreaded functions within the `tmap` or if
-our parallel `matmulsums_perthread_static` itself gets called from another parallel region
-we will likely oversubscribe the Julia threads and get subpar performance. Given these
-caveats, we should therefore generally take a different approach.
+However, this approach has serious shortcomings.
+
+1. It can easily be broken if someone doesn't know that the `scheduler = :static`
+option is required for correctness, and removes it in a refactor.
+2. It makes the parallel code  non-composable: If we call other multithreaded functions
+within the `tmap` or if our parallel `matmulsums_perthread_static` itself gets called
+from another parallel region we will likely oversubscribe the Julia threads and get subpar
+performance.
+3. It can waste memory by creating too many temporary storage slots since `maxthreadid()`
+can give an over-estimate of the number of slots needed for the computation.
+
+While the above pattern might be the easiest to migrate to from the incorrect pattern,
+we do not recommend it. We instead urge you to use task-local-storages, or the `Channel`
+based techniques described below:
 
 ### The safe way: `Channel`
 
@@ -419,13 +433,13 @@ of which gives us dynamic load balancing.
 ````
 
 ````
-  170.563 ms (126 allocations: 5.03 MiB)
-  165.647 ms (108 allocations: 5.02 MiB)
-  172.216 ms (114 allocations: 5.02 MiB)
-  108.662 ms (237 allocations: 10.05 MiB)
-  114.673 ms (185 allocations: 5.04 MiB)
-  97.933 ms (1118 allocations: 50.13 MiB)
-  96.868 ms (746 allocations: 5.10 MiB)
+  212.200 ms (962 allocations: 3.05 MiB)
+  212.014 ms (191 allocations: 4.04 MiB)
+  211.336 ms (190 allocations: 3.04 MiB)
+  168.835 ms (1136 allocations: 6.05 MiB)
+  169.097 ms (334 allocations: 3.04 MiB)
+  130.469 ms (2530 allocations: 30.17 MiB)
+  131.037 ms (1487 allocations: 3.14 MiB)
 
 ````
 
@@ -484,9 +498,9 @@ Quick benchmark:
 ````
 
 ````
-  94.389 ms (170 allocations: 5.07 MiB)
-  94.580 ms (271 allocations: 10.10 MiB)
-  94.768 ms (1071 allocations: 50.41 MiB)
+  137.431 ms (133 allocations: 3.04 MiB)
+  126.854 ms (211 allocations: 6.06 MiB)
+  127.647 ms (836 allocations: 30.29 MiB)
 
 ````
 
@@ -497,7 +511,7 @@ need to copy the elements into the `Channel`. Concretely, in the example above,
 we could replace `Channel() do .. end` with
 `OhMyThreads.ChannelLike(1:length(As))`.
 
-## Bumper.jl (only for the brave)
+### Bumper.jl (only for the brave)
 
 If you are bold and want to cut down temporary allocations even more you can
 give [Bumper.jl](https://github.com/MasonProtter/Bumper.jl) a try. Essentially, it
@@ -506,8 +520,8 @@ dynamically allocate memory to, and reset them at the end of a code block, just 
 Julia's stack.
 Be warned though that Bumper.jl is (1) a rather young package with (likely) some bugs
 and (2) can easily lead to segfaults when used incorrectly. If you can live with the
-risk, Bumper.jl is especially useful for cases where the size of the preallocated matrix
-isn't known ahead of time, and even more useful if we want to do many intermediate
+risk, Bumper.jl is especially useful for causes  we don't know ahead of time how large
+a matrix to pre-allocate, and even more useful if we want to do many intermediate
 allocations on the task, not just one. For our example, this isn't the case but let's
 nonetheless how one would use Bumper.jl here.
 
@@ -532,7 +546,7 @@ sort(res) ≈ sort(res_bumper)
 ````
 
 ````
-  7.814 ms (134 allocations: 27.92 KiB)
+  9.439 ms (198 allocations: 39.25 KiB)
 
 ````
 
