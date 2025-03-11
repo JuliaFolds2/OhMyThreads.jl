@@ -710,4 +710,41 @@ end
     @test test_f() == 10
 end
 
+
+@testset "Boxing detection and error" begin
+    let
+        f1() = tmap(1:10) do i
+            A = i
+            sleep(rand()/10)
+            A
+        end
+        f2() = tmap(1:10) do i
+            local A = i
+            sleep(rand()/10)
+            A
+        end
+
+        @test f1() == 1:10
+        @test f2() == 1:10
+    end
+
+    let
+        f1() = tmap(1:10) do i
+            A = i
+            sleep(rand()/10)
+            A
+        end
+        f2() = tmap(1:10) do i
+            local A = i
+            sleep(rand()/10)
+            A
+        end
+
+        @test_throws ErrorException f1()
+        @test f2() == 1:10
+        
+        A = 1 # Cause spooky action-at-a-distance by making A outer-local to the whole let block!
+    end
+end
+
 # Todo way more testing, and easier tests to deal with
