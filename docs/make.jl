@@ -27,6 +27,7 @@ makedocs(;
             "Trapezoidal Integration" => "literate/integration/integration.md"
         ],
         "Translation Guide" => "translation.md",
+        "Boxed Variables" => "literate/boxing/boxing.md",
         "Thread-Safe Storage" => "literate/tls/tls.md",
         "False Sharing" => "literate/falsesharing/falsesharing.md",
         # "Explanations" => [
