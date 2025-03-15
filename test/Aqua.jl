@@ -4,8 +4,8 @@ using Aqua
   Aqua.test_all(
     OhMyThreads;
     # ambiguities=(exclude=[SomePackage.some_function], broken=true),
-    # stale_deps=(ignore=[SomePackage],),
-    deps_compat=(;ignore,),
+    # stale_deps=(ignore=[:SomePackage],),
+    deps_compat=(ignore=[:Test],),
     # piracies=false,
     persistent_tasks=false,
   )
