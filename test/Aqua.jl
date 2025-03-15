@@ -1,7 +1,7 @@
 using Aqua
 
 @testset "Aqua.jl" begin
-  ignore = isdefined(Base, :ScopedValues) ? [:ScopedValues] : []
+  ignore = isdefined(Base, :ScopedValues) ? [:ScopedValues] : Symbol[]
   Aqua.test_all(
     OhMyThreads;
     # ambiguities=(exclude=[SomePackage.some_function], broken=true),
