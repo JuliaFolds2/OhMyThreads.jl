@@ -16,11 +16,7 @@ export chunks, index_chunks
 using TaskLocalValues: TaskLocalValues
 const TaskLocalValue = TaskLocalValues.TaskLocalValue
 
-if isdefined(Base, :ScopedValues)
-    using Base.ScopedValues: ScopedValues, ScopedValue, @with
-else
-    using ScopedValues: ScopedValues, ScopedValue, @with
-end
+using ScopedValues: ScopedValues, ScopedValue, @with
 
 include("types.jl")
 include("functions.jl")
