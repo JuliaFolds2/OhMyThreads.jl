@@ -760,7 +760,7 @@ end
         end
         @test_throws ErrorException f1() == ones(10) # Throws even though the redefinition is 'harmless'
 
-        @allow_boxed_variables begin
+        @allow_boxed_captures begin
             f2() = tmap(1:10) do i
                 A = 1
             end
@@ -769,13 +769,13 @@ end
 
         # Can nest allow and disallow because they're scoped values!
         function f3()
-            @disallow_boxed_variables begin
+            @disallow_boxed_captures begin
                 tmap(1:10) do i
                 A = 1
                 end
             end
         end
-        @allow_boxed_variables begin
+        @allow_boxed_captures begin
             @test_throws ErrorException f3() == ones(10)
         end
     end
