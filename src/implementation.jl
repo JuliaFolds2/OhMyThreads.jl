@@ -1,7 +1,7 @@
 module Implementation
 
 import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
-using OhMyThreads: @spawn, @spawnat, WithTaskLocals, promise_task_local, ChannelLike
+using OhMyThreads: @spawn, @spawnat, WithTaskLocals, promise_task_local, ChannelLike, allowing_boxed_captures
 using OhMyThreads.Tools: nthtid
 using OhMyThreads: Scheduler,
                    DynamicScheduler, StaticScheduler, GreedyScheduler,
@@ -305,10 +305,13 @@ end
 
 
 function throw_if_boxed_captures(f)
+    if allowing_boxed_captures[]
+        return nothing
+    end
     T = typeof(f)
     if any(FT -> FT <: Core.Box, fieldtypes(T))
         boxed_fields = join((fieldname(T, i) for i in 1:fieldcount(T) if fieldtype(T,i) <: Core.Box), ", ")
-        error("Attempted to capture and modify outer local variable(s) $boxed_fields, which would be not only slow, but could also cause a race condition. Consider marking these variables as local inside their respective closure, or redesigning your code to avoid a race condition. If these variables are inside a @one_by_one or @only_one block, consider using a mutable Ref instead of re-binding the variable.")
+        error("Attempted to capture and modify outer local variable(s) $boxed_fields, which would be not only slow, but could also cause a race condition. Consider marking these variables as local inside their respective closure, or redesigning your code to avoid the race condition.\n\nIf these variables are inside a @one_by_one or @only_one block, consider using a mutable Ref instead of re-binding the variable.\n\nThis error can be bypassed with the @allow_boxed_captures macro.")
     end
     for i ∈ 1:fieldcount(T)
         # recurse into nested captured functions.

@@ -752,6 +752,35 @@ end
         
         A = 1 # Cause spooky action-at-a-distance by making A outer-local to the whole let block!
     end
+
+    let
+        A = 1
+        f1() = tmap(1:10) do i
+            A = 1
+        end
+        @test_throws ErrorException f1() == ones(10) # Throws even though the redefinition is 'harmless'
+
+        @allow_boxed_variables begin
+            f2() = tmap(1:10) do i
+                A = 1
+            end
+            @test f2() == ones(10)
+        end
+
+        # Can nest allow and disallow because they're scoped values!
+        function f3()
+            @disallow_boxed_variables begin
+                tmap(1:10) do i
+                A = 1
+                end
+            end
+        end
+        @allow_boxed_variables begin
+            @test_throws ErrorException f3() == ones(10)
+        end
+    end
+    
+    
 end
 
 # Todo way more testing, and easier tests to deal with
