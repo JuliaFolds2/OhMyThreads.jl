@@ -1,11 +1,12 @@
 name = "OhMyThreads"
 uuid = "67456a42-1dca-4109-a031-0a68de7e3ad5"
 authors = ["Carsten Bauer <mail@carstenbauer.eu>", "Mason Protter <mason.protter@icloud.com>"]
-version = "0.7.0"
+version = "0.8.0"
 
 [deps]
 BangBang = "198e06fe-97b7-11e9-32a5-e1d131e6ad66"
 ChunkSplitters = "ae650224-84b6-46f8-82ea-d812ca08434e"
+ScopedValues = "7e506255-f358-4e82-b7e4-beb19740aa63"
 StableTasks = "91464d47-22a1-43fe-8b7f-2d57ee82463f"
 TaskLocalValues = "ed4db957-447d-4319-bfb6-7fa9ae7ecf34"
 
