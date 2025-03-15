@@ -308,7 +308,7 @@ function throw_if_boxed_captures(f)
     T = typeof(f)
     if any(FT -> FT <: Core.Box, fieldtypes(T))
         boxed_fields = join((fieldname(T, i) for i in 1:fieldcount(T) if fieldtype(T,i) <: Core.Box), ", ")
-        error("Attempted to capture and modify outer local variable(s) $boxed_fields, which would cause a race condition. Consider marking these variables as local inside their respective closure, or redesigning your code to avoid a race condition.")
+        error("Attempted to capture and modify outer local variable(s) $boxed_fields, which would be not only slow, but could also cause a race condition. Consider marking these variables as local inside their respective closure, or redesigning your code to avoid a race condition. If these variables are inside a @one_by_one or @only_one block, consider using a mutable Ref instead of re-binding the variable.")
     end
     for i ∈ 1:fieldcount(T)
         # recurse into nested captured functions.
