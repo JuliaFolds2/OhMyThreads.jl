@@ -284,7 +284,7 @@ function _maybe_handle_atonebyone_blocks!(args)
         init_lock_ex = :($(onebyone) = Base.ReentrantLock())
         push!(setup_onebyone_blocks.args, init_lock_ex)
         args[i] = quote
-            $(esc(:lock))($(onebyone)) do
+            lock($(onebyone)) do
                 $(esc(body))
             end
         end
