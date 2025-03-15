@@ -13,6 +13,8 @@ CollapsedDocStrings = true
 @local
 @only_one
 @one_by_one
+@allow_boxed_captures
+@disallow_boxed_captures
 ```
 
 ### Functions
