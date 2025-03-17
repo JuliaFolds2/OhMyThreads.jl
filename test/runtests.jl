@@ -261,21 +261,22 @@ end;
     end) == 10 * var
 
     # enumerate(chunks)
-    data = collect(1:100)
-    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.index_chunks(data; n=5))
-        @set reducer = +
-        @set chunking = false
-        [i, sum(@view(data[idcs]))]
-    end) == [sum(1:5), sum(data)]
-    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.index_chunks(data; size=5))
-        @set reducer = +
-        [i, sum(@view(data[idcs]))]
-    end) == [sum(1:20), sum(data)]
-    @test @tasks(for (i, idcs) in enumerate(OhMyThreads.index_chunks(1:100; n=5))
-        @set chunking=false
-        @set collect=true
-        [i, idcs]
-    end) == [[1, 1:20], [2, 21:40], [3, 41:60], [4, 61:80], [5, 81:100]]
+    let data = collect(1:100)
+        @test @tasks(for (i, idcs) in enumerate(OhMyThreads.index_chunks(data; n=5))
+                         @set reducer = +
+                             @set chunking = false
+                         [i, sum(@view(data[idcs]))]
+                     end) == [sum(1:5), sum(data)]
+        @test @tasks(for (i, idcs) in enumerate(OhMyThreads.index_chunks(data; size=5))
+                         @set reducer = +
+                             [i, sum(@view(data[idcs]))]
+                     end) == [sum(1:20), sum(data)]
+        @test @tasks(for (i, idcs) in enumerate(OhMyThreads.index_chunks(1:100; n=5))
+                         @set chunking=false
+                         @set collect=true
+                         [i, idcs]
+                     end) == [[1, 1:20], [2, 21:40], [3, 41:60], [4, 61:80], [5, 81:100]]
+    end
 end;
 
 @testset "WithTaskLocals" begin
@@ -362,10 +363,10 @@ end;
         @test_throws ArgumentError sched(; nchunks = -2, chunksize = -3)
 
         let scheduler = sched(; chunksize = 2, split = :batch)
-            @test tmapreduce(sin, +, 1:10; scheduler) ≈ mapreduce(sin, +, 1:10)
+            @test tmapreduce(sin, +, 1:10; scheduler, init=0.0) ≈ mapreduce(sin, +, 1:10)
+            @test treduce(+, 1:10; scheduler, init=0.0) ≈ reduce(+, 1:10)
             @test tmap(sin, Float64, 1:10; scheduler) ≈ map(sin, 1:10)
             @test isnothing(tforeach(sin, 1:10; scheduler))
-            @test treduce(+, 1:10; scheduler) ≈ reduce(+, 1:10)
         end
     end
 end;
@@ -462,6 +463,7 @@ end
 @testset "regions" begin
     @testset "@one_by_one" begin
         sao = SingleAccessOnly()
+
         try
             @tasks for i in 1:10
                 @set ntasks = 10
@@ -477,111 +479,114 @@ end
             @test true
         end
 
+
         # test escaping
-        x = 0
-        y = 0
-        sao = SingleAccessOnly()
-        try
+        let
+            x = Ref(0)
+            y = Ref(0)
             @tasks for i in 1:10
                 @set ntasks = 10
 
-                y += 1 # not safe (race condition)
+                y[] += 1 # not safe (race condition)
                 @one_by_one begin
-                    x += 1 # parallel-safe because inside of one_by_one region
+                    x[] += 1 # parallel-safe because inside of one_by_one region
                     acquire(sao) do
                         sleep(0.01)
                     end
                 end
             end
-            @test x == 10
-        catch ErrorException
-            @test false
+            @test x[] == 10
+
         end
 
         test_f = () -> begin
-            x = 0
-            y = 0
+            x = Ref(0)
+            y = Ref(0)
             @tasks for i in 1:10
                 @set ntasks = 10
 
-                y += 1 # not safe (race condition)
+                y[] += 1 # not safe (race condition)
                 @one_by_one begin
-                    x += 1 # parallel-safe because inside of one_by_one region
+                    x[] += 1 # parallel-safe because inside of one_by_one region
                     acquire(sao) do
                         sleep(0.01)
                     end
                 end
             end
-            return x
+            return x[]
         end
         @test test_f() == 10
     end
 
     @testset "@only_one" begin
-        x = 0
-        y = 0
-        try
-            @tasks for i in 1:10
-                @set ntasks = 10
+        let
+            x = Ref(0)
+            y = Ref(0)
+            try
+                @tasks for i in 1:10
+                    @set ntasks = 10
 
-                y += 1 # not safe (race condition)
-                @only_one begin
-                    x += 1 # parallel-safe because only a single task will execute this
+                    y[] += 1 # not safe (race condition)
+                    @only_one begin
+                        x[] += 1 # parallel-safe because only a single task will execute this
+                    end
                 end
+                @test x[] == 1 # only a single task should have incremented x
+            catch ErrorException
+                @test false
             end
-            @test x == 1 # only a single task should have incremented x
-        catch ErrorException
-            @test false
         end
 
-        x = 0
-        y = 0
-        try
-            @tasks for i in 1:10
-                @set ntasks = 2
+        let 
+            x = Ref(0)
+            y = Ref(0)
+            try
+                @tasks for i in 1:10
+                    @set ntasks = 2
 
-                y += 1 # not safe (race condition)
-                @only_one begin
-                    x += 1 # parallel-safe because only a single task will execute this
+                    y[] += 1 # not safe (race condition)
+                    @only_one begin
+                        x[] += 1 # parallel-safe because only a single task will execute this
+                    end
                 end
+                @test x[] == 5 # a single task should have incremented x 5 times
+            catch ErrorException
+                @test false
             end
-            @test x == 5 # a single task should have incremented x 5 times
-        catch ErrorException
-            @test false
         end
 
         test_f = () -> begin
-            x = 0
-            y = 0
+            x = Ref(0)
+            y = Ref(0)
             @tasks for i in 1:10
                 @set ntasks = 2
 
-                y += 1 # not safe (race condition)
+                y[] += 1 # not safe (race condition)
                 @only_one begin
-                    x += 1 # parallel-safe because only a single task will execute this
+                    x[] += 1 # parallel-safe because only a single task will execute this
                 end
             end
-            return x
+            return x[]
         end
         @test test_f() == 5
     end
 
     @testset "@only_one + @one_by_one" begin
-        x = 0
-        y = 0
+        x = Ref(0)
+        y = Ref(0)
         try
             @tasks for i in 1:10
                 @set ntasks = 10
 
                 @only_one begin
-                    x += 1 # parallel-safe
+                    x[] += 1 # parallel-safe
                 end
 
                 @one_by_one begin
-                    y += 1 # parallel-safe
+                    y[] += 1 # parallel-safe
                 end
             end
-            @test x == 1 && y == 10
+            @test x[] == 1 && y[] == 10
         catch ErrorException
             @test false
         end
@@ -674,40 +679,108 @@ end
         x[]
     end)
     # OhMyThreads.@only_one
-    x = 0
-    y = 0
-    try
-        @tasks for i in 1:10
-            OhMyThreads.@set ntasks = 10
+    let
+        x = Ref(0)
+        y = Ref(0)
+        try
+            @tasks for i in 1:10
+                OhMyThreads.@set ntasks = 10
 
-            y += 1 # not safe (race condition)
-            OhMyThreads.@only_one begin
-                x += 1 # parallel-safe because only a single task will execute this
+                y[] += 1 # not safe (race condition)
+                OhMyThreads.@only_one begin
+                    x[] += 1 # parallel-safe because only a single task will execute this
+                end
             end
+            @test x[] == 1 # only a single task should have incremented x
+        catch ErrorException
+            @test false
         end
-        @test x == 1 # only a single task should have incremented x
-    catch ErrorException
-        @test false
     end
     # OhMyThreads.@one_by_one
     test_f = () -> begin
         sao = SingleAccessOnly()
-        x = 0
-        y = 0
+        x = Ref(0)
+        y = Ref(0)
         @tasks for i in 1:10
             OhMyThreads.@set ntasks = 10
 
-            y += 1 # not safe (race condition)
+            y[] += 1 # not safe (race condition)
             OhMyThreads.@one_by_one begin
-                x += 1 # parallel-safe because inside of one_by_one region
+                x[] += 1 # parallel-safe because inside of one_by_one region
                 acquire(sao) do
                     sleep(0.01)
                 end
             end
         end
-        return x
+        return x[]
     end
     @test test_f() == 10
+end
+
+
+@testset "Boxing detection and error" begin
+    let
+        f1() = tmap(1:10) do i
+            A = i
+            sleep(rand()/10)
+            A
+        end
+        f2() = tmap(1:10) do i
+            local A = i
+            sleep(rand()/10)
+            A
+        end
+
+        @test f1() == 1:10
+        @test f2() == 1:10
+    end
+
+    let
+        f1() = tmap(1:10) do i
+            A = i
+            sleep(rand()/10)
+            A
+        end
+        f2() = tmap(1:10) do i
+            local A = i
+            sleep(rand()/10)
+            A
+        end
+
+        @test_throws ErrorException f1()
+        @test f2() == 1:10
+        
+        A = 1 # Cause spooky action-at-a-distance by making A outer-local to the whole let block!
+    end
+
+    let
+        A = 1
+        f1() = tmap(1:10) do i
+            A = 1
+        end
+        @test_throws ErrorException f1() == ones(10) # Throws even though the redefinition is 'harmless'
+
+        @allow_boxed_captures begin
+            f2() = tmap(1:10) do i
+                A = 1
+            end
+            @test f2() == ones(10)
+        end
+
+        # Can nest allow and disallow because they're scoped values!
+        function f3()
+            @disallow_boxed_captures begin
+                tmap(1:10) do i
+                A = 1
+                end
+            end
+        end
+        @allow_boxed_captures begin
+            @test_throws ErrorException f3() == ones(10)
+        end
+    end
+    
+    
 end
 
 # Todo way more testing, and easier tests to deal with
