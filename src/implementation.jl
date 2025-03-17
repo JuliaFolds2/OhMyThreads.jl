@@ -1,7 +1,7 @@
 module Implementation
 
 import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
-using OhMyThreads: @spawn, @spawnat, WithTaskLocals, promise_task_local, ChannelLike
+using OhMyThreads: @spawn, @spawnat, WithTaskLocals, promise_task_local, ChannelLike, allowing_boxed_captures
 using OhMyThreads.Tools: nthtid
 using OhMyThreads: Scheduler,
                    DynamicScheduler, StaticScheduler, GreedyScheduler,
@@ -94,6 +94,7 @@ end
 
 treducemap(op, f, A...; kwargs...) = tmapreduce(f, op, A...; kwargs...)
 
+
 # DynamicScheduler: AbstractArray/Generic
 function _tmapreduce(f,
         op,
@@ -103,6 +104,7 @@ function _tmapreduce(f,
         mapreduce_kwargs)::OutputType where {OutputType}
     (; threadpool) = scheduler
     check_all_have_same_indices(Arrs)
+    throw_if_boxed_captures(f, op)
     if chunking_enabled(scheduler)
         tasks = map(_index_chunks(scheduler, first(Arrs))) do inds
             args = map(A -> view(A, inds), Arrs)
@@ -129,6 +131,7 @@ function _tmapreduce(f,
         scheduler::DynamicScheduler,
         mapreduce_kwargs)::OutputType where {OutputType, T}
     (; threadpool) = scheduler
+    throw_if_boxed_captures(f, op)
     tasks = map(only(Arrs)) do idcs
         @spawn threadpool promise_task_local(f)(idcs)
     end
@@ -144,6 +147,7 @@ function _tmapreduce(f,
         mapreduce_kwargs)::OutputType where {OutputType}
     nt = nthreads()
     check_all_have_same_indices(Arrs)
+    throw_if_boxed_captures(f, op)
     if chunking_enabled(scheduler)
         tasks = map(enumerate(_index_chunks(scheduler, first(Arrs)))) do (c, inds)
             tid = @inbounds nthtid(mod1(c, nt))
@@ -176,6 +180,7 @@ function _tmapreduce(f,
         scheduler::StaticScheduler,
         mapreduce_kwargs)::OutputType where {OutputType, T}
     check_all_have_same_indices(Arrs)
+    throw_if_boxed_captures(f, op)
     chnks = only(Arrs)
     nt = nthreads()
     tasks = map(enumerate(chnks)) do (c, idcs)
@@ -191,6 +196,26 @@ end
 
 # NOTE: once v1.12 releases we should switch this to wait(t; throw=false)
 wait_nothrow(t) = Base._wait(t)
+
+
+"""
+    empty_collection_error(task)
+
+Check if a task failed due to an empty collection error.
+"""
+function empty_collection_error end
+
+@static if VERSION < v"1.11.0-"
+    function empty_collection_error(task)
+        task.result isa MethodError && task.result.f == Base.mapreduce_empty
+    end
+else
+    function empty_collection_error(task)
+        task.result isa ArgumentError &&
+            task.result.msg ==
+            "reducing over an empty collection is not allowed; consider supplying `init` to the reducer"
+    end
+end
 
 # GreedyScheduler w/o chunking
 function _tmapreduce(f,
@@ -208,6 +233,7 @@ function _tmapreduce(f,
         ntasks = min(length(first(Arrs)), ntasks_desired)
         ch_len = length(first(Arrs))
     end
+    throw_if_boxed_captures(f, op)
     # TODO: Use ChannelLike for iterators that support it. Dispatch on IndexLinear?
     ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn = true) do ch
         for args in zip(Arrs...)
@@ -231,7 +257,7 @@ function _tmapreduce(f,
     filtered_tasks = filter(tasks) do stabletask
         task = stabletask.t
         istaskdone(task) || wait_nothrow(task)
-        if task.result isa MethodError && task.result.f == Base.mapreduce_empty
+        if empty_collection_error(task)
             false
         else
             true
@@ -253,6 +279,7 @@ function _tmapreduce(f,
         throw(ArgumentError("SizeUnkown iterators in combination with a greedy scheduler and chunking are currently not supported."))
     end
     check_all_have_same_indices(Arrs)
+    throw_if_boxed_captures(f, op)
     chnks = _index_chunks(scheduler, first(Arrs))
     ntasks_desired = scheduler.ntasks
     ntasks = min(length(chnks), ntasks_desired)
@@ -278,7 +305,7 @@ function _tmapreduce(f,
     filtered_tasks = filter(tasks) do stabletask
         task = stabletask.t
         istaskdone(task) || wait_nothrow(task)
-        if task.result isa MethodError && task.result.f == Base.mapreduce_empty
+        if empty_collection_error(task)
             false
         else
             true
@@ -295,6 +322,33 @@ function check_all_have_same_indices(Arrs)
             error("The indices of the input arrays must match the indices of the output array.")
         end
     end
+end
+
+
+function throw_if_boxed_captures(f)
+    if allowing_boxed_captures[]
+        return nothing
+    end
+    T = typeof(f)
+    if any(FT -> FT <: Core.Box, fieldtypes(T))
+        boxed_fields = join((fieldname(T, i) for i in 1:fieldcount(T) if fieldtype(T,i) <: Core.Box), ", ")
+        error("Attempted to capture and modify outer local variable(s) $boxed_fields, which would be not only slow, but could also cause a race condition. Consider marking these variables as local inside their respective closure, or redesigning your code to avoid the race condition.\n\nIf these variables are inside a @one_by_one or @only_one block, consider using a mutable Ref instead of re-binding the variable.\n\nThis error can be bypassed with the @allow_boxed_captures macro.")
+    end
+    for i ∈ 1:fieldcount(T)
+        # recurse into nested captured functions.
+        if fieldtype(T, i) <: Function
+            f_inner = getfield(f, i)
+            if f !== f_inner
+                # don't recurse into self!
+                throw_if_boxed_captures(getfield(f, i))
+            end
+        end
+    end
+end
+
+function throw_if_boxed_captures(f, fs...)
+    throw_if_boxed_captures(f)
+    throw_if_boxed_captures(fs...)
 end
 
 #-------------------------------------------------------------
@@ -382,6 +436,7 @@ function _tmap(scheduler::DynamicScheduler{NoChunking},
         _Arrs::AbstractArray...;)
     (; threadpool) = scheduler
     Arrs = (A, _Arrs...)
+    throw_if_boxed_captures(f)
     tasks = map(eachindex(A)) do i
         @spawn threadpool begin
             args = map(A -> A[i], Arrs)
@@ -398,6 +453,7 @@ function _tmap(scheduler::DynamicScheduler{NoChunking},
         A::Union{AbstractChunks, ChunkSplitters.Internals.Enumerate},
         _Arrs::AbstractArray...)
     (; threadpool) = scheduler
+    throw_if_boxed_captures(f)
     tasks = map(A) do idcs
         @spawn threadpool promise_task_local(f)(idcs)
     end
@@ -410,6 +466,7 @@ function _tmap(scheduler::StaticScheduler{NoChunking},
         A::AbstractChunks,
         _Arrs::AbstractArray...)
     nt = nthreads()
+    throw_if_boxed_captures(f)
     tasks = map(enumerate(A)) do (c, idcs)
         tid = @inbounds nthtid(mod1(c, nt))
         @spawnat tid promise_task_local(f)(idcs)
@@ -424,6 +481,7 @@ function _tmap(scheduler::StaticScheduler{NoChunking},
         _Arrs::AbstractArray...;)
     Arrs = (A, _Arrs...)
     nt = nthreads()
+    throw_if_boxed_captures(f)
     tasks = map(enumerate(A)) do (c, i)
         tid = @inbounds nthtid(mod1(c, nt))
         @spawnat tid begin
@@ -466,6 +524,7 @@ end
         map!(f, out, Arrs...)
     else
         @boundscheck check_all_have_same_indices((out, Arrs...))
+        throw_if_boxed_captures(f)
         mapping_f = maybe_rewrap(f) do f
             function mapping_function(i)
                 args = map(A -> @inbounds(A[i]), Arrs)

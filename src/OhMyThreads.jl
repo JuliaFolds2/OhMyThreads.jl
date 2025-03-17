@@ -15,6 +15,9 @@ export chunks, index_chunks
 
 using TaskLocalValues: TaskLocalValues
 const TaskLocalValue = TaskLocalValues.TaskLocalValue
+
+using ScopedValues: ScopedValues, ScopedValue, @with
+
 include("types.jl")
 include("functions.jl")
 include("macros.jl")
@@ -26,7 +29,7 @@ using .Schedulers: Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler
 include("implementation.jl")
 include("experimental.jl")
 
-export @tasks, @set, @local, @one_by_one, @only_one
+export @tasks, @set, @local, @one_by_one, @only_one, @allow_boxed_captures, @disallow_boxed_captures
 export treduce, tmapreduce, treducemap, tmap, tmap!, tforeach, tcollect
 export Scheduler, DynamicScheduler, StaticScheduler, GreedyScheduler, SerialScheduler
 
