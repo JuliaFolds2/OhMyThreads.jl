@@ -4,6 +4,7 @@ OhMyThreads.jl Changelog
 Version 0.8.0
 -------------
 - ![BREAKING][badge-breaking] We now detect and throw errors if an `OhMyThreads` parallel function is passed a closure containing a `Box`ed variable. This behaviour can be disabled with the new `@allow_boxed_captures` macro, and re-enabled with `@disallow_boxed_captures`. ([#141][gh-pr-141])
+- ![INFO][badge-info] Schedulder chunking info is no longer directly available via `getproperty`. This was never a public interface, but it's possible some users relied upon it [#135][gh-pr-135].
 
 Version 0.7.0
 -------------
@@ -143,4 +144,5 @@ Version 0.2.0
 
 [gh-pr-5]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/5
 [gh-pr-121]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/121
+[gh-pr-135]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/135
 [gh-pr-141]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/141
