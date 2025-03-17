@@ -756,7 +756,8 @@ end
          ├ Num. tasks: $nt
          ├ Chunking: fixed count ($(10 * nt)), split :roundrobin
          └ Threadpool: default"""
-
+end
+  
 @testset "Boxing detection and error" begin
     let
         f1() = tmap(1:10) do i
