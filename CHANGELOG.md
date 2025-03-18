@@ -1,6 +1,11 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.8.1
+------------
+- ![Feature][badge-feature] Added a `@localize` macro which turns `@localize x y expr` into `let x=x, y=y; expr end` ([#142][gh-pr-142])
+- ![INFO][badge-info] The error messafe for captured variables now has a longer error hint that displays when the `Markdown` package is loaded (e.g. in the REPL.) ([#142][gh-pr-142])
+
 Version 0.8.0
 -------------
 - ![BREAKING][badge-breaking] We now detect and throw errors if an `OhMyThreads` parallel function is passed a closure containing a `Box`ed variable. This behaviour can be disabled with the new `@allow_boxed_captures` macro, and re-enabled with `@disallow_boxed_captures`. ([#141][gh-pr-141])
@@ -146,3 +151,4 @@ Version 0.2.0
 [gh-pr-121]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/121
 [gh-pr-135]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/135
 [gh-pr-141]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/141
+[gh-pr-142]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/142
