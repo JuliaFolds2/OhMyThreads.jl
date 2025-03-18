@@ -2,6 +2,7 @@ using Test, OhMyThreads
 using OhMyThreads: TaskLocalValue, WithTaskLocals, @fetch, promise_task_local
 using OhMyThreads: Consecutive, RoundRobin
 using OhMyThreads.Experimental: @barrier
+using OhMyThreads.Implementation: BoxedVariableError
 
 include("Aqua.jl")
 
@@ -787,7 +788,7 @@ end
             A
         end
 
-        @test_throws ErrorException f1()
+        @test_throws BoxedVariableError f1()
         @test f2() == 1:10
         
         A = 1 # Cause spooky action-at-a-distance by making A outer-local to the whole let block!
@@ -798,7 +799,7 @@ end
         f1() = tmap(1:10) do i
             A = 1
         end
-        @test_throws ErrorException f1() == ones(10) # Throws even though the redefinition is 'harmless'
+        @test_throws BoxedVariableError f1() == ones(10) # Throws even though the redefinition is 'harmless'
 
         @allow_boxed_captures begin
             f2() = tmap(1:10) do i
@@ -816,7 +817,7 @@ end
             end
         end
         @allow_boxed_captures begin
-            @test_throws ErrorException f3() == ones(10)
+            @test_throws BoxedVariableError f3() == ones(10)
         end
     end
     @testset "@localize" begin
