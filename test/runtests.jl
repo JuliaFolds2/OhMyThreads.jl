@@ -826,7 +826,7 @@ end
             A = 2
         end
         ## This stops A from being boxed!
-        v = @localize A map(1:2) do _
+        v = @localize A tmap(1:2) do _
             A
         end
         @test v == [1, 1]
