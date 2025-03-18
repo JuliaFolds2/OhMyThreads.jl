@@ -819,6 +819,17 @@ end
             @test_throws ErrorException f3() == ones(10)
         end
     end
+    @testset "@localize" begin
+        A = 1
+        if false
+            A = 2
+        end
+        ## This stops A from being boxed!
+        v = @localize A map(1:2) do _
+            A
+        end
+        @test v == [1, 1]
+    end
 end
 
 # Todo way more testing, and easier tests to deal with

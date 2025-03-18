@@ -304,3 +304,34 @@ macro disallow_boxed_captures(ex)
         @with allowing_boxed_captures => false $(esc(ex))
     end
 end
+
+"""
+   @localize args... expr
+
+Writing
+```
+@localize x y z expr
+```
+is equivalent to writing
+```
+let x=x, y=y, z=z
+    expr
+end
+```
+This is useful for avoiding the boxing of captured variables when working with closures.
+
+See https://juliafolds2.github.io/OhMyThreads.jl/stable/literate/boxing/boxing/ for more information about boxed variables.
+"""
+macro localize(args...)
+    syms = args[1:end-1]
+    ex = args[end]
+    letargs = map(syms) do sym
+        if !(sym isa Symbol)
+            throw(ArgumentError("All but the final argument to `@localize` must be symbols! Got $sym"))
+        end
+        :($sym = $sym)
+    end
+    esc(:(let $(letargs...)
+              $ex
+          end))
+end
