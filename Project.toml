@@ -10,13 +10,17 @@ ScopedValues = "7e506255-f358-4e82-b7e4-beb19740aa63"
 StableTasks = "91464d47-22a1-43fe-8b7f-2d57ee82463f"
 TaskLocalValues = "ed4db957-447d-4319-bfb6-7fa9ae7ecf34"
 
+[extensions]
+MarkdownExt = "Markdown"
+
 [compat]
 Aqua = "0.8"
 BangBang = "0.3.40, 0.4"
 ChunkSplitters = "3"
+Markdown = "1.11.0"
+ScopedValues = "1.3"
 StableTasks = "0.1.5"
 TaskLocalValues = "0.1"
-ScopedValues = "1.3"
 Test = "1"
 julia = "1.10"
 

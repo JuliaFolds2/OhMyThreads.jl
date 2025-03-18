@@ -324,6 +324,17 @@ function check_all_have_same_indices(Arrs)
     end
 end
 
+struct BoxedVariableError <: Exception
+    vars::Vector{Symbol}
+end
+function Base.showerror(io::IO, bve::BoxedVariableError)
+    boxed_fields = join(bve.vars, ", ")
+    print(io, "Attempted to capture and modify outer local variable(s) $boxed_fields.
+See https://juliafolds2.github.io/OhMyThreads.jl/stable/literate/boxing/boxing/ for a fuller explanation.")
+    if isdefined(Base.Experimental, :show_error_hints)
+        Base.Experimental.show_error_hints(io, bve)
+    end
+end
 
 function throw_if_boxed_captures(f)
     if allowing_boxed_captures[]
@@ -331,8 +342,8 @@ function throw_if_boxed_captures(f)
     end
     T = typeof(f)
     if any(FT -> FT <: Core.Box, fieldtypes(T))
-        boxed_fields = join((fieldname(T, i) for i in 1:fieldcount(T) if fieldtype(T,i) <: Core.Box), ", ")
-        error("Attempted to capture and modify outer local variable(s) $boxed_fields, which would be not only slow, but could also cause a race condition. Consider marking these variables as local inside their respective closure, or redesigning your code to avoid the race condition.\n\nIf these variables are inside a @one_by_one or @only_one block, consider using a mutable Ref instead of re-binding the variable.\n\nThis error can be bypassed with the @allow_boxed_captures macro.")
+        boxed_fields = [fieldname(T, i) for i in 1:fieldcount(T) if fieldtype(T,i) <: Core.Box]
+        throw(BoxedVariableError(boxed_fields))
     end
     for i ∈ 1:fieldcount(T)
         # recurse into nested captured functions.
