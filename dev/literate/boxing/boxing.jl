@@ -5,6 +5,8 @@ All multithreading in julia is built around the idea of passing around
 and executing functions, but often these functions "enclose" data from
 an outer local scope, making them what's called a "closure".
 
+# ## Boxed variables causing race conditions
+
 Julia allows functions which capture variables to re-bind those variables
 to different values, but doing so can cause subtle race conditions in
 multithreaded code.
@@ -44,11 +46,26 @@ try
         out
     end
 catch e;
-    println(e.msg) # show that error
+    ## Show the error
+    Base.showerror(stdout, e)
 end
 
 #====================================
-If you really desire to bypass this behaviour, you can use the
+In this case, we could fix the race conditon by marking `A` as local:
+====================================#
+
+let
+    out = tmap(1:10) do i
+        local A = i # Note the use of `local`
+        sleep(1/100)
+        A
+    end
+    A = 1
+    out
+end
+
+#====================================
+If you really desire to bypass this error, you can use the
 `@allow_boxed_captures` macro
 ====================================#
 
@@ -61,3 +78,51 @@ If you really desire to bypass this behaviour, you can use the
     A = 1
     out
 end
+
+#====================================
+## Non-race conditon boxed variables
+
+Any re-binding of captured variables can cause boxing, even when that boxing isn't strictly necessary, like the following example where we do not rebind `A` in the loop:
+====================================#
+try
+    let A = 1
+        if rand(Bool)
+            ## Rebind A, it's now boxed!
+            A = 2
+        end
+        @tasks for i in 1:2
+            @show A
+        end
+    end
+catch e;
+    println("Yup, that errored!")
+end
+#====================================
+This comes down to how julia parses and lowers code. To avoid this, you can use an inner `let` block to localize `A` to the loop:
+====================================#
+
+let A = 1
+    if rand(Bool)
+        A = 2
+    end
+    let A = A # This stops A from being boxed!
+        @tasks for i in 1:2
+            @show A
+        end
+    end
+end
+
+#====================================
+OhMyThreads provides a macro `@localize` to automate this process:
+====================================#
+
+let A = 1
+    if rand(Bool)
+        A = 2
+    end
+    ## This stops A from being boxed!
+    @localize A @tasks for i in 1:2
+        @show A
+    end
+end
+
