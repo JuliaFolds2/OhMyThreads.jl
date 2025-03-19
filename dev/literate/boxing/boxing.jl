@@ -5,7 +5,7 @@ All multithreading in julia is built around the idea of passing around
 and executing functions, but often these functions "enclose" data from
 an outer local scope, making them what's called a "closure".
 
-# ## Boxed variables causing race conditions
+## Boxed variables causing race conditions
 
 Julia allows functions which capture variables to re-bind those variables
 to different values, but doing so can cause subtle race conditions in
