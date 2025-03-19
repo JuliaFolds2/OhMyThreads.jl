@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Julia Set · OhMyThreads.jl</title><meta name="title" content="Julia Set · OhMyThreads.jl"/><meta property="og:title" content="Julia Set · OhMyThreads.jl"/><meta property="twitter:title" content="Julia Set · OhMyThreads.jl"/><meta name="description" content="Documentation for OhMyThreads.jl."/><meta property="og:description" content="Documentation for OhMyThreads.jl."/><meta property="twitter:description" content="Documentation for OhMyThreads.jl."/><script data-outdated-warner src="../../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../../assets/documenter.js"></script><script src="../../../search_index.js"></script><script src="../../../siteinfo.js"></script><script src="../../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../../">OhMyThreads.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../../">OhMyThreads</a></li><li><input class="collapse-toggle" id="menuitem-2" type="checkbox" checked/><label class="tocitem" for="menuitem-2"><span class="docs-label">Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../mc/mc/">Parallel Monte Carlo</a></li><li class="is-active"><a class="tocitem" href>Julia Set</a><ul class="internal"><li><a class="tocitem" href="#Sequential-computation"><span>Sequential computation</span></a></li><li><a class="tocitem" href="#Parallelization"><span>Parallelization</span></a></li><li><a class="tocitem" href="#Benchmark"><span>Benchmark</span></a></li></ul></li><li><a class="tocitem" href="../../integration/integration/">Trapezoidal Integration</a></li></ul></li><li><a class="tocitem" href="../../../translation/">Translation Guide</a></li><li><a class="tocitem" href="../../boxing/boxing/">Boxed Variables</a></li><li><a class="tocitem" href="../../tls/tls/">Thread-Safe Storage</a></li><li><a class="tocitem" href="../../falsesharing/falsesharing/">False Sharing</a></li><li><input class="collapse-toggle" id="menuitem-7" type="checkbox"/><label class="tocitem" for="menuitem-7"><span class="docs-label">API</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../../refs/api/">Public API</a></li><li><a class="tocitem" href="../../../refs/experimental/">Experimental</a></li><li><a class="tocitem" href="../../../refs/internal/">Internal</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li class="is-active"><a href>Julia Set</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Julia Set</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/JuliaFolds2/OhMyThreads.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/JuliaFolds2/OhMyThreads.jl/blob/master/docs/src/literate/juliaset/juliaset.jl#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Julia-Set"><a class="docs-heading-anchor" href="#Julia-Set">Julia Set</a><a id="Julia-Set-1"></a><a class="docs-heading-anchor-permalink" href="#Julia-Set" title="Permalink"></a></h1><p>In this example, we will compute an image of the <a href="https://en.wikipedia.org/wiki/Julia_set">Julia set</a> in parallel. We will explore the <code>schedule</code> and <code>nchunks</code> options that can be used to get load balancing.</p><p>The value of a single pixel of the Julia set, which corresponds to a point in the complex number plane, can be computed by the following iteration procedure.</p><pre><code class="language-julia hljs">function _compute_pixel(i, j, n; max_iter = 255, c = -0.79 + 0.15 * im)
+    x = -2.0 + (j - 1) * 4.0 / (n - 1)
+    y = -2.0 + (i - 1) * 4.0 / (n - 1)
+
+    z = x + y * im
+    iter = max_iter
+    for k in 1:max_iter
+        if abs2(z) &gt; 4.0
+            iter = k - 1
+            break
+        end
+        z = z^2 + c
+    end
+    return iter
+end</code></pre><pre><code class="nohighlight hljs">_compute_pixel (generic function with 1 method)</code></pre><p>Note that the value of the pixel is the number of performed iterations for the corresponding complex input number. Hence, the computational <strong>workload is non-uniform</strong>.</p><h2 id="Sequential-computation"><a class="docs-heading-anchor" href="#Sequential-computation">Sequential computation</a><a id="Sequential-computation-1"></a><a class="docs-heading-anchor-permalink" href="#Sequential-computation" title="Permalink"></a></h2><p>In our naive implementation, we just loop over the dimensions of the image matrix and call the pixel kernel above.</p><pre><code class="language-julia hljs">function compute_juliaset_sequential!(img)
+    N = size(img, 1)
+    for j in 1:N
+        for i in 1:N
+            img[i, j] = _compute_pixel(i, j, N)
+        end
+    end
+    return img
+end
+
+N = 2000
+img = zeros(Int, N, N)
+compute_juliaset_sequential!(img);</code></pre><p>Let&#39;s look at the result</p><pre><code class="language-julia hljs">using Plots
+p = heatmap(img)</code></pre><p><img src="../juliaset-8.png" alt/></p><h2 id="Parallelization"><a class="docs-heading-anchor" href="#Parallelization">Parallelization</a><a id="Parallelization-1"></a><a class="docs-heading-anchor-permalink" href="#Parallelization" title="Permalink"></a></h2><p>The Julia set computation above is a <code>map!</code> operation: We apply some function to each element of the array. Hence, we can use <code>tmap!</code> for parallelization. We use <code>CartesianIndices</code> to map between linear and two-dimensional cartesian indices.</p><pre><code class="language-julia hljs">using OhMyThreads: tmap!
+
+function compute_juliaset_parallel!(img; kwargs...)
+    N = size(img, 1)
+    cart = CartesianIndices(img)
+    tmap!(img, eachindex(img); kwargs...) do idx
+        c = cart[idx]
+        _compute_pixel(c[1], c[2], N)
+    end
+    return img
+end
+
+# or alternatively
+#
+# function compute_juliaset_parallel!(img; kwargs...)
+#     N = size(img, 1)
+#     cart = CartesianIndices(img)
+#     @tasks for idx in eachindex(img)
+#         c = cart[idx]
+#         img[idx] = _compute_pixel(c[1], c[2], N)
+#     end
+#     return img
+# end
+
+N = 2000
+img = zeros(Int, N, N)
+compute_juliaset_parallel!(img);
+p = heatmap(img)</code></pre><p><img src="../juliaset-10.png" alt/></p><h2 id="Benchmark"><a class="docs-heading-anchor" href="#Benchmark">Benchmark</a><a id="Benchmark-1"></a><a class="docs-heading-anchor-permalink" href="#Benchmark" title="Permalink"></a></h2><p>Let&#39;s benchmark the variants above.</p><pre><code class="language-julia hljs">using BenchmarkTools
+using Base.Threads: nthreads
+
+N = 2000
+img = zeros(Int, N, N)
+
+@show nthreads()
+
+@btime compute_juliaset_sequential!($img) samples=10 evals=3;
+@btime compute_juliaset_parallel!($img) samples=10 evals=3;</code></pre><pre><code class="nohighlight hljs">nthreads() = 10
+  131.295 ms (0 allocations: 0 bytes)
+  31.422 ms (68 allocations: 6.09 KiB)
+</code></pre><p>As hoped, the parallel implementation is much faster!</p><h3 id="Dynamic-vs-static-scheduling"><a class="docs-heading-anchor" href="#Dynamic-vs-static-scheduling">Dynamic vs static scheduling</a><a id="Dynamic-vs-static-scheduling-1"></a><a class="docs-heading-anchor-permalink" href="#Dynamic-vs-static-scheduling" title="Permalink"></a></h3><p>As stated above, the per-pixel computation is non-uniform. Hence, we do benefit from the load balancing of the default dynamic scheduler. The latter divides the overall workload into tasks that can then be dynamically distributed among threads to adjust the per-thread load. We can try to fine tune and improve the load balancing further by increasing the <code>ntasks</code> parameter of the scheduler, that is, creating more tasks with smaller per-task workload.</p><pre><code class="language-julia hljs">using OhMyThreads: DynamicScheduler
+
+@btime compute_juliaset_parallel!($img; ntasks=N, scheduler=:dynamic) samples=10 evals=3;</code></pre><pre><code class="nohighlight hljs">  17.438 ms (12018 allocations: 1.11 MiB)
+</code></pre><p>Note that while this turns out to be a bit faster, it comes at the expense of much more allocations.</p><p>To quantify the impact of load balancing we can opt out of dynamic scheduling and use the <code>StaticScheduler</code> instead. The latter doesn&#39;t provide any form of load balancing.</p><pre><code class="language-julia hljs">using OhMyThreads: StaticScheduler
+
+@btime compute_juliaset_parallel!($img; scheduler=:static) samples=10 evals=3;</code></pre><pre><code class="nohighlight hljs">  30.097 ms (73 allocations: 6.23 KiB)
+</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../mc/mc/">« Parallel Monte Carlo</a><a class="docs-footer-nextpage" href="../../integration/integration/">Trapezoidal Integration »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.9.0 on <span class="colophon-date" title="Wednesday 19 March 2025 15:37">Wednesday 19 March 2025</span>. Using Julia version 1.11.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
