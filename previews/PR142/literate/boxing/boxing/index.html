@@ -8,16 +8,16 @@
     A = 1
     out
 end</code></pre><pre><code class="nohighlight hljs">10-element Vector{Int64}:
- 10
-  4
-  8
-  4
-  2
-  4
- 10
-  4
- 10
- 10</code></pre><p>You may have expected that to return <code>[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]</code>, but the nonsense result is caused by <code>A</code> actually being a shared mutable container here which all the parallel tasks are accessing and mutating in parallel, giving unpredictable results.</p><p>OhMyThreads.jl tries to protect users from this surprising behaviour:</p><pre><code class="language-julia hljs">using OhMyThreads
+ 6
+ 6
+ 6
+ 6
+ 6
+ 6
+ 6
+ 6
+ 6
+ 6</code></pre><p>You may have expected that to return <code>[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]</code>, but the nonsense result is caused by <code>A</code> actually being a shared mutable container here which all the parallel tasks are accessing and mutating in parallel, giving unpredictable results.</p><p>OhMyThreads.jl tries to protect users from this surprising behaviour:</p><pre><code class="language-julia hljs">using OhMyThreads
 
 try
     let
@@ -33,11 +33,15 @@ try
 catch e;
     # Show the error
     Base.showerror(stdout, e)
-end</code></pre><pre><code class="nohighlight hljs">Attempted to capture and modify outer local variable(s) A.
+end</code></pre><pre><code class="nohighlight hljs">Attempted to capture and modify outer local variable: A
+
 See https://juliafolds2.github.io/OhMyThreads.jl/stable/literate/boxing/boxing/ for a fuller explanation.
 
-  Capturing boxed variables can be not only slow, but also cause race
-  conditions.
+  Hint
+  ----
+
+  Capturing boxed variables can be not only slow, but also cause surprising
+  and incorrect results.
 
     •  If you meant for these variables to be local to each loop
        iteration and not depend on a variable from an outer scope, you
@@ -48,9 +52,7 @@ See https://juliafolds2.github.io/OhMyThreads.jl/stable/literate/boxing/boxing/ 
        let block, like e.g.
 
   function foo(x, N)
-      if rand(Bool)
-      x = 1 # This rebinding of x causes it to be boxed ...
-      end
+      rand(Bool) &amp;&amp; x = 1 # This rebinding of x causes it to be boxed ...
       let x = x # ... Unless we localize it here with the let block 
           @tasks for i in 1:N
               f(x)    
@@ -92,16 +94,16 @@ end</code></pre><pre><code class="nohighlight hljs">10-element Vector{Int64}:
     A = 1
     out
 end</code></pre><pre><code class="nohighlight hljs">10-element Vector{Int64}:
- 7
- 2
- 7
- 2
- 7
- 2
- 7
- 2
- 7
- 7</code></pre><h2 id="Non-race-conditon-boxed-variables"><a class="docs-heading-anchor" href="#Non-race-conditon-boxed-variables">Non-race conditon boxed variables</a><a id="Non-race-conditon-boxed-variables-1"></a><a class="docs-heading-anchor-permalink" href="#Non-race-conditon-boxed-variables" title="Permalink"></a></h2><p>Any re-binding of captured variables can cause boxing, even when that boxing isn&#39;t strictly necessary, like the following example where we do not rebind <code>A</code> in the loop:</p><pre><code class="language-julia hljs">try
+ 10
+ 10
+ 10
+ 10
+ 10
+ 10
+ 10
+ 10
+ 10
+ 10</code></pre><h2 id="Non-race-conditon-boxed-variables"><a class="docs-heading-anchor" href="#Non-race-conditon-boxed-variables">Non-race conditon boxed variables</a><a id="Non-race-conditon-boxed-variables-1"></a><a class="docs-heading-anchor-permalink" href="#Non-race-conditon-boxed-variables" title="Permalink"></a></h2><p>Any re-binding of captured variables can cause boxing, even when that boxing isn&#39;t strictly necessary, like the following example where we do not rebind <code>A</code> in the loop:</p><pre><code class="language-julia hljs">try
     let A = 1
         if rand(Bool)
             # Rebind A, it&#39;s now boxed!
@@ -123,8 +125,8 @@ end</code></pre><pre><code class="nohighlight hljs">Yup, that errored!
             @show A
         end
     end
-end</code></pre><pre><code class="nohighlight hljs">A = 2
-A = 2
+end</code></pre><pre><code class="nohighlight hljs">A = 1
+A = 1
 </code></pre><p>OhMyThreads provides a macro <code>@localize</code> to automate this process:</p><pre><code class="language-julia hljs">let A = 1
     if rand(Bool)
         A = 2
@@ -133,6 +135,6 @@ A = 2
     @localize A @tasks for i in 1:2
         @show A
     end
-end</code></pre><pre><code class="nohighlight hljs">A = 2
-A = 2
-</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../../translation/">« Translation Guide</a><a class="docs-footer-nextpage" href="../../tls/tls/">Thread-Safe Storage »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.9.0 on <span class="colophon-date" title="Wednesday 19 March 2025 15:09">Wednesday 19 March 2025</span>. Using Julia version 1.11.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+end</code></pre><pre><code class="nohighlight hljs">A = 1
+A = 1
+</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../../translation/">« Translation Guide</a><a class="docs-footer-nextpage" href="../../tls/tls/">Thread-Safe Storage »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.9.0 on <span class="colophon-date" title="Wednesday 19 March 2025 15:13">Wednesday 19 March 2025</span>. Using Julia version 1.11.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
