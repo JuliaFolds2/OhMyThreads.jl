@@ -30,16 +30,16 @@ end
 
 ````
 10-element Vector{Int64}:
- 10
-  4
-  8
-  4
-  2
-  4
- 10
-  4
- 10
- 10
+ 6
+ 6
+ 6
+ 6
+ 6
+ 6
+ 6
+ 6
+ 6
+ 6
 ````
 
 You may have expected that to return `[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]`,
@@ -70,11 +70,15 @@ end
 ````
 
 ````
-Attempted to capture and modify outer local variable(s) A.
+Attempted to capture and modify outer local variable: A
+
 See https://juliafolds2.github.io/OhMyThreads.jl/stable/literate/boxing/boxing/ for a fuller explanation.
 
-  Capturing boxed variables can be not only slow, but also cause race
-  conditions.
+  Hint
+  ----
+
+  Capturing boxed variables can be not only slow, but also cause surprising
+  and incorrect results.
 
     •  If you meant for these variables to be local to each loop
        iteration and not depend on a variable from an outer scope, you
@@ -85,9 +89,7 @@ See https://juliafolds2.github.io/OhMyThreads.jl/stable/literate/boxing/boxing/ 
        let block, like e.g.
 
   function foo(x, N)
-      if rand(Bool)
-      x = 1 # This rebinding of x causes it to be boxed ...
-      end
+      rand(Bool) && x = 1 # This rebinding of x causes it to be boxed ...
       let x = x # ... Unless we localize it here with the let block 
           @tasks for i in 1:N
               f(x)    
@@ -150,16 +152,16 @@ end
 
 ````
 10-element Vector{Int64}:
- 7
- 2
- 7
- 2
- 7
- 2
- 7
- 2
- 7
- 7
+ 10
+ 10
+ 10
+ 10
+ 10
+ 10
+ 10
+ 10
+ 10
+ 10
 ````
 
 ## Non-race conditon boxed variables
@@ -203,8 +205,8 @@ end
 ````
 
 ````
-A = 2
-A = 2
+A = 1
+A = 1
 
 ````
 
@@ -223,8 +225,8 @@ end
 ````
 
 ````
-A = 2
-A = 2
+A = 1
+A = 1
 
 ````
 

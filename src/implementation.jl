@@ -329,8 +329,8 @@ struct BoxedVariableError <: Exception
 end
 function Base.showerror(io::IO, bve::BoxedVariableError)
     boxed_fields = join(bve.vars, ", ")
-    suffix = length(bve.vars) >= 1 ? "s" : ""
-    print(io, "Attempted to capture and modify outer local variable$suffix: ")
+    suffix = length(bve.vars) > 1 ? "s" : ""
+    print(io, "Attempted to capture and modify outer local variable$(suffix): ")
     printstyled(io, boxed_fields; color=:red)
     print(io, "\n\nSee https://juliafolds2.github.io/OhMyThreads.jl/stable/literate/boxing/boxing/ for a fuller explanation.")
     if isdefined(Base.Experimental, :show_error_hints)
