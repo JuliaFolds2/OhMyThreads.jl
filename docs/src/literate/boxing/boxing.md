@@ -8,7 +8,7 @@ All multithreading in julia is built around the idea of passing around
 and executing functions, but often these functions "enclose" data from
 an outer local scope, making them what's called a "closure".
 
-# ## Boxed variables causing race conditions
+## Boxed variables causing race conditions
 
 Julia allows functions which capture variables to re-bind those variables
 to different values, but doing so can cause subtle race conditions in
@@ -30,16 +30,16 @@ end
 
 ````
 10-element Vector{Int64}:
+ 5
+ 4
  6
- 6
- 6
- 6
- 6
- 6
- 6
- 6
- 6
- 6
+ 4
+ 5
+ 4
+ 5
+ 4
+ 5
+ 4
 ````
 
 You may have expected that to return `[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]`,
@@ -152,16 +152,16 @@ end
 
 ````
 10-element Vector{Int64}:
- 10
- 10
- 10
- 10
- 10
- 10
- 10
- 10
- 10
- 10
+ 3
+ 2
+ 3
+ 2
+ 3
+ 2
+ 3
+ 2
+ 3
+ 3
 ````
 
 ## Non-race conditon boxed variables
@@ -225,8 +225,8 @@ end
 ````
 
 ````
-A = 1
-A = 1
+A = 2
+A = 2
 
 ````
 
