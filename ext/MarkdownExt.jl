@@ -9,15 +9,14 @@ function __init__()
             println(io)
             println(io)
             term(io, md"""
-Capturing boxed variables can be not only slow, but also cause race conditions. 
+#### Hint
+Capturing boxed variables can be not only slow, but also cause surprising and incorrect results. 
 
 * If you meant for these variables to be local to each loop iteration and not depend on a variable from an outer scope, you should mark them as `local` inside the closure.
 * If you meant to reference a variable from the outer scope, but do not want access to it to be boxed, you can wrap uses of it in a let block, like e.g.
 ```julia
 function foo(x, N)
-    if rand(Bool)
-    x = 1 # This rebinding of x causes it to be boxed ...
-    end
+    rand(Bool) && x = 1 # This rebinding of x causes it to be boxed ...
     let x = x # ... Unless we localize it here with the let block 
         @tasks for i in 1:N
             f(x)    
