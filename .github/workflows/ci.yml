@@ -14,7 +14,6 @@ jobs:
           - 'pre'
         os:
           - ubuntu-latest
-          - macos-13
           - windows-latest
         arch:
           - x64
