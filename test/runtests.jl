@@ -4,6 +4,8 @@ using OhMyThreads: Consecutive, RoundRobin
 using OhMyThreads.Experimental: @barrier
 using OhMyThreads.Implementation: BoxedVariableError
 
+@info "Testing with $(Threads.nthreads(:default)),$(Threads.nthreads(:interactive)) threads."
+
 include("Aqua.jl")
 
 sets_to_test = [(~ = isapprox, f = sin ∘ *, op = +,
@@ -544,7 +546,7 @@ end
             end
         end
 
-        let 
+        let
             x = Ref(0)
             y = Ref(0)
             try
@@ -758,7 +760,7 @@ end
          ├ Chunking: fixed count ($(10 * nt)), split :roundrobin
          └ Threadpool: default"""
 end
-  
+
 @testset "Boxing detection and error" begin
     let
         f1() = tmap(1:10) do i
@@ -790,7 +792,7 @@ end
 
         @test_throws BoxedVariableError f1()
         @test f2() == 1:10
-        
+
         A = 1 # Cause spooky action-at-a-distance by making A outer-local to the whole let block!
     end
 
