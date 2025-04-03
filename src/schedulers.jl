@@ -133,15 +133,12 @@ _chunkingstr(ca::ChunkingArgs{NoChunking}) = "none"
 function _chunkingstr(ca::ChunkingArgs{FixedCount})
     str = "fixed count ($(ca.n)), split :$(_splitid(ca.split))"
     if has_minsize(ca)
-        str = str * ", min chunksize $(ca.minsize)"
+        str = str * ", minimum chunk size  $(ca.minsize)"
     end
     str
 end
 function _chunkingstr(ca::ChunkingArgs{FixedSize})
     str = "fixed size ($(ca.size)), split :$(_splitid(ca.split))"
-    if has_minsize(ca)
-        str = str * ", minimum chunk size $(ca.minsize)"
-    end
     str
 end
 
