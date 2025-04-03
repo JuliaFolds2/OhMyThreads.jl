@@ -70,10 +70,14 @@ function _check_chunks_incompatible_kwargs(; kwargs...)
 end
 
 function has_multiple_chunks(scheduler, coll)
-    if chunking_mode(scheduler) == NoChunking || coll isa Union{AbstractChunks, ChunkSplitters.Internals.Enumerate}
+    C = chunking_mode(scheduler)
+    if C == NoChunking || coll isa Union{AbstractChunks, ChunkSplitters.Internals.Enumerate}
         length(coll) > 1
-    else
-        length(_index_chunks(scheduler, coll)) > 1
+    elseif C == FixedCount
+        mcs = max(min(minsize(scheduler), length(coll)), 1)
+        min(length(coll) ÷ mcs, nchunks(scheduler)) > 1
+    elseif C == FixedSize
+        length(coll) ÷ chunksize(scheduler) > 1
     end
 end
 
