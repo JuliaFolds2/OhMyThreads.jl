@@ -74,7 +74,11 @@ function has_multiple_chunks(scheduler, coll)
     if C == NoChunking || coll isa Union{AbstractChunks, ChunkSplitters.Internals.Enumerate}
         length(coll) > 1
     elseif C == FixedCount
-        mcs = max(min(minsize(scheduler), length(coll)), 1)
+        if isnothing(minsize(scheduler))
+            mcs = max(length(coll), 1)
+        else
+            mcs = max(min(minsize(scheduler), length(coll)), 1)
+        end
         min(length(coll) ÷ mcs, nchunks(scheduler)) > 1
     elseif C == FixedSize
         length(coll) ÷ chunksize(scheduler) > 1
