@@ -28,45 +28,46 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                 SerialScheduler, ChunkedGreedy)
                 @testset for split in (Consecutive(), RoundRobin(), :consecutive, :roundrobin)
                     for nchunks in (1, 2, 6)
-                        if sched == GreedyScheduler
-                            scheduler = sched(; ntasks = nchunks)
-                        elseif sched == DynamicScheduler{OhMyThreads.Schedulers.NoChunking}
-                            scheduler = DynamicScheduler(; chunking = false)
-                        elseif sched == SerialScheduler
-                            scheduler = SerialScheduler()
-                        else
-                            scheduler = sched(; nchunks, split)
+                        for minsize ∈ (nothing, 1, 3)
+                            if sched == GreedyScheduler
+                                scheduler = sched(; ntasks = nchunks, minsize)
+                            elseif sched == DynamicScheduler{OhMyThreads.Schedulers.NoChunking}
+                                scheduler = DynamicScheduler(; chunking = false)
+                            elseif sched == SerialScheduler
+                                scheduler = SerialScheduler()
+                            else
+                                scheduler = sched(; nchunks, split, minsize)
+                            end
+                            kwargs = (; scheduler)
+                            if (split in (RoundRobin(), :roundrobin) ||
+                                sched ∈ (GreedyScheduler, ChunkedGreedy)) || op ∉ (vcat, *)
+                                # scatter and greedy only works for commutative operators!
+                            else
+                                mapreduce_f_op_itr = mapreduce(f, op, itrs...)
+                                @test tmapreduce(f, op, itrs...; init, kwargs...) ~ mapreduce_f_op_itr
+                                @test treducemap(op, f, itrs...; init, kwargs...) ~ mapreduce_f_op_itr
+                                @test treduce(op, f.(itrs...); init, kwargs...) ~ mapreduce_f_op_itr
+                            end
+
+                            split in (RoundRobin(), :roundrobin) && continue
+                            map_f_itr = map(f, itrs...)
+                            @test all(tmap(f, Any, itrs...; kwargs...) .~ map_f_itr)
+                            @test all(tcollect(Any, (f(x...) for x in collect(zip(itrs...))); kwargs...) .~ map_f_itr)
+                            @test all(tcollect(Any, f.(itrs...); kwargs...) .~ map_f_itr)
+
+                            RT = Core.Compiler.return_type(f, Tuple{eltype.(itrs)...})
+
+                            @test tmap(f, RT, itrs...; kwargs...) ~ map_f_itr
+                            @test tcollect(RT, (f(x...) for x in collect(zip(itrs...))); kwargs...) ~ map_f_itr
+                            @test tcollect(RT, f.(itrs...); kwargs...) ~ map_f_itr
+
+                            if sched ∉ (GreedyScheduler, ChunkedGreedy)
+                                @test tmap(f, itrs...; kwargs...) ~ map_f_itr
+                                @test tcollect((f(x...) for x in collect(zip(itrs...))); kwargs...) ~ map_f_itr
+                                @test tcollect(f.(itrs...); kwargs...) ~ map_f_itr
+                            end
                         end
-
-                        kwargs = (; scheduler)
-                        if (split in (RoundRobin(), :roundrobin) ||
-                            sched ∈ (GreedyScheduler, ChunkedGreedy)) || op ∉ (vcat, *)
-                            # scatter and greedy only works for commutative operators!
-                        else
-                            mapreduce_f_op_itr = mapreduce(f, op, itrs...)
-                            @test tmapreduce(f, op, itrs...; init, kwargs...) ~ mapreduce_f_op_itr
-                            @test treducemap(op, f, itrs...; init, kwargs...) ~ mapreduce_f_op_itr
-                            @test treduce(op, f.(itrs...); init, kwargs...) ~ mapreduce_f_op_itr
-                        end
-
-                        split in (RoundRobin(), :roundrobin) && continue
-                        map_f_itr = map(f, itrs...)
-                        @test all(tmap(f, Any, itrs...; kwargs...) .~ map_f_itr)
-                        @test all(tcollect(Any, (f(x...) for x in collect(zip(itrs...))); kwargs...) .~ map_f_itr)
-                        @test all(tcollect(Any, f.(itrs...); kwargs...) .~ map_f_itr)
-
-                        RT = Core.Compiler.return_type(f, Tuple{eltype.(itrs)...})
-
-                        @test tmap(f, RT, itrs...; kwargs...) ~ map_f_itr
-                        @test tcollect(RT, (f(x...) for x in collect(zip(itrs...))); kwargs...) ~ map_f_itr
-                        @test tcollect(RT, f.(itrs...); kwargs...) ~ map_f_itr
-
-                        if sched ∉ (GreedyScheduler, ChunkedGreedy)
-                            @test tmap(f, itrs...; kwargs...) ~ map_f_itr
-                            @test tcollect((f(x...) for x in collect(zip(itrs...))); kwargs...) ~ map_f_itr
-                            @test tcollect(f.(itrs...); kwargs...) ~ map_f_itr
-                        end
-                    end
+                    end 
                 end
             end
         end
@@ -183,6 +184,10 @@ end;
     @test @tasks(for i in 1:3
         @set scheduler = :dynamic
         @set chunking = false
+        i
+    end) |> isnothing
+    @test @tasks(for i in 1:4
+        @set minsize=2
         i
     end) |> isnothing
     @test_throws ArgumentError @tasks(for i in 1:3
@@ -386,7 +391,9 @@ end;
     @test tmapreduce(sin, +, 1:10000; split = RoundRobin()) ≈ res_tmr
     @test tmapreduce(sin, +, 1:10000; chunksize = 2) ≈ res_tmr
     @test tmapreduce(sin, +, 1:10000; chunking = false) ≈ res_tmr
-
+    @test tmapreduce(sin, +, 1:10000; minsize=10) ≈ res_tmr
+    @test tmapreduce(sin, +, 1:10; minsize=10) == mapreduce(sin, +, 1:10)
+    
     # scheduler isa Scheduler
     @test tmapreduce(sin, +, 1:10000; scheduler = StaticScheduler()) ≈ res_tmr
     @test_throws ArgumentError tmapreduce(
