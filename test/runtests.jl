@@ -28,15 +28,15 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                 SerialScheduler, ChunkedGreedy)
                 @testset for split in (Consecutive(), RoundRobin(), :consecutive, :roundrobin)
                     for nchunks in (1, 2, 6)
-                        for minsize ∈ (nothing, 1, 3)
+                        for minchunksize ∈ (nothing, 1, 3)
                             if sched == GreedyScheduler
-                                scheduler = sched(; ntasks = nchunks, minsize)
+                                scheduler = sched(; ntasks = nchunks, minchunksize)
                             elseif sched == DynamicScheduler{OhMyThreads.Schedulers.NoChunking}
                                 scheduler = DynamicScheduler(; chunking = false)
                             elseif sched == SerialScheduler
                                 scheduler = SerialScheduler()
                             else
-                                scheduler = sched(; nchunks, split, minsize)
+                                scheduler = sched(; nchunks, split, minchunksize)
                             end
                             kwargs = (; scheduler)
                             if (split in (RoundRobin(), :roundrobin) ||
@@ -187,7 +187,7 @@ end;
         i
     end) |> isnothing
     @test @tasks(for i in 1:4
-        @set minsize=2
+        @set minchunksize=2
         i
     end) |> isnothing
     @test_throws ArgumentError @tasks(for i in 1:3
@@ -391,8 +391,8 @@ end;
     @test tmapreduce(sin, +, 1:10000; split = RoundRobin()) ≈ res_tmr
     @test tmapreduce(sin, +, 1:10000; chunksize = 2) ≈ res_tmr
     @test tmapreduce(sin, +, 1:10000; chunking = false) ≈ res_tmr
-    @test tmapreduce(sin, +, 1:10000; minsize=10) ≈ res_tmr
-    @test tmapreduce(sin, +, 1:10; minsize=10) == mapreduce(sin, +, 1:10)
+    @test tmapreduce(sin, +, 1:10000; minchunksize=10) ≈ res_tmr
+    @test tmapreduce(sin, +, 1:10; minchunksize=10) == mapreduce(sin, +, 1:10)
     
     # scheduler isa Scheduler
     @test tmapreduce(sin, +, 1:10000; scheduler = StaticScheduler()) ≈ res_tmr

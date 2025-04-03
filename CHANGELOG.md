@@ -3,8 +3,8 @@ OhMyThreads.jl Changelog
 
 Version 0.8.2
 ------------
-- ![Feature][badge-feature] Added a `minsize` chunking argument for schedulers, so that they can specify a lower bound on the size of chunks which are worth parallelizing. For example, `treduce(+, 1:10; minsize=100)` will run serially, but `treduce(+, 1:1000000; minsize=100)` will be parallelized.
-- ![Enhancement][badge-enhancement] Operations on collections with only one 'chunk' no longer spawn an unnecessary task. That means operations like `treduce(+, 1:10; nchunks=1)` will have less overhead. 
+- ![Feature][badge-feature] Added a `minchunksize` chunking argument for schedulers, so that they can specify a lower bound on the size of chunks which are worth parallelizing. For example, `treduce(+, 1:10; minchunksize=100)` will run serially, but `treduce(+, 1:1000000; minchunksize=100)` will be parallelized.
+- ![Enhancement][badge-enhancement] Operations on collections with only one 'chunk' no longer spawn an unnecessary task. That means operations like `treduce(+, 1:10; minchunksize=100)` will have less overhead.
 
 Version 0.8.1
 ------------

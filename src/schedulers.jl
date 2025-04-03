@@ -153,12 +153,12 @@ chunking_args(::Scheduler) = ChunkingArgs(NoChunking)
 nchunks(sched::Scheduler) = chunking_args(sched).n
 chunksize(sched::Scheduler) = chunking_args(sched).size
 chunksplit(sched::Scheduler) = chunking_args(sched).split
-minsize(sched::Scheduler) = chunking_args(sched).minsize
+minchunksize(sched::Scheduler) = chunking_args(sched).minsize
 
 has_nchunks(sched::Scheduler) = has_n(chunking_args(sched))
 has_chunksize(sched::Scheduler) = has_size(chunking_args(sched))
 has_chunksplit(sched::Scheduler) = has_split(chunking_args(sched))
-has_chunkminsize(sched::Scheduler) = has_minsize(chunking_args(sched))
+has_minchunksize(sched::Scheduler) = has_minsize(chunking_args(sched))
 
 chunking_mode(sched::Scheduler) = chunking_mode(chunking_args(sched))
 chunking_enabled(sched::Scheduler) = chunking_enabled(chunking_args(sched))
@@ -193,8 +193,8 @@ with other multithreaded code.
 - `chunksize::Integer` (default not set)
     * Specifies the desired chunk size (instead of the number of chunks).
     * The options `chunksize` and `nchunks`/`ntasks` are **mutually exclusive** (only one may be a positive integer).
-- `minsize::Union{Integer, Nothing}` (default `nothing`)
-    * Sets a lower bound on the size of chunks. This argument takes priority over `nchunks`, so `treduce(+, 1:10; nchunks=10, minsize=5)` will only operate on `2` chunks for example.
+- `minchunksize::Union{Integer, Nothing}` (default `nothing`)
+    * Sets a lower bound on the size of chunks. This argument takes priority over `nchunks`, so `treduce(+, 1:10; nchunks=10, minchunksize=5)` will only operate on `2` chunks for example.
 - `split::Union{Symbol, OhMyThreads.Split}` (default `OhMyThreads.Consecutive()`):
     * Determines how the collection is divided into chunks (if chunking=true). By default, each chunk consists of contiguous elements and order is maintained.
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` in place of `Consecutive()`, and `:roundrobin` in place of `RoundRobin()`
@@ -225,14 +225,14 @@ function DynamicScheduler(;
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = true,
         split::Union{Split, Symbol} = Consecutive(),
-        minsize::Union{Nothing, Int}=nothing)
+        minchunksize::Union{Nothing, Int}=nothing)
     if isgiven(ntasks)
         if isgiven(nchunks)
             throw(ArgumentError("For the dynamic scheduler, nchunks and ntasks are aliases and only one may be provided"))
         end
         nchunks = ntasks
     end
-    ca = ChunkingArgs(DynamicScheduler, nchunks, chunksize, split; chunking, minsize)
+    ca = ChunkingArgs(DynamicScheduler, nchunks, chunksize, split; chunking, minsize=minchunksize)
     return DynamicScheduler(threadpool, ca)
 end
 from_symbol(::Val{:dynamic}) = DynamicScheduler
@@ -266,8 +266,8 @@ Isn't well composable with other multithreaded code though.
 - `chunksize::Integer` (default not set)
     * Specifies the desired chunk size (instead of the number of chunks).
     * The options `chunksize` and `nchunks`/`ntasks` are **mutually exclusive** (only one may be non-zero).
-- `minsize::Union{Integer, Nothing}` (default `nothing`)
-    * Sets a lower bound on the size of chunks. This argument takes priority over `nchunks`, so `treduce(+, 1:10; nchunks=10, minsize=5)` will only operate on `2` chunks for example.
+- `minchunksize::Union{Integer, Nothing}` (default `nothing`)
+    * Sets a lower bound on the size of chunks. This argument takes priority over `nchunks`, so `treduce(+, 1:10; nchunks=10, minchunksize=5)` will only operate on `2` chunks for example.
 - `chunking::Bool` (default `true`):
     * Controls whether input elements are grouped into chunks (`true`) or not (`false`).
     * For `chunking=false`, the arguments `nchunks`/`ntasks`, `chunksize`, and `split` are ignored and input elements are regarded as "chunks" as is. Hence, there will be one parallel task spawned per input element. Note that, depending on the input, this **might spawn many(!) tasks** and can be costly!
@@ -286,14 +286,14 @@ function StaticScheduler(;
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = true,
         split::Union{Split, Symbol} = Consecutive(),
-        minsize::Union{Nothing, Int} = nothing)
+        minchunksize::Union{Nothing, Int} = nothing)
     if isgiven(ntasks)
         if isgiven(nchunks)
             throw(ArgumentError("For the static scheduler, nchunks and ntasks are aliases and only one may be provided"))
         end
         nchunks = ntasks
     end
-    ca = ChunkingArgs(StaticScheduler, nchunks, chunksize, split; chunking, minsize)
+    ca = ChunkingArgs(StaticScheduler, nchunks, chunksize, split; chunking, minsize=minchunksize)
     return StaticScheduler(ca)
 end
 from_symbol(::Val{:static}) = StaticScheduler
@@ -334,8 +334,8 @@ some additional overhead.
 - `chunksize::Integer` (default not set)
     * Specifies the desired chunk size (instead of the number of chunks).
     * The options `chunksize` and `nchunks` are **mutually exclusive** (only one may be a positive integer).
-- `minsize::Union{Integer, Nothing}` (default `nothing`)
-    * Sets a lower bound on the size of chunks. This argument takes priority over `nchunks`, so `treduce(+, 1:10; nchunks=10, minsize=5)` will only operate on `2` chunks for example.
+- `minchunksize::Union{Integer, Nothing}` (default `nothing`)
+    * Sets a lower bound on the size of chunks. This argument takes priority over `nchunks`, so `treduce(+, 1:10; nchunks=10, minchunksize=5)` will only operate on `2` chunks for example.
 - `split::Union{Symbol, OhMyThreads.Split}` (default `OhMyThreads.RoundRobin()`):
     * Determines how the collection is divided into chunks (if chunking=true).
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` in place of `Consecutive()`, and `:roundrobin` in place of `RoundRobin()`
@@ -356,11 +356,11 @@ function GreedyScheduler(;
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = false,
         split::Union{Split, Symbol} = RoundRobin(),
-        minsize::Union{Nothing, Int} = nothing)
+        minchunksize::Union{Nothing, Int} = nothing)
     if isgiven(nchunks) || isgiven(chunksize)
         chunking = true
     end
-    ca = ChunkingArgs(GreedyScheduler, nchunks, chunksize, split; chunking, minsize)
+    ca = ChunkingArgs(GreedyScheduler, nchunks, chunksize, split; chunking, minsize=minchunksize)
     return GreedyScheduler(ntasks, ca)
 end
 from_symbol(::Val{:greedy}) = GreedyScheduler

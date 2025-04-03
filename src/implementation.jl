@@ -7,7 +7,7 @@ using OhMyThreads: Scheduler,
                    DynamicScheduler, StaticScheduler, GreedyScheduler,
                    SerialScheduler
 using OhMyThreads.Schedulers: chunking_enabled,
-                              nchunks, chunksize, chunksplit, minsize, has_chunksplit,
+                              nchunks, chunksize, chunksplit, minchunksize, has_chunksplit,
                               chunking_mode, ChunkingMode, NoChunking,
                               FixedSize, FixedCount, scheduler_from_symbol, NotGiven,
                               isgiven
@@ -25,7 +25,7 @@ function _index_chunks(sched, arg)
     C = chunking_mode(sched)
     @assert C != NoChunking
     if C == FixedCount
-        msz = isnothing(minsize(sched)) ? nothing : min(minsize(sched), length(arg))
+        msz = isnothing(minchunksize(sched)) ? nothing : min(minchunksize(sched), length(arg))
         index_chunks(arg;
             n = nchunks(sched),
             split = chunksplit(sched),
@@ -35,7 +35,7 @@ function _index_chunks(sched, arg)
         index_chunks(arg;
             size = chunksize(sched),
             split = chunksplit(sched),
-            minsize = minsize(sched))::IndexChunks{
+            minsize = minchunksize(sched))::IndexChunks{
             typeof(arg), ChunkSplitters.Internals.FixedSize}
     end
 end
@@ -75,10 +75,10 @@ function has_multiple_chunks(scheduler, coll)
     if C == NoChunking || coll isa Union{AbstractChunks, ChunkSplitters.Internals.Enumerate}
         length(coll) > 1
     elseif C == FixedCount
-        if isnothing(minsize(scheduler))
+        if isnothing(minchunksize(scheduler))
             mcs = 1
         else
-            mcs = max(min(minsize(scheduler), length(coll)), 1)
+            mcs = max(min(minchunksize(scheduler), length(coll)), 1)
         end
         min(length(coll) ÷ mcs, nchunks(scheduler)) > 1
     elseif C == FixedSize
