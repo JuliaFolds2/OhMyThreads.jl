@@ -75,7 +75,7 @@ function has_multiple_chunks(scheduler, coll)
         length(coll) > 1
     elseif C == FixedCount
         if isnothing(minsize(scheduler))
-            mcs = max(length(coll), 1)
+            mcs = 1
         else
             mcs = max(min(minsize(scheduler), length(coll)), 1)
         end
