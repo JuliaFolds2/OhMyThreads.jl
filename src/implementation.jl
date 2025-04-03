@@ -25,10 +25,11 @@ function _index_chunks(sched, arg)
     C = chunking_mode(sched)
     @assert C != NoChunking
     if C == FixedCount
+        msz = isnothing(minsize(sched)) ? nothing : min(minsize(sched), length(arg))
         index_chunks(arg;
             n = nchunks(sched),
             split = chunksplit(sched),
-            minsize = minsize(sched))::IndexChunks{
+            minsize = msz)::IndexChunks{
             typeof(arg), ChunkSplitters.Internals.FixedCount}
     elseif C == FixedSize
         index_chunks(arg;
