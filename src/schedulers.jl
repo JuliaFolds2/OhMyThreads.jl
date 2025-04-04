@@ -45,10 +45,22 @@ abstract type Scheduler end
 
 from_symbol(::Val) = throw(ArgumentError("unkown scheduler symbol"))
 
-scheduler_from_symbol(s::Symbol; kwargs...) = scheduler_from_symbol(Val(s); kwargs...)
-function scheduler_from_symbol(v::Val; kwargs...)
+function scheduler_from_symbol(v::Val, ; kwargs...)
     sched = from_symbol(v)
     return sched(; kwargs...)
+end
+
+function scheduler_from_symbol(s::Symbol; kwargs...)
+    # we could simply use the last line
+    # but there is a high chance to have a runtime dispatch to pass from Symbol to Val
+    # so we do the dispatch by hand as much as possible
+    # There will always be a performance penalty because the output
+    # of this function is not known at compile time.
+    s == :dynamic && return DynamicScheduler(; kwargs...)
+    s == :static && return StaticScheduler(; kwargs...)
+    s == :greedy && return GreedyScheduler(; kwargs...)
+    s == :serial && return SerialScheduler(; kwargs...)
+    return scheduler_from_symbol(Val(s), kwargs...)
 end
 
 """
@@ -85,18 +97,22 @@ struct ChunkingArgs{C, S <: Split}
     n::Int
     size::Int
     split::S
-    minsize::Union{Int, Nothing}
+    minsize::Int
 end
-ChunkingArgs(::Type{NoChunking}) = ChunkingArgs{NoChunking, NoSplit}(-1, -1, NoSplit(), nothing)
+ChunkingArgs(::Type{NoChunking}) = ChunkingArgs{NoChunking, NoSplit}(-1, -1, NoSplit(), -1)
 function ChunkingArgs(
         Sched::Type{<:Scheduler},
         n::MaybeInteger,
         size::MaybeInteger,
         split::Union{Symbol, Split};
-        minsize=nothing,
+        minsize::MaybeInteger,
         chunking
 )
     chunking || return ChunkingArgs(NoChunking)
+
+    if !isgiven(minsize)
+        minsize = -1
+    end
 
     if !isgiven(n) && !isgiven(size)
         n = default_nchunks(Sched)
@@ -126,7 +142,7 @@ chunking_mode(::ChunkingArgs{C}) where {C} = C
 has_n(ca::ChunkingArgs) = ca.n > 0
 has_size(ca::ChunkingArgs) = ca.size > 0
 has_split(::ChunkingArgs{C, S}) where {C, S} = S !== NoSplit
-has_minsize(ca::ChunkingArgs) = !isnothing(ca.minsize)
+has_minsize(ca::ChunkingArgs) = ca.minsize > 0
 chunking_enabled(ca::ChunkingArgs) = chunking_mode(ca) != NoChunking
 
 _chunkingstr(ca::ChunkingArgs{NoChunking}) = "none"
@@ -203,15 +219,14 @@ with other multithreaded code.
     * Possible options are `:default` and `:interactive`.
     * The high-priority pool `:interactive` should be used very carefully since tasks on this threadpool should not be allowed to run for a long time without `yield`ing as it can interfere with [heartbeat](https://en.wikipedia.org/wiki/Heartbeat_(computing)) processes.
 """
-struct DynamicScheduler{C <: ChunkingMode, S <: Split} <: Scheduler
-    threadpool::Symbol
+struct DynamicScheduler{C <: ChunkingMode, S <: Split, threadpool} <: Scheduler
     chunking_args::ChunkingArgs{C, S}
 
     function DynamicScheduler(threadpool::Symbol, ca::ChunkingArgs)
         if !(threadpool in (:default, :interactive))
             throw(ArgumentError("threadpool must be either :default or :interactive"))
         end
-        new{chunking_mode(ca), typeof(ca.split)}(threadpool, ca)
+        new{chunking_mode(ca), typeof(ca.split), threadpool}(ca)
     end
 end
 
@@ -222,7 +237,7 @@ function DynamicScheduler(;
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = true,
         split::Union{Split, Symbol} = Consecutive(),
-        minchunksize::Union{Nothing, Int}=nothing)
+        minchunksize::MaybeInteger = NotGiven())
     if isgiven(ntasks)
         if isgiven(nchunks)
             throw(ArgumentError("For the dynamic scheduler, nchunks and ntasks are aliases and only one may be provided"))
@@ -234,12 +249,13 @@ function DynamicScheduler(;
 end
 from_symbol(::Val{:dynamic}) = DynamicScheduler
 chunking_args(sched::DynamicScheduler) = sched.chunking_args
+threadpool(::DynamicScheduler{C, S, T}) where {C, S, T} = T
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::DynamicScheduler)
     print(io, "DynamicScheduler", "\n")
     cstr = _chunkingstr(s.chunking_args)
     println(io, "├ Chunking: ", cstr)
-    print(io, "└ Threadpool: ", s.threadpool)
+    print(io, "└ Threadpool: ", threadpool(s))
 end
 
 """
@@ -283,7 +299,7 @@ function StaticScheduler(;
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = true,
         split::Union{Split, Symbol} = Consecutive(),
-        minchunksize::Union{Nothing, Int} = nothing)
+        minchunksize::MaybeInteger = NotGiven())
     if isgiven(ntasks)
         if isgiven(nchunks)
             throw(ArgumentError("For the static scheduler, nchunks and ntasks are aliases and only one may be provided"))
@@ -353,7 +369,7 @@ function GreedyScheduler(;
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = false,
         split::Union{Split, Symbol} = RoundRobin(),
-        minchunksize::Union{Nothing, Int} = nothing)
+        minchunksize::MaybeInteger = NotGiven())
     if isgiven(nchunks) || isgiven(chunksize)
         chunking = true
     end
