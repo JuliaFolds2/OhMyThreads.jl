@@ -8,6 +8,7 @@ using OhMyThreads: Scheduler,
                    SerialScheduler
 using OhMyThreads.Schedulers: chunking_enabled,
                               nchunks, chunksize, chunksplit, minchunksize, has_chunksplit,
+                              has_minchunksize,
                               chunking_mode, ChunkingMode, NoChunking,
                               FixedSize, FixedCount, scheduler_from_symbol, NotGiven,
                               isgiven
@@ -25,7 +26,7 @@ function _index_chunks(sched, arg)
     C = chunking_mode(sched)
     @assert C != NoChunking
     if C == FixedCount
-        msz = isnothing(minchunksize(sched)) ? nothing : min(minchunksize(sched), length(arg))
+        msz = !has_minchunksize(sched) ? nothing : min(minchunksize(sched), length(arg))
         index_chunks(arg;
             n = nchunks(sched),
             split = chunksplit(sched),
@@ -75,7 +76,7 @@ function has_multiple_chunks(scheduler, coll)
     if C == NoChunking || coll isa Union{AbstractChunks, ChunkSplitters.Internals.Enumerate}
         length(coll) > 1
     elseif C == FixedCount
-        if isnothing(minchunksize(scheduler))
+        if !has_minchunksize(scheduler)
             mcs = 1
         else
             mcs = max(min(minchunksize(scheduler), length(coll)), 1)
