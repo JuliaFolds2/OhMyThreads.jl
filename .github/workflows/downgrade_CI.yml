@@ -22,9 +22,9 @@ jobs:
         with:
           version: ${{ matrix.version }}
       - uses: cjdoris/julia-downgrade-compat-action@v1
-        with:
-          skip: Pkg,TOML,Test,Markdown
         env:
           JULIA_NUM_THREADS: 4,2
+        with:
+          skip: Pkg,TOML,Test,Markdown
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
