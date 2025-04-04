@@ -7,7 +7,7 @@ using OhMyThreads: Scheduler,
                    DynamicScheduler, StaticScheduler, GreedyScheduler,
                    SerialScheduler
 using OhMyThreads.Schedulers: chunking_enabled,
-                              nchunks, chunksize, chunksplit, has_chunksplit,
+                              nchunks, chunksize, chunksplit, minchunksize, has_chunksplit,
                               chunking_mode, ChunkingMode, NoChunking,
                               FixedSize, FixedCount, scheduler_from_symbol, NotGiven,
                               isgiven
@@ -25,14 +25,17 @@ function _index_chunks(sched, arg)
     C = chunking_mode(sched)
     @assert C != NoChunking
     if C == FixedCount
+        msz = isnothing(minchunksize(sched)) ? nothing : min(minchunksize(sched), length(arg))
         index_chunks(arg;
             n = nchunks(sched),
-            split = chunksplit(sched))::IndexChunks{
+            split = chunksplit(sched),
+            minsize = msz)::IndexChunks{
             typeof(arg), ChunkSplitters.Internals.FixedCount}
     elseif C == FixedSize
         index_chunks(arg;
             size = chunksize(sched),
-            split = chunksplit(sched))::IndexChunks{
+            split = chunksplit(sched),
+            minsize = minchunksize(sched))::IndexChunks{
             typeof(arg), ChunkSplitters.Internals.FixedSize}
     end
 end
@@ -67,6 +70,23 @@ function _check_chunks_incompatible_kwargs(; kwargs...)
     return nothing
 end
 
+function has_multiple_chunks(scheduler, coll)
+    C = chunking_mode(scheduler)
+    if C == NoChunking || coll isa Union{AbstractChunks, ChunkSplitters.Internals.Enumerate}
+        length(coll) > 1
+    elseif C == FixedCount
+        if isnothing(minchunksize(scheduler))
+            mcs = 1
+        else
+            mcs = max(min(minchunksize(scheduler), length(coll)), 1)
+        end
+        min(length(coll) ÷ mcs, nchunks(scheduler)) > 1
+    elseif C == FixedSize
+        length(coll) ÷ chunksize(scheduler) > 1
+    end
+end
+
+
 function tmapreduce(f, op, Arrs...;
         scheduler::MaybeScheduler = NotGiven(),
         outputtype::Type = Any,
@@ -79,7 +99,7 @@ function tmapreduce(f, op, Arrs...;
     if A isa AbstractChunks || A isa ChunkSplitters.Internals.Enumerate
         _check_chunks_incompatible_kwargs(; kwargs...)
     end
-    if _scheduler isa SerialScheduler || isempty(first(Arrs))
+    if _scheduler isa SerialScheduler || !has_multiple_chunks(_scheduler, first(Arrs))
         # empty input collection → align with Base.mapreduce behavior
         mapreduce(f, op, Arrs...; mapreduce_kwargs...)
     else
@@ -107,11 +127,12 @@ function _tmapreduce(f,
     throw_if_boxed_captures(f, op)
     if chunking_enabled(scheduler)
         tasks = map(_index_chunks(scheduler, first(Arrs))) do inds
+
             args = map(A -> view(A, inds), Arrs)
             # Note, calling `promise_task_local` here is only safe because we're assuming that
             # Base.mapreduce isn't going to magically try to do multithreading on us...
             @spawn threadpool mapreduce(promise_task_local(f), promise_task_local(op),
-                args...; $mapreduce_kwargs...)
+                                        args...; $mapreduce_kwargs...)
         end
         mapreduce(fetch, promise_task_local(op), tasks)
     else
