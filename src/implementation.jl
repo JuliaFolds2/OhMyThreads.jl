@@ -11,7 +11,7 @@ using OhMyThreads.Schedulers: chunking_enabled,
                               has_minchunksize,
                               chunking_mode, ChunkingMode, NoChunking,
                               FixedSize, FixedCount, scheduler_from_symbol, NotGiven,
-                              isgiven
+                              isgiven, threadpool as get_threadpool
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 using BangBang: append!!
@@ -25,8 +25,8 @@ include("macro_impl.jl")
 function _index_chunks(sched, arg)
     C = chunking_mode(sched)
     @assert C != NoChunking
+    msz = !has_minchunksize(sched) ? nothing : min(minchunksize(sched), length(arg))
     if C == FixedCount
-        msz = !has_minchunksize(sched) ? nothing : min(minchunksize(sched), length(arg))
         index_chunks(arg;
             n = nchunks(sched),
             split = chunksplit(sched),
@@ -36,7 +36,7 @@ function _index_chunks(sched, arg)
         index_chunks(arg;
             size = chunksize(sched),
             split = chunksplit(sched),
-            minsize = minchunksize(sched))::IndexChunks{
+            minsize = msz)::IndexChunks{
             typeof(arg), ChunkSplitters.Internals.FixedSize}
     end
 end
@@ -124,7 +124,7 @@ function _tmapreduce(f,
         ::Type{OutputType},
         scheduler::DynamicScheduler,
         mapreduce_kwargs)::OutputType where {OutputType}
-    (; threadpool) = scheduler
+    threadpool = get_threadpool(scheduler)
     check_all_have_same_indices(Arrs)
     throw_if_boxed_captures(f, op)
     if chunking_enabled(scheduler)
@@ -153,7 +153,7 @@ function _tmapreduce(f,
         ::Type{OutputType},
         scheduler::DynamicScheduler,
         mapreduce_kwargs)::OutputType where {OutputType, T}
-    (; threadpool) = scheduler
+    threadpool = get_threadpool(scheduler)
     throw_if_boxed_captures(f, op)
     tasks = map(only(Arrs)) do idcs
         @spawn threadpool promise_task_local(f)(idcs)
@@ -470,7 +470,7 @@ function _tmap(scheduler::DynamicScheduler{NoChunking},
         f,
         A::AbstractArray,
         _Arrs::AbstractArray...;)
-    (; threadpool) = scheduler
+    threadpool = get_threadpool(scheduler)
     Arrs = (A, _Arrs...)
     throw_if_boxed_captures(f)
     tasks = map(eachindex(A)) do i
@@ -488,7 +488,7 @@ function _tmap(scheduler::DynamicScheduler{NoChunking},
         f,
         A::Union{AbstractChunks, ChunkSplitters.Internals.Enumerate},
         _Arrs::AbstractArray...)
-    (; threadpool) = scheduler
+    threadpool = get_threadpool(scheduler)
     throw_if_boxed_captures(f)
     tasks = map(A) do idcs
         @spawn threadpool promise_task_local(f)(idcs)

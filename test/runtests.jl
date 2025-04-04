@@ -28,7 +28,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                 SerialScheduler, ChunkedGreedy)
                 @testset for split in (Consecutive(), RoundRobin(), :consecutive, :roundrobin)
                     for nchunks in (1, 2, 6)
-                        for minchunksize ∈ (nothing, 1, 3)
+                        for minchunksize ∈ (-1, 1, 3)
                             if sched == GreedyScheduler
                                 scheduler = sched(; ntasks = nchunks, minchunksize)
                             elseif sched == DynamicScheduler{OhMyThreads.Schedulers.NoChunking}
@@ -67,7 +67,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                                 @test tcollect(f.(itrs...); kwargs...) ~ map_f_itr
                             end
                         end
-                    end 
+                    end
                 end
             end
         end
@@ -393,7 +393,7 @@ end;
     @test tmapreduce(sin, +, 1:10000; chunking = false) ≈ res_tmr
     @test tmapreduce(sin, +, 1:10000; minchunksize=10) ≈ res_tmr
     @test tmapreduce(sin, +, 1:10; minchunksize=10) == mapreduce(sin, +, 1:10)
-    
+
     # scheduler isa Scheduler
     @test tmapreduce(sin, +, 1:10000; scheduler = StaticScheduler()) ≈ res_tmr
     @test_throws ArgumentError tmapreduce(

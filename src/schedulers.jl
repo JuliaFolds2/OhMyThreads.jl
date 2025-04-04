@@ -59,7 +59,7 @@ function scheduler_from_symbol(s::Symbol; kwargs...)
     s == :dynamic && return DynamicScheduler(; kwargs...)
     s == :static && return StaticScheduler(; kwargs...)
     s == :greedy && return GreedyScheduler(; kwargs...)
-    s == :serial && return SerialScheduler()
+    s == :serial && return SerialScheduler(; kwargs...)
     return scheduler_from_symbol(Val(s), kwargs...)
 end
 
