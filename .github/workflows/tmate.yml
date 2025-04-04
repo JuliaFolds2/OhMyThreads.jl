@@ -1,4 +1,4 @@
-name: CI
+name: TMATE
 on:
   - push
   - pull_request
