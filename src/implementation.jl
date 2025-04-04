@@ -89,7 +89,10 @@ function has_multiple_chunks(scheduler, coll)
     end
 end
 
-function tmapreduce(f, op, Arrs...;
+# we can inline this function because we use @noinline on the main function
+# it can save some time in cases where we do not hit the main function (e.g. when
+# fallback to mapreduce without any threading)
+@inline function tmapreduce(f, op, Arrs...;
         scheduler::MaybeScheduler = NotGiven(),
         outputtype::Type = Any,
         init = NotGiven(),
