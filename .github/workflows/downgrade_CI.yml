@@ -24,5 +24,7 @@ jobs:
       - uses: cjdoris/julia-downgrade-compat-action@v1
         with:
           skip: Pkg,TOML,Test,Markdown
+        env:
+          JULIA_NUM_THREADS: 4,2
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
