@@ -45,9 +45,22 @@ abstract type Scheduler end
 
 from_symbol(::Val) = throw(ArgumentError("unkown scheduler symbol"))
 
-function scheduler_from_symbol(v::Val; kwargs...)
+function scheduler_from_symbol(v::Val, ; kwargs...)
     sched = from_symbol(v)
     return sched(; kwargs...)
+end
+
+function scheduler_from_symbol(s::Symbol; kwargs...)
+    # we could simply use the last line
+    # but there is a high chance to have a runtime dispatch to pass from Symbol to Val
+    # so we do the dispatch by hand as much as possible
+    # There will always be a performance penalty because the output
+    # of this function is not known at compile time.
+    s == :dynamic && return DynamicScheduler(; kwargs...)
+    s == :static && return StaticScheduler(; kwargs...)
+    s == :greedy && return GreedyScheduler(; kwargs...)
+    s == :serial && return SerialScheduler()
+    return scheduler_from_symbol(Val(s), kwargs...)
 end
 
 """
