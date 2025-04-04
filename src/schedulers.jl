@@ -45,7 +45,6 @@ abstract type Scheduler end
 
 from_symbol(::Val) = throw(ArgumentError("unkown scheduler symbol"))
 
-scheduler_from_symbol(s::Symbol; kwargs...) = scheduler_from_symbol(Val(s); kwargs...)
 function scheduler_from_symbol(v::Val; kwargs...)
     sched = from_symbol(v)
     return sched(; kwargs...)
@@ -207,15 +206,14 @@ with other multithreaded code.
     * Possible options are `:default` and `:interactive`.
     * The high-priority pool `:interactive` should be used very carefully since tasks on this threadpool should not be allowed to run for a long time without `yield`ing as it can interfere with [heartbeat](https://en.wikipedia.org/wiki/Heartbeat_(computing)) processes.
 """
-struct DynamicScheduler{C <: ChunkingMode, S <: Split} <: Scheduler
-    threadpool::Symbol
+struct DynamicScheduler{C <: ChunkingMode, S <: Split, threadpool} <: Scheduler
     chunking_args::ChunkingArgs{C, S}
 
     function DynamicScheduler(threadpool::Symbol, ca::ChunkingArgs)
         if !(threadpool in (:default, :interactive))
             throw(ArgumentError("threadpool must be either :default or :interactive"))
         end
-        new{chunking_mode(ca), typeof(ca.split)}(threadpool, ca)
+        new{chunking_mode(ca), typeof(ca.split), threadpool}(ca)
     end
 end
 
@@ -238,12 +236,13 @@ function DynamicScheduler(;
 end
 from_symbol(::Val{:dynamic}) = DynamicScheduler
 chunking_args(sched::DynamicScheduler) = sched.chunking_args
+threadpool(::DynamicScheduler{C, S, T}) where {C, S, T} = T
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::DynamicScheduler)
     print(io, "DynamicScheduler", "\n")
     cstr = _chunkingstr(s.chunking_args)
     println(io, "├ Chunking: ", cstr)
-    print(io, "└ Threadpool: ", s.threadpool)
+    print(io, "└ Threadpool: ", threadpool(s))
 end
 
 """

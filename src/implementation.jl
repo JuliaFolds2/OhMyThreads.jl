@@ -18,7 +18,7 @@ using BangBang: append!!
 using ChunkSplitters: ChunkSplitters, index_chunks, Consecutive
 using ChunkSplitters.Internals: AbstractChunks, IndexChunks
 
-const MaybeScheduler = Union{NotGiven, Scheduler, Symbol}
+const MaybeScheduler = Union{NotGiven, Scheduler, Symbol, Val}
 
 include("macro_impl.jl")
 
@@ -84,9 +84,10 @@ function has_multiple_chunks(scheduler, coll)
         min(length(coll) ÷ mcs, nchunks(scheduler)) > 1
     elseif C == FixedSize
         length(coll) ÷ chunksize(scheduler) > 1
+    else
+        throw(ArgumentError("Unknown chunking mode: $C."))
     end
 end
-
 
 function tmapreduce(f, op, Arrs...;
         scheduler::MaybeScheduler = NotGiven(),
@@ -443,7 +444,7 @@ function tmap(f,
         if chunking_enabled(_scheduler)
             if _scheduler isa DynamicScheduler
                 _scheduler = DynamicScheduler(;
-                    threadpool = _scheduler.threadpool,
+                    threadpool = threadpool(_scheduler),
                     chunking = false)
             elseif _scheduler isa StaticScheduler
                 _scheduler = StaticScheduler(; chunking = false)
