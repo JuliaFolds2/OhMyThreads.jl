@@ -28,7 +28,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                 SerialScheduler, ChunkedGreedy)
                 @testset for split in (Consecutive(), RoundRobin(), :consecutive, :roundrobin)
                     for nchunks in (1, 2, 6)
-                        for minchunksize ∈ (-1, 1, 3)
+                        for minchunksize ∈ (nothing, 1, 3)
                             if sched == GreedyScheduler
                                 scheduler = sched(; ntasks = nchunks, minchunksize)
                             elseif sched == DynamicScheduler{OhMyThreads.Schedulers.NoChunking}
