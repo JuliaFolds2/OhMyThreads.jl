@@ -97,9 +97,9 @@ struct ChunkingArgs{C, S <: Split}
     n::Int
     size::Int
     split::S
-    minsize::Int
+    minsize::Union{Int, Nothing}
 end
-ChunkingArgs(::Type{NoChunking}) = ChunkingArgs{NoChunking, NoSplit}(-1, -1, NoSplit(), -1)
+ChunkingArgs(::Type{NoChunking}) = ChunkingArgs{NoChunking, NoSplit}(-1, -1, NoSplit(), nothing)
 function ChunkingArgs(
         Sched::Type{<:Scheduler},
         n::MaybeInteger,
@@ -109,10 +109,6 @@ function ChunkingArgs(
         chunking
 )
     chunking || return ChunkingArgs(NoChunking)
-
-    if !isgiven(minsize)
-        minsize = -1
-    end
 
     if !isgiven(n) && !isgiven(size)
         n = default_nchunks(Sched)
@@ -142,7 +138,7 @@ chunking_mode(::ChunkingArgs{C}) where {C} = C
 has_n(ca::ChunkingArgs) = ca.n > 0
 has_size(ca::ChunkingArgs) = ca.size > 0
 has_split(::ChunkingArgs{C, S}) where {C, S} = S !== NoSplit
-has_minsize(ca::ChunkingArgs) = ca.minsize > 0
+has_minsize(ca::ChunkingArgs) = !isnothing(ca.minsize)
 chunking_enabled(ca::ChunkingArgs) = chunking_mode(ca) != NoChunking
 
 _chunkingstr(ca::ChunkingArgs{NoChunking}) = "none"
@@ -237,7 +233,7 @@ function DynamicScheduler(;
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = true,
         split::Union{Split, Symbol} = Consecutive(),
-        minchunksize::MaybeInteger = NotGiven())
+        minchunksize::Union{Integer, Nothing} = nothing)
     if isgiven(ntasks)
         if isgiven(nchunks)
             throw(ArgumentError("For the dynamic scheduler, nchunks and ntasks are aliases and only one may be provided"))
@@ -299,7 +295,7 @@ function StaticScheduler(;
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = true,
         split::Union{Split, Symbol} = Consecutive(),
-        minchunksize::MaybeInteger = NotGiven())
+        minchunksize::Union{Integer, Nothing} = nothing)
     if isgiven(ntasks)
         if isgiven(nchunks)
             throw(ArgumentError("For the static scheduler, nchunks and ntasks are aliases and only one may be provided"))
@@ -369,7 +365,7 @@ function GreedyScheduler(;
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = false,
         split::Union{Split, Symbol} = RoundRobin(),
-        minchunksize::MaybeInteger = NotGiven())
+        minchunksize::Union{Integer, Nothing} = nothing)
     if isgiven(nchunks) || isgiven(chunksize)
         chunking = true
     end
