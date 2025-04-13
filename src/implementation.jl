@@ -1,14 +1,15 @@
 module Implementation
 
 import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
-using OhMyThreads: @spawn, @spawnat, WithTaskLocals, promise_task_local, ChannelLike, allowing_boxed_captures
+using OhMyThreads: @spawn, @spawnat, WithTaskLocals, promise_task_local, ChannelLike,
+                   allowing_boxed_captures
 using OhMyThreads.Tools: nthtid
 using OhMyThreads: Scheduler,
                    DynamicScheduler, StaticScheduler, GreedyScheduler,
                    SerialScheduler
-using OhMyThreads.Schedulers: chunking_enabled,
+using OhMyThreads.Schedulers: chunksplitter_mode, chunking_enabled,
                               nchunks, chunksize, chunksplit, minchunksize, has_chunksplit,
-                              has_minchunksize,
+                              has_minchunksize, chunkingargs_to_kwargs,
                               chunking_mode, ChunkingMode, NoChunking,
                               FixedSize, FixedCount, scheduler_from_symbol, NotGiven,
                               isgiven, threadpool as get_threadpool
@@ -22,23 +23,11 @@ const MaybeScheduler = Union{NotGiven, Scheduler, Symbol, Val}
 
 include("macro_impl.jl")
 
-function _index_chunks(sched, arg)
+@inline function _index_chunks(sched, arg)
     C = chunking_mode(sched)
-    @assert C != NoChunking
-    msz = !has_minchunksize(sched) ? nothing : min(minchunksize(sched), length(arg))
-    if C == FixedCount
-        index_chunks(arg;
-            n = nchunks(sched),
-            split = chunksplit(sched),
-            minsize = msz)::IndexChunks{
-            typeof(arg), ChunkSplitters.Internals.FixedCount}
-    elseif C == FixedSize
-        index_chunks(arg;
-            size = chunksize(sched),
-            split = chunksplit(sched),
-            minsize = msz)::IndexChunks{
-            typeof(arg), ChunkSplitters.Internals.FixedSize}
-    end
+    @assert chunking_enabled(sched)
+    kwargs = chunkingargs_to_kwargs(sched, arg)
+    return index_chunks(arg; kwargs...)::IndexChunks{typeof(arg), chunksplitter_mode(C)}
 end
 
 function _scheduler_from_userinput(scheduler::MaybeScheduler; kwargs...)

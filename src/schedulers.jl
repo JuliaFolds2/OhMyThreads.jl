@@ -1,7 +1,7 @@
 module Schedulers
 
 using Base.Threads: nthreads
-using ChunkSplitters: Split, Consecutive, RoundRobin
+using ChunkSplitters: Split, Consecutive, RoundRobin, ChunkSplitters
 
 # Used to indicate that a keyword argument has not been set by the user.
 # We don't use Nothing because nothing maybe sometimes be a valid user input (e.g. for init)
@@ -65,6 +65,9 @@ struct NoChunking <: ChunkingMode end
 struct FixedCount <: ChunkingMode end
 struct FixedSize <: ChunkingMode end
 
+chunksplitter_mode(::Type{FixedCount}) = ChunkSplitters.Internals.FixedCount
+chunksplitter_mode(::Type{FixedSize}) = ChunkSplitters.Internals.FixedSize
+
 """
     ChunkingArgs{C, S <: Split}(n::Int, size::Int, split::S)
     ChunkingArgs(Sched::Type{<:Scheduler}, n::MaybeInteger, size::MaybeInteger, split::Union{Symbol, Split}; chunking)
@@ -82,52 +85,45 @@ to know if the field is effectively used, since it is no longer
 `NotGiven` for type stability.
 """
 struct ChunkingArgs{C, S <: Split}
-    n::Int
-    size::Int
-    split::S
+    n::Union{Int, Nothing}
+    size::Union{Int, Nothing}
     minsize::Union{Int, Nothing}
+    split::S
 end
-ChunkingArgs(::Type{NoChunking}) = ChunkingArgs{NoChunking, NoSplit}(-1, -1, NoSplit(), nothing)
+function ChunkingArgs(::Type{NoChunking})
+    ChunkingArgs{NoChunking, NoSplit}(nothing, nothing, nothing, NoSplit())
+end
 function ChunkingArgs(
-        Sched::Type{<:Scheduler},
-        n::MaybeInteger,
-        size::MaybeInteger,
-        split::Union{Symbol, Split};
-        minsize=nothing,
+        Sched::Type{<:Scheduler};
+        n = nothing,
+        size = nothing,
+        minsize = nothing,
+        split::Union{Symbol, Split},
         chunking
 )
     chunking || return ChunkingArgs(NoChunking)
 
-    if !isgiven(n) && !isgiven(size)
+    if isnothing(n) && isnothing(size)
         n = default_nchunks(Sched)
-        size = -1
-    else
-        n = isgiven(n) ? n : -1
-        size = isgiven(size) ? size : -1
+    elseif !isnothing(n) && !isnothing(size)
+        throw(ArgumentError("nchunks and chunksize are mutually exclusive"))
     end
-
-    chunking_mode = size > 0 ? FixedSize : FixedCount
+    chunking_mode = isnothing(n) ? FixedSize : FixedCount
     split = _parse_split(split)
-    result = ChunkingArgs{chunking_mode, typeof(split)}(n, size, split, minsize)
-
-    # argument names in error messages are those of the scheduler constructor instead
-    # of ChunkingArgs because the user should not be aware of the ChunkingArgs type
-    # (e.g. `nchunks` instead of `n`)
-    if !(has_n(result) || has_size(result))
-        throw(ArgumentError("Either `nchunks` or `chunksize` must be a positive integer (or chunking=false)."))
-    end
-    if has_n(result) && has_size(result)
-        throw(ArgumentError("`nchunks` and `chunksize` are mutually exclusive and only one of them may be a positive integer"))
-    end
-    return result
+    return ChunkingArgs{chunking_mode, typeof(split)}(n, size, minsize, split)
 end
 
 chunking_mode(::ChunkingArgs{C}) where {C} = C
-has_n(ca::ChunkingArgs) = ca.n > 0
-has_size(ca::ChunkingArgs) = ca.size > 0
+has_n(ca::ChunkingArgs) = !isnothing(ca.n)
+has_size(ca::ChunkingArgs) = !isnothing(ca.size)
 has_split(::ChunkingArgs{C, S}) where {C, S} = S !== NoSplit
 has_minsize(ca::ChunkingArgs) = !isnothing(ca.minsize)
 chunking_enabled(ca::ChunkingArgs) = chunking_mode(ca) != NoChunking
+
+function chunkingargs_to_kwargs(ca::ChunkingArgs, arg)
+    minsize = !has_minsize(ca) ? nothing : min(ca.minsize, length(arg))
+    return (; ca.n, ca.size, minsize, ca.split)
+end
 
 _chunkingstr(ca::ChunkingArgs{NoChunking}) = "none"
 function _chunkingstr(ca::ChunkingArgs{FixedCount})
@@ -156,6 +152,10 @@ has_nchunks(sched::Scheduler) = has_n(chunking_args(sched))
 has_chunksize(sched::Scheduler) = has_size(chunking_args(sched))
 has_chunksplit(sched::Scheduler) = has_split(chunking_args(sched))
 has_minchunksize(sched::Scheduler) = has_minsize(chunking_args(sched))
+
+function chunkingargs_to_kwargs(sched::Scheduler, arg)
+    chunkingargs_to_kwargs(chunking_args(sched), arg)
+end
 
 chunking_mode(sched::Scheduler) = chunking_mode(chunking_args(sched))
 chunking_enabled(sched::Scheduler) = chunking_enabled(chunking_args(sched))
@@ -216,19 +216,21 @@ end
 
 function DynamicScheduler(;
         threadpool::Symbol = :default,
-        nchunks::MaybeInteger = NotGiven(),
-        ntasks::MaybeInteger = NotGiven(), # "alias" for nchunks
-        chunksize::MaybeInteger = NotGiven(),
-        chunking::Bool = true,
+        nchunks = nothing,
+        ntasks = nothing, # "alias" for nchunks
+        chunksize = nothing,
         split::Union{Split, Symbol} = Consecutive(),
-        minchunksize::Union{Integer, Nothing} = nothing)
-    if isgiven(ntasks)
-        if isgiven(nchunks)
+        minchunksize = nothing,
+        chunking::Bool = true
+)
+    if !isnothing(ntasks)
+        if !isnothing(nchunks)
             throw(ArgumentError("For the dynamic scheduler, nchunks and ntasks are aliases and only one may be provided"))
         end
         nchunks = ntasks
     end
-    ca = ChunkingArgs(DynamicScheduler, nchunks, chunksize, split; chunking, minsize=minchunksize)
+    ca = ChunkingArgs(DynamicScheduler;
+        n = nchunks, size = chunksize, minsize = minchunksize, split, chunking)
     return DynamicScheduler(threadpool, ca)
 end
 from_symbol(::Val{:dynamic}) = DynamicScheduler
@@ -278,19 +280,21 @@ struct StaticScheduler{C <: ChunkingMode, S <: Split} <: Scheduler
 end
 
 function StaticScheduler(;
-        nchunks::MaybeInteger = NotGiven(),
-        ntasks::MaybeInteger = NotGiven(), # "alias" for nchunks
-        chunksize::MaybeInteger = NotGiven(),
-        chunking::Bool = true,
+        nchunks = nothing,
+        ntasks = nothing, # "alias" for nchunks
+        chunksize = nothing,
+        minchunksize = nothing,
         split::Union{Split, Symbol} = Consecutive(),
-        minchunksize::Union{Integer, Nothing} = nothing)
-    if isgiven(ntasks)
-        if isgiven(nchunks)
+        chunking::Bool = true
+)
+    if !isnothing(ntasks)
+        if !isnothing(nchunks)
             throw(ArgumentError("For the static scheduler, nchunks and ntasks are aliases and only one may be provided"))
         end
         nchunks = ntasks
     end
-    ca = ChunkingArgs(StaticScheduler, nchunks, chunksize, split; chunking, minsize=minchunksize)
+    ca = ChunkingArgs(StaticScheduler;
+        n = nchunks, size = chunksize, minsize = minchunksize, split, chunking)
     return StaticScheduler(ca)
 end
 from_symbol(::Val{:static}) = StaticScheduler
@@ -349,15 +353,17 @@ end
 
 function GreedyScheduler(;
         ntasks::Integer = nthreads(),
-        nchunks::MaybeInteger = NotGiven(),
-        chunksize::MaybeInteger = NotGiven(),
-        chunking::Bool = false,
+        nchunks = nothing,
+        chunksize = nothing,
+        minchunksize = nothing,
         split::Union{Split, Symbol} = RoundRobin(),
-        minchunksize::Union{Integer, Nothing} = nothing)
-    if isgiven(nchunks) || isgiven(chunksize)
+        chunking::Bool = false
+)
+    if !(isnothing(nchunks) && isnothing(chunksize))
         chunking = true
     end
-    ca = ChunkingArgs(GreedyScheduler, nchunks, chunksize, split; chunking, minsize=minchunksize)
+    ca = ChunkingArgs(GreedyScheduler;
+        n = nchunks, size = chunksize, minsize = minchunksize, split, chunking)
     return GreedyScheduler(ntasks, ca)
 end
 from_symbol(::Val{:greedy}) = GreedyScheduler

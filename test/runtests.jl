@@ -347,10 +347,10 @@ end;
                 nchunks = 2, chunksize = 4, chunking = false)) ==
                   OhMyThreads.Schedulers.NoChunking
             @test OhMyThreads.Schedulers.chunking_mode(sched(;
-                nchunks = -2, chunksize = -4, split = :whatever, chunking = false)) ==
+                nchunks = nothing, chunksize = nothing, split = :whatever, chunking = false)) ==
                   OhMyThreads.Schedulers.NoChunking
             @test OhMyThreads.Schedulers.chunking_enabled(sched(;
-                nchunks = -2, chunksize = -4, chunking = false)) == false
+                nchunks = nothing, chunksize = nothing, chunking = false)) == false
             @test OhMyThreads.Schedulers.chunking_enabled(sched(;
                 nchunks = 2, chunksize = 4, chunking = false)) == false
         else
@@ -369,8 +369,6 @@ end;
         @test OhMyThreads.Schedulers.chunking_enabled(sched(; chunksize = 2)) == true
         @test OhMyThreads.Schedulers.chunking_enabled(sched(; nchunks = 2)) == true
         @test_throws ArgumentError sched(; nchunks = 2, chunksize = 3)
-        @test_throws ArgumentError sched(; nchunks = 0, chunksize = 0)
-        @test_throws ArgumentError sched(; nchunks = -2, chunksize = -3)
         @test_throws ArgumentError sched(; nchunks = 2, split = :whatever)
 
         let scheduler = sched(; chunksize = 2, split = :batch)
@@ -781,11 +779,11 @@ if Threads.nthreads() > 1
                 sleep(rand()/10)
                 A
             end
-    
+
             @test f1() == 1:10
             @test f2() == 1:10
         end
-    
+
         let
             f1() = tmap(1:10) do i
                 A = i
@@ -797,27 +795,27 @@ if Threads.nthreads() > 1
                 sleep(rand()/10)
                 A
             end
-    
+
             @test_throws BoxedVariableError f1()
             @test f2() == 1:10
-    
+
             A = 1 # Cause spooky action-at-a-distance by making A outer-local to the whole let block!
         end
-    
+
         let
             A = 1
             f1() = tmap(1:10) do i
                 A = 1
             end
             @test_throws BoxedVariableError f1() == ones(10) # Throws even though the redefinition is 'harmless'
-    
+
             @allow_boxed_captures begin
                 f2() = tmap(1:10) do i
                     A = 1
                 end
                 @test f2() == ones(10)
             end
-    
+
             # Can nest allow and disallow because they're scoped values!
             function f3()
                 @disallow_boxed_captures begin
