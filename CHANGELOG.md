@@ -1,6 +1,10 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.8.3
+------------
+- ![Enhancement][badge-enhancement] The overhead of `tmapreduce` in the serial case was reduced a bit. Sentinel values in scheduler kwarg internals were replaced by `nothing` [#148][gh-pr-148]
+
 Version 0.8.2
 ------------
 - ![Feature][badge-feature] Added a `minchunksize` chunking argument for schedulers, so that they can specify a lower bound on the size of chunks which are worth parallelizing. For example, `treduce(+, 1:10; minchunksize=100)` will run serially, but `treduce(+, 1:1000000; minchunksize=100)` will be parallelized [#145][gh-pr-145].
@@ -158,3 +162,4 @@ Version 0.2.0
 [gh-pr-141]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/141
 [gh-pr-142]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/142
 [gh-pr-145]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/145
+[gh-pr-148]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/148
