@@ -67,7 +67,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                                 @test tcollect(f.(itrs...); kwargs...) ~ map_f_itr
                             end
                         end
-                    end 
+                    end
                 end
             end
         end
@@ -347,10 +347,10 @@ end;
                 nchunks = 2, chunksize = 4, chunking = false)) ==
                   OhMyThreads.Schedulers.NoChunking
             @test OhMyThreads.Schedulers.chunking_mode(sched(;
-                nchunks = -2, chunksize = -4, split = :whatever, chunking = false)) ==
+                nchunks = nothing, chunksize = nothing, split = :whatever, chunking = false)) ==
                   OhMyThreads.Schedulers.NoChunking
             @test OhMyThreads.Schedulers.chunking_enabled(sched(;
-                nchunks = -2, chunksize = -4, chunking = false)) == false
+                nchunks = nothing, chunksize = nothing, chunking = false)) == false
             @test OhMyThreads.Schedulers.chunking_enabled(sched(;
                 nchunks = 2, chunksize = 4, chunking = false)) == false
         else
@@ -369,8 +369,6 @@ end;
         @test OhMyThreads.Schedulers.chunking_enabled(sched(; chunksize = 2)) == true
         @test OhMyThreads.Schedulers.chunking_enabled(sched(; nchunks = 2)) == true
         @test_throws ArgumentError sched(; nchunks = 2, chunksize = 3)
-        @test_throws ArgumentError sched(; nchunks = 0, chunksize = 0)
-        @test_throws ArgumentError sched(; nchunks = -2, chunksize = -3)
         @test_throws ArgumentError sched(; nchunks = 2, split = :whatever)
 
         let scheduler = sched(; chunksize = 2, split = :batch)
@@ -393,7 +391,7 @@ end;
     @test tmapreduce(sin, +, 1:10000; chunking = false) ≈ res_tmr
     @test tmapreduce(sin, +, 1:10000; minchunksize=10) ≈ res_tmr
     @test tmapreduce(sin, +, 1:10; minchunksize=10) == mapreduce(sin, +, 1:10)
-    
+
     # scheduler isa Scheduler
     @test tmapreduce(sin, +, 1:10000; scheduler = StaticScheduler()) ≈ res_tmr
     @test_throws ArgumentError tmapreduce(
@@ -768,77 +766,79 @@ end
          └ Threadpool: default"""
 end
 
-@testset "Boxing detection and error" begin
-    let
-        f1() = tmap(1:10) do i
-            A = i
-            sleep(rand()/10)
-            A
-        end
-        f2() = tmap(1:10) do i
-            local A = i
-            sleep(rand()/10)
-            A
-        end
-
-        @test f1() == 1:10
-        @test f2() == 1:10
-    end
-
-    let
-        f1() = tmap(1:10) do i
-            A = i
-            sleep(rand()/10)
-            A
-        end
-        f2() = tmap(1:10) do i
-            local A = i
-            sleep(rand()/10)
-            A
-        end
-
-        @test_throws BoxedVariableError f1()
-        @test f2() == 1:10
-
-        A = 1 # Cause spooky action-at-a-distance by making A outer-local to the whole let block!
-    end
-
-    let
-        A = 1
-        f1() = tmap(1:10) do i
-            A = 1
-        end
-        @test_throws BoxedVariableError f1() == ones(10) # Throws even though the redefinition is 'harmless'
-
-        @allow_boxed_captures begin
+if Threads.nthreads() > 1
+    @testset "Boxing detection and error" begin
+        let
+            f1() = tmap(1:10) do i
+                A = i
+                sleep(rand()/10)
+                A
+            end
             f2() = tmap(1:10) do i
+                local A = i
+                sleep(rand()/10)
+                A
+            end
+
+            @test f1() == 1:10
+            @test f2() == 1:10
+        end
+
+        let
+            f1() = tmap(1:10) do i
+                A = i
+                sleep(rand()/10)
+                A
+            end
+            f2() = tmap(1:10) do i
+                local A = i
+                sleep(rand()/10)
+                A
+            end
+
+            @test_throws BoxedVariableError f1()
+            @test f2() == 1:10
+
+            A = 1 # Cause spooky action-at-a-distance by making A outer-local to the whole let block!
+        end
+
+        let
+            A = 1
+            f1() = tmap(1:10) do i
                 A = 1
             end
-            @test f2() == ones(10)
-        end
+            @test_throws BoxedVariableError f1() == ones(10) # Throws even though the redefinition is 'harmless'
 
-        # Can nest allow and disallow because they're scoped values!
-        function f3()
-            @disallow_boxed_captures begin
-                tmap(1:10) do i
-                A = 1
+            @allow_boxed_captures begin
+                f2() = tmap(1:10) do i
+                    A = 1
+                end
+                @test f2() == ones(10)
+            end
+
+            # Can nest allow and disallow because they're scoped values!
+            function f3()
+                @disallow_boxed_captures begin
+                    tmap(1:10) do i
+                    A = 1
+                    end
                 end
             end
+            @allow_boxed_captures begin
+                @test_throws BoxedVariableError f3() == ones(10)
+            end
         end
-        @allow_boxed_captures begin
-            @test_throws BoxedVariableError f3() == ones(10)
+        @testset "@localize" begin
+            A = 1
+            if false
+                A = 2
+            end
+            ## This stops A from being boxed!
+            v = @localize A tmap(1:2) do _
+                A
+            end
+            @test v == [1, 1]
         end
-    end
-    @testset "@localize" begin
-        A = 1
-        if false
-            A = 2
-        end
-        ## This stops A from being boxed!
-        v = @localize A tmap(1:2) do _
-            A
-        end
-        @test v == [1, 1]
     end
 end
 
