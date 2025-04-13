@@ -69,20 +69,15 @@ chunksplitter_mode(::Type{FixedCount}) = ChunkSplitters.Internals.FixedCount
 chunksplitter_mode(::Type{FixedSize}) = ChunkSplitters.Internals.FixedSize
 
 """
-    ChunkingArgs{C, S <: Split}(n::Int, size::Int, split::S)
-    ChunkingArgs(Sched::Type{<:Scheduler}, n::MaybeInteger, size::MaybeInteger, split::Union{Symbol, Split}; chunking)
+    ChunkingArgs{C, S <: Split}(n::Union{Int, Nothing}, size::Union{Int, Nothing}, minsize::Union{Int, Nothing}, split::S)
+    ChunkingArgs(Sched::Type{<:Scheduler}; n = nothing, size = nothing, minsize = nothing, split::Union{Symbol, Split}; chunking)
 
 Stores all the information needed for chunking. The type parameter `C` is the chunking mode
-(`NoChunking`, `FixedSize`, or `FixedCount`).
-
-`MaybeInteger` arguments are arguments that can be `NotGiven`. If it is the case, the
-constructor automatically throws errors or gives defaults values while taking into account
-the kind of scheduler (provided by `Sched`, e.g. `DynamicScheduler`). The `chunking` keyword
-argument is a boolean and if true, everything is skipped and `C = NoChunking`.
+(`NoChunking`, `FixedSize`, or `FixedCount`). The `chunking` keyword argument is a boolean
+and if true, everything is skipped and `C = NoChunking`.
 
 Once the object is created, use the `has_fieldname(object)` function (e.g. `has_size(object)`)
-to know if the field is effectively used, since it is no longer
-`NotGiven` for type stability.
+to know if the field is effectively used.
 """
 struct ChunkingArgs{C, S <: Split}
     n::Union{Int, Nothing}
