@@ -170,6 +170,57 @@ kind of scheduler.
 function default_nchunks end
 default_nchunks(::Type{<:Scheduler}) = nthreads(:default)
 
+
+
+tree_str = raw"""
+```
+t1 t2  t3  t4  t5 t6
+ \  |   |  /   |  /
+  \ |   | /    | /
+   op   op     op
+    \   /     /
+     \ /     /
+      op    /
+        \  /
+         op
+```
+"""
+ 
+"""
+    FinalReductionMode
+
+A trait type to decide how the final reduction is performed. Essentially,
+OhMyThreads.jl will turn a `tmapreduce(f, op, v)` call into something of
+the form
+```julia
+tasks = map(chunks(v; chunking_kwargs...)) do chunk
+    @spawn mapreduce(f, op, chunk)
+end
+final_reduction(op, tasks, ReductionMode)
+```
+where the options for `ReductionMode` are currently
+
+* `SerialFinalReduction` is the default option that should be preferred whenever `op` is not the bottleneck in your reduction. In this mode, we use a simple `mapreduce` over the tasks vector, fetching each one, i.e.
+```julia
+function final_reduction(op, tasks, ::SerialFinalReduction)
+    mapreduce(fetch, op, tasks)
+end
+```
+
+* `ParallelFinalReduction` should be opted into when `op` takes a long time relative to the time it takes to `@spawn` and `fetch` tasks (typically tens of microseconds). In this mode, the vector of tasks is split up and `op` is applied in parallel using a recursive tree-based approach.
+$tree_str
+"""
+abstract type FinalReductionMode end
+struct SerialFinalReduction <: FinalReductionMode end
+struct ParallelFinalReduction <: FinalReductionMode end
+
+FinalReductionMode(s::Scheduler) = s.final_reduction_mode
+
+FinalReductionMode(s::Symbol) = FinalReductionMode(Val(s))
+FinalReductionMode(::Val{:serial}) = SerialFinalReduction()
+FinalReductionMode(::Val{:parallel}) = ParallelFinalReduction()
+FinalReductionMode(m::FinalReductionMode) = m
+
 """
     DynamicScheduler (aka :dynamic)
 
@@ -202,16 +253,17 @@ with other multithreaded code.
 - `threadpool::Symbol` (default `:default`):
     * Possible options are `:default` and `:interactive`.
     * The high-priority pool `:interactive` should be used very carefully since tasks on this threadpool should not be allowed to run for a long time without `yield`ing as it can interfere with [heartbeat](https://en.wikipedia.org/wiki/Heartbeat_(computing)) processes.
+- `final_reduction_mode` (default `SerialFinalReduction`). Switch this to `ParallelFinalReduction` or `:parallel` if your reducing operator `op` is significantly slower than the time to `@spawn` and `fetch` tasks (typically tens of microseconds).
 """
-struct DynamicScheduler{C <: ChunkingMode, S <: Split} <: Scheduler
+struct DynamicScheduler{C <: ChunkingMode, S <: Split, FRM <: FinalReductionMode} <: Scheduler
     threadpool::Symbol
     chunking_args::ChunkingArgs{C, S}
-
-    function DynamicScheduler(threadpool::Symbol, ca::ChunkingArgs)
+    final_reduction_mode::FRM
+    function DynamicScheduler(threadpool::Symbol, ca::ChunkingArgs, frm=SerialFinalReduction())
         if !(threadpool in (:default, :interactive))
             throw(ArgumentError("threadpool must be either :default or :interactive"))
         end
-        new{chunking_mode(ca), typeof(ca.split)}(threadpool, ca)
+        new{chunking_mode(ca), typeof(ca.split), typeof(frm)}(threadpool, ca, frm)
     end
 end
 
@@ -222,7 +274,8 @@ function DynamicScheduler(;
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = true,
         split::Union{Split, Symbol} = Consecutive(),
-        minchunksize::Union{Nothing, Int}=nothing)
+        minchunksize::Union{Nothing, Int}=nothing,
+        final_reduction_mode::Union{Symbol, FinalReductionMode}=SerialFinalReduction())
     if isgiven(ntasks)
         if isgiven(nchunks)
             throw(ArgumentError("For the dynamic scheduler, nchunks and ntasks are aliases and only one may be provided"))
@@ -230,7 +283,8 @@ function DynamicScheduler(;
         nchunks = ntasks
     end
     ca = ChunkingArgs(DynamicScheduler, nchunks, chunksize, split; chunking, minsize=minchunksize)
-    return DynamicScheduler(threadpool, ca)
+    frm = FinalReductionMode(final_reduction_mode)
+    return DynamicScheduler(threadpool, ca, frm)
 end
 from_symbol(::Val{:dynamic}) = DynamicScheduler
 chunking_args(sched::DynamicScheduler) = sched.chunking_args
@@ -239,7 +293,8 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::DynamicScheduler
     print(io, "DynamicScheduler", "\n")
     cstr = _chunkingstr(s.chunking_args)
     println(io, "├ Chunking: ", cstr)
-    print(io, "└ Threadpool: ", s.threadpool)
+    println(io, "├ Threadpool: ", s.threadpool)
+    print(io,   "└ FinalReductionMode: ", FinalReductionMode(s))
 end
 
 """
@@ -336,14 +391,16 @@ some additional overhead.
 - `split::Union{Symbol, OhMyThreads.Split}` (default `OhMyThreads.RoundRobin()`):
     * Determines how the collection is divided into chunks (if chunking=true).
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` in place of `Consecutive()`, and `:roundrobin` in place of `RoundRobin()`
+- `final_reduction_mode` (default `SerialFinalReduction`). Switch this to `ParallelFinalReduction` or `:parallel` if your reducing operator `op` is significantly slower than the time to `@spawn` and `fetch` tasks (typically tens of microseconds).
 """
-struct GreedyScheduler{C <: ChunkingMode, S <: Split} <: Scheduler
+struct GreedyScheduler{C <: ChunkingMode, S <: Split, FRM <:FinalReductionMode} <: Scheduler
     ntasks::Int
     chunking_args::ChunkingArgs{C, S}
+    final_reduction_mode::FRM
 
-    function GreedyScheduler(ntasks::Integer, ca::ChunkingArgs)
+    function GreedyScheduler(ntasks::Integer, ca::ChunkingArgs, frm=SerialFinalReduction())
         ntasks > 0 || throw(ArgumentError("ntasks must be a positive integer"))
-        return new{chunking_mode(ca), typeof(ca.split)}(ntasks, ca)
+        return new{chunking_mode(ca), typeof(ca.split), typeof(frm)}(ntasks, ca, frm)
     end
 end
 
@@ -353,12 +410,14 @@ function GreedyScheduler(;
         chunksize::MaybeInteger = NotGiven(),
         chunking::Bool = false,
         split::Union{Split, Symbol} = RoundRobin(),
-        minchunksize::Union{Nothing, Int} = nothing)
+        minchunksize::Union{Nothing, Int} = nothing,
+        final_reduction_mode::Union{Symbol,FinalReductionMode} = SerialFinalReduction())
     if isgiven(nchunks) || isgiven(chunksize)
         chunking = true
     end
     ca = ChunkingArgs(GreedyScheduler, nchunks, chunksize, split; chunking, minsize=minchunksize)
-    return GreedyScheduler(ntasks, ca)
+    frm = FinalReductionMode(final_reduction_mode)
+    return GreedyScheduler(ntasks, ca, frm)
 end
 from_symbol(::Val{:greedy}) = GreedyScheduler
 chunking_args(sched::GreedyScheduler) = sched.chunking_args
@@ -367,9 +426,9 @@ default_nchunks(::Type{GreedyScheduler}) = 10 * nthreads(:default)
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::GreedyScheduler)
     print(io, "GreedyScheduler", "\n")
     println(io, "├ Num. tasks: ", s.ntasks)
-    cstr = _chunkingstr(s)
-    println(io, "├ Chunking: ", cstr)
-    print(io, "└ Threadpool: default")
+    println(io, "├ Chunking: ", _chunkingstr(s))
+    println(io, "├ Threadpool: default")
+    print(  io, "└ FinalReductionMode: ", FinalReductionMode(s))
 end
 
 """

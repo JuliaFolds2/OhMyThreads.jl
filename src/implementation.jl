@@ -10,7 +10,9 @@ using OhMyThreads.Schedulers: chunking_enabled,
                               nchunks, chunksize, chunksplit, minchunksize, has_chunksplit,
                               chunking_mode, ChunkingMode, NoChunking,
                               FixedSize, FixedCount, scheduler_from_symbol, NotGiven,
-                              isgiven
+                              isgiven,
+                              FinalReductionMode,
+                              SerialFinalReduction, ParallelFinalReduction
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 using BangBang: append!!
@@ -86,7 +88,6 @@ function has_multiple_chunks(scheduler, coll)
     end
 end
 
-
 function tmapreduce(f, op, Arrs...;
         scheduler::MaybeScheduler = NotGiven(),
         outputtype::Type = Any,
@@ -115,6 +116,35 @@ end
 treducemap(op, f, A...; kwargs...) = tmapreduce(f, op, A...; kwargs...)
 
 
+function tree_mapreduce(f, op, v)
+    if length(v) == 1
+        f(only(v))
+    elseif length(v) == 2
+        op(f(v[1]), f(v[2]))
+    else
+        l, r = v[begin:(end-begin)÷2], v[((end-begin)÷2+1):end]
+        task_r = @spawn tree_mapreduce(f, op, r)
+        result_l = tree_mapreduce(f, op, l)
+        op(result_l, fetch(task_r))
+    end
+end
+
+function final_mapreduce(op, tasks, ::SerialFinalReduction; mapreduce_kwargs...)
+    # Note, calling `promise_task_local` here is only safe because we're assuming that
+    # Base.mapreduce isn't going to magically try to do multithreading on us...
+    mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
+end
+function final_mapreduce(op, tasks, ::ParallelFinalReduction; mapreduce_kwargs...)
+    if isempty(tasks)
+        # Note, calling `promise_task_local` here is only safe because we're assuming that
+        # Base.mapreduce isn't going to magically try to do multithreading on us...
+        mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
+    else
+        tree_mapreduce(fetch, op, tasks; mapreduce_kwargs...)
+    end
+end
+
+
 # DynamicScheduler: AbstractArray/Generic
 function _tmapreduce(f,
         op,
@@ -134,14 +164,13 @@ function _tmapreduce(f,
             @spawn threadpool mapreduce(promise_task_local(f), promise_task_local(op),
                                         args...; $mapreduce_kwargs...)
         end
-        mapreduce(fetch, promise_task_local(op), tasks)
     else
         tasks = map(eachindex(first(Arrs))) do i
             args = map(A -> @inbounds(A[i]), Arrs)
             @spawn threadpool promise_task_local(f)(args...)
         end
-        mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
     end
+    final_mapreduce(op, tasks, FinalReductionMode(scheduler); mapreduce_kwargs...)
 end
 
 # DynamicScheduler: AbstractChunks
@@ -156,7 +185,7 @@ function _tmapreduce(f,
     tasks = map(only(Arrs)) do idcs
         @spawn threadpool promise_task_local(f)(idcs)
     end
-    mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
+    final_mapreduce(op, tasks, FinalReductionMode(scheduler); mapreduce_kwargs...)
 end
 
 # StaticScheduler: AbstractArray/Generic
@@ -284,9 +313,7 @@ function _tmapreduce(f,
             true
         end
     end
-    # Note, calling `promise_task_local` here is only safe because we're assuming that
-    # Base.mapreduce isn't going to magically try to do multithreading on us...
-    mapreduce(fetch, promise_task_local(op), filtered_tasks; mapreduce_kwargs...)
+    final_mapreduce(op, filtered_tasks, FinalReductionMode(scheduler); mapreduce_kwargs...)
 end
 
 # GreedyScheduler w/ chunking
@@ -332,9 +359,7 @@ function _tmapreduce(f,
             true
         end
     end
-    # Note, calling `promise_task_local` here is only safe because we're assuming that
-    # Base.mapreduce isn't going to magically try to do multithreading on us...
-    mapreduce(fetch, promise_task_local(op), filtered_tasks; mapreduce_kwargs...)
+    final_mapreduce(op, filtered_tasks, FinalReductionMode(scheduler); mapreduce_kwargs...)
 end
 
 function check_all_have_same_indices(Arrs)

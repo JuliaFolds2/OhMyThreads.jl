@@ -740,14 +740,16 @@ end
           """
           DynamicScheduler
           ├ Chunking: fixed count ($nt), split :consecutive
-          └ Threadpool: default"""
+          ├ Threadpool: default
+          └ FinalReductionMode: SerialFinalReduction()"""
 
     @test repr(
-        "text/plain", DynamicScheduler(; chunking = false, threadpool = :interactive)) ==
+        "text/plain", DynamicScheduler(; chunking = false, threadpool = :interactive, final_reduction_mode=:parallel)) ==
           """
           DynamicScheduler
           ├ Chunking: none
-          └ Threadpool: interactive"""
+          ├ Threadpool: interactive
+          └ FinalReductionMode: ParallelFinalReduction()"""
 
     @test repr("text/plain", StaticScheduler()) ==
           """StaticScheduler
@@ -764,8 +766,9 @@ end
           """
          GreedyScheduler
          ├ Num. tasks: $nt
-         ├ Chunking: fixed count ($(10 * nt)), split :roundrobin
-         └ Threadpool: default"""
+         ├ Chunking: fixed count ($(10*nt)), split :roundrobin
+         ├ Threadpool: default
+         └ FinalReductionMode: SerialFinalReduction()"""
 end
 
 @testset "Boxing detection and error" begin
