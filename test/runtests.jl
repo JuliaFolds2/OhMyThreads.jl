@@ -78,7 +78,9 @@ end;
     x = rand(100)
     chnks = OhMyThreads.index_chunks(x; n = Threads.nthreads())
     for scheduler in (
-        DynamicScheduler(; chunking = false), StaticScheduler(; chunking = false))
+        DynamicScheduler(),
+        DynamicScheduler(; chunking = false),
+        StaticScheduler(; chunking = false))
         @testset "$scheduler" begin
             @test tmap(x -> sin.(x), chnks; scheduler) ≈ map(x -> sin.(x), chnks)
             @test tmapreduce(x -> sin.(x), vcat, chnks; scheduler) ≈

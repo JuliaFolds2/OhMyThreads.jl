@@ -436,7 +436,7 @@ function tmap(f,
         if chunking_enabled(_scheduler)
             if _scheduler isa DynamicScheduler
                 _scheduler = DynamicScheduler(;
-                    threadpool = threadpool(_scheduler),
+                    threadpool = get_threadpool(_scheduler),
                     chunking = false)
             elseif _scheduler isa StaticScheduler
                 _scheduler = StaticScheduler(; chunking = false)
