@@ -1,6 +1,10 @@
 OhMyThreads.jl Changelog
 =========================
 
+Unreleased
+------------
+- ![Enhancement][badge-enhancement] `SerialScheduler` now accepts and ignores arguments passed to it to make switching schedulers easier [#162][gh-pr-162].
+
 Version 0.8.3
 ------------
 - ![Enhancement][badge-enhancement] The overhead of `tmapreduce` in the serial case was reduced a bit. Sentinel values in scheduler kwarg internals were replaced by `nothing` [#148][gh-pr-148]

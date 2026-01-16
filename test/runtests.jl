@@ -34,7 +34,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                             elseif sched == DynamicScheduler{OhMyThreads.Schedulers.NoChunking}
                                 scheduler = DynamicScheduler(; chunking = false)
                             elseif sched == SerialScheduler
-                                scheduler = SerialScheduler()
+                                scheduler = SerialScheduler(; nchunks)
                             else
                                 scheduler = sched(; nchunks, split, minchunksize)
                             end
@@ -194,11 +194,6 @@ end;
     end) |> isnothing
     @test_throws ArgumentError @tasks(for i in 1:3
         @set scheduler = DynamicScheduler()
-        @set chunking = false
-        i
-    end)
-    @test_throws MethodError @tasks(for i in 1:3
-        @set scheduler = :serial
         @set chunking = false
         i
     end)

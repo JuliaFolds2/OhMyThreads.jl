@@ -379,8 +379,14 @@ end
 A scheduler for turning off any multithreading and running the code in serial. It aims to
 make parallel functions like, e.g., `tmapreduce(sin, +, 1:100)` behave like their serial
 counterparts, e.g., `mapreduce(sin, +, 1:100)`.
+
+Note that `SerialScheduler` has no arguments and will ignore any that are passed
+to it. This is to make it easier to switch to the serial scheduler without
+having to change the rest of the code.
 """
 struct SerialScheduler <: Scheduler
+    # Dummy constructor to allow ignoring settings for other schedulers
+    SerialScheduler(; _...) = new()
 end
 from_symbol(::Val{:serial}) = SerialScheduler
 
