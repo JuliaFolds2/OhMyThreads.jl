@@ -22,6 +22,8 @@ jobs:
         with:
           version: ${{ matrix.version }}
       - uses: cjdoris/julia-downgrade-compat-action@v1
+        env:
+          JULIA_NUM_THREADS: 4,2
         with:
           skip: Pkg,TOML,Test,Markdown
       - uses: julia-actions/julia-buildpkg@v1
