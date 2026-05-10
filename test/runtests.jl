@@ -23,7 +23,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
     for (; ~, f, op, itrs, init) in sets_to_test
         @testset "f=$f, op=$op, itrs::$(typeof(itrs))" begin
             @testset for sched in (
-                StaticScheduler, DynamicScheduler, GreedyScheduler,
+                StaticScheduler, DynamicScheduler, GreedyScheduler, :GreedySchedulerNoMig,
                 DynamicScheduler{OhMyThreads.Schedulers.NoChunking},
                 SerialScheduler, ChunkedGreedy)
                 @testset for split in (Consecutive(), RoundRobin(), :consecutive, :roundrobin)
@@ -31,6 +31,8 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                         for minchunksize ∈ (nothing, 1, 3)
                             if sched == GreedyScheduler
                                 scheduler = sched(; ntasks = nchunks, minchunksize)
+                            elseif sched == :GreedySchedulerNoMig
+                                scheduler = GreedyScheduler(; ntasks = nchunks, minchunksize, migration = false)
                             elseif sched == DynamicScheduler{OhMyThreads.Schedulers.NoChunking}
                                 scheduler = DynamicScheduler(; chunking = false)
                             elseif sched == SerialScheduler
@@ -40,7 +42,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                             end
                             kwargs = (; scheduler)
                             if (split in (RoundRobin(), :roundrobin) ||
-                                sched ∈ (GreedyScheduler, ChunkedGreedy)) || op ∉ (vcat, *)
+                                sched ∈ (GreedyScheduler, :GreedySchedulerNoMig, ChunkedGreedy)) || op ∉ (vcat, *)
                                 # scatter and greedy only works for commutative operators!
                             else
                                 mapreduce_f_op_itr = mapreduce(f, op, itrs...)
@@ -61,7 +63,7 @@ ChunkedGreedy(; kwargs...) = GreedyScheduler(; kwargs...)
                             @test tcollect(RT, (f(x...) for x in collect(zip(itrs...))); kwargs...) ~ map_f_itr
                             @test tcollect(RT, f.(itrs...); kwargs...) ~ map_f_itr
 
-                            if sched ∉ (GreedyScheduler, ChunkedGreedy)
+                            if sched ∉ (GreedyScheduler, :GreedySchedulerNoMig, ChunkedGreedy)
                                 @test tmap(f, itrs...; kwargs...) ~ map_f_itr
                                 @test tcollect((f(x...) for x in collect(zip(itrs...))); kwargs...) ~ map_f_itr
                                 @test tcollect(f.(itrs...); kwargs...) ~ map_f_itr
@@ -760,6 +762,15 @@ end
          GreedyScheduler
          ├ Num. tasks: $nt
          ├ Chunking: fixed count ($(10 * nt)), split :roundrobin
+         ├ Task migration: true
+         └ Threadpool: default"""
+
+    @test repr("text/plain", GreedyScheduler(; chunking = true, migration = false)) ==
+          """
+         GreedyScheduler
+         ├ Num. tasks: $nt
+         ├ Chunking: fixed count ($(10 * nt)), split :roundrobin
+         ├ Task migration: false
          └ Threadpool: default"""
 end
 

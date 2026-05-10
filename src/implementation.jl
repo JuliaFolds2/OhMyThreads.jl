@@ -12,7 +12,7 @@ using OhMyThreads.Schedulers: chunksplitter_mode, chunking_enabled,
                               has_minchunksize, chunkingargs_to_kwargs,
                               chunking_mode, ChunkingMode, NoChunking,
                               FixedSize, FixedCount, scheduler_from_symbol, NotGiven,
-                              isgiven, threadpool as get_threadpool
+                              isgiven, threadpool as get_threadpool, allow_migration
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 using BangBang: append!!
@@ -255,11 +255,23 @@ function _tmapreduce(f,
             put!(ch, args)
         end
     end
-    tasks = map(1:ntasks) do _
-        # Note, calling `promise_task_local` here is only safe because we're assuming that
-        # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
-            promise_task_local(f)(args...)
+    if allow_migration(scheduler)
+        tasks = map(1:ntasks) do _
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
+                promise_task_local(f)(args...)
+            end
+        end
+    else
+        nt = nthreads()
+        tasks = map(1:ntasks) do c
+            tid = @inbounds nthtid(mod1(c, nt))
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawnat tid mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
+                promise_task_local(f)(args...)
+            end
         end
     end
     # Doing this because of https://github.com/JuliaFolds2/OhMyThreads.jl/issues/82
@@ -302,12 +314,25 @@ function _tmapreduce(f,
     # ChunkSplitters.IndexChunks support everything needed for ChannelLike
     ch = ChannelLike(chnks)
 
-    tasks = map(1:ntasks) do _
-        # Note, calling `promise_task_local` here is only safe because we're assuming that
-        # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
-            args = map(A -> view(A, inds), Arrs)
-            mapreduce(promise_task_local(f), promise_task_local(op), args...)
+    if allow_migration(scheduler)
+        tasks = map(1:ntasks) do _
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
+                args = map(A -> view(A, inds), Arrs)
+                mapreduce(promise_task_local(f), promise_task_local(op), args...)
+            end
+        end
+    else
+        nt = nthreads()
+        tasks = map(1:ntasks) do c
+            tid = @inbounds nthtid(mod1(c, nt))
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawnat tid mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
+                args = map(A -> view(A, inds), Arrs)
+                mapreduce(promise_task_local(f), promise_task_local(op), args...)
+            end
         end
     end
     # Doing this because of https://github.com/JuliaFolds2/OhMyThreads.jl/issues/82
