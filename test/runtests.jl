@@ -840,3 +840,5 @@ if Threads.nthreads() > 1
 end
 
 # Todo way more testing, and easier tests to deal with
+
+include("ProgressMeterExt.jl")

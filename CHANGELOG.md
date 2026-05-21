@@ -4,6 +4,7 @@ OhMyThreads.jl Changelog
 Unreleased
 ------------
 - ![Enhancement][badge-enhancement] `SerialScheduler` now accepts and ignores arguments passed to it to make switching schedulers easier [#162][gh-pr-162].
+- ![Enhancement][badge-enhancement] `tmap`, `tmap!`, `tforeach`, `tmapreduce`, `treducemap`, and `treduce` are now compatible with [ProgressMeter.jl](https://github.com/timholy/ProgressMeter.jl), so you can do e.g. `@showprogress tmap(...)`[#164][gh-pr-164].
 
 Version 0.8.3
 ------------
