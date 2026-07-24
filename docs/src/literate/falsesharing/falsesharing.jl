@@ -73,10 +73,10 @@ nthreads()
 # Although our parallel summation above is semantically correct, it has a
 # big **performance issue**: *False sharing*. To understand false sharing, we have to think
 # a little bit about how computers work. Specifically, we need to realize that when a CPU core
-# fetches a piece of data from RAM into its on-board, high-speed cache, it doesn't fetch the data
-# one byte at a time.  Rather, data is fetched in fixed, 64-byte blocks called "cache lines".
+# fetches a piece of data from RAM into its local, high-speed cache, it doesn't fetch the data one
+# byte at a time.  Rather, data is fetched in fixed (typically 64-byte) blocks called "cache lines".
 # Suppose that multiple cores have loaded the same cache line, with the intent of each modifying
-# a distinct, independent variable residing in this single cache line.  When any one core modifies
+# a distinct, independent data element residing in this single cache line.  When any one core modifies
 # even a single byte of memory in its cache, then the cache line is marked as invalid for all other
 # cores, even if the other cores would never attempt to modify this same memory location.  All of
 # these other cores that previously loaded the cache line must discard it and reload it from main
