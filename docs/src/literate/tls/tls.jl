@@ -298,13 +298,13 @@ res_nu ≈ res_pt_static
 # However, this approach has serious shortcomings.
 #
 # 1. It can easily be broken if someone doesn't know that the `scheduler = :static`
-# option is required for correctness, and removes it in a refactor.
+#    option is required for correctness, and removes it in a refactor.
 # 2. It makes the parallel code  non-composable: If we call other multithreaded functions
-# within the `tmap` or if our parallel `matmulsums_perthread_static` itself gets called
-# from another parallel region we will likely oversubscribe the Julia threads and get subpar
-# performance.
+#    within the `tmap` or if our parallel `matmulsums_perthread_static` itself gets called
+#    from another parallel region we will likely oversubscribe the Julia threads and get subpar
+#    performance.
 # 3. It can waste memory by creating too many temporary storage slots since `maxthreadid()`
-# can give an over-estimate of the number of slots needed for the computation.
+#    can give an over-estimate of the number of slots needed for the computation.
 #
 # While the above pattern might be the easiest to migrate to from the incorrect pattern,
 # we do not recommend it. We instead urge you to use task-local-storages, or the `Channel`
