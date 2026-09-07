@@ -34,7 +34,7 @@ function _scheduler_from_userinput(scheduler::MaybeScheduler; kwargs...)
     if scheduler isa Scheduler
         isempty(kwargs) || scheduler_and_kwargs_err(; kwargs...)
         _scheduler = scheduler
-    elseif scheduler isa Symbol
+    elseif scheduler isa Union{Symbol, Val}
         _scheduler = scheduler_from_symbol(scheduler; kwargs...)
     else # default fallback
         _scheduler = DynamicScheduler(; kwargs...)
@@ -61,6 +61,10 @@ function _check_chunks_incompatible_kwargs(; kwargs...)
 end
 
 function has_multiple_chunks(scheduler, coll)
+    if Base.IteratorSize(coll) isa Base.SizeUnknown
+        # can't know the number of elements up front; assume parallelization is worthwhile
+        return true
+    end
     C = chunking_mode(scheduler)
     if C == NoChunking || coll isa Union{AbstractChunks, ChunkSplitters.Internals.Enumerate}
         length(coll) > 1
@@ -72,7 +76,8 @@ function has_multiple_chunks(scheduler, coll)
         end
         min(length(coll) ÷ mcs, nchunks(scheduler)) > 1
     elseif C == FixedSize
-        length(coll) ÷ chunksize(scheduler) > 1
+        # matches the number of chunks that ChunkSplitters produces for `size`
+        cld(length(coll), chunksize(scheduler)) > 1
     else
         throw(ArgumentError("Unknown chunking mode: $C."))
     end
@@ -209,8 +214,11 @@ function _tmapreduce(f,
     mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
 end
 
-# NOTE: once v1.12 releases we should switch this to wait(t; throw=false)
-wait_nothrow(t) = Base._wait(t)
+@static if VERSION >= v"1.12.0-"
+    wait_nothrow(t) = wait(t; throw = false)
+else
+    wait_nothrow(t) = Base._wait(t)
+end
 
 
 """
@@ -249,19 +257,36 @@ function _tmapreduce(f,
         ch_len = length(first(Arrs))
     end
     throw_if_boxed_captures(f, op)
-    # TODO: Use ChannelLike for iterators that support it. Dispatch on IndexLinear?
-    ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn = true) do ch
-        for args in zip(Arrs...)
-            put!(ch, args)
+    if Arrs isa Tuple{Vararg{AbstractArray}}
+        # Indexable inputs: iterate shared indices via ChannelLike, which avoids
+        # copying the data into a Channel (one lock round-trip per element) and
+        # doesn't need a producer task.
+        ch = ChannelLike(eachindex(first(Arrs)))
+        tasks = map(1:ntasks) do c
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawn begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do i
+                    args = map(A -> @inbounds(A[i]), Arrs)
+                    local_f(args...)
+                end
+            end
         end
-    end
-    tasks = map(1:ntasks) do c
-        # Note, calling `promise_task_local` here is only safe because we're assuming that
-        # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawn begin
-            local_f = promise_task_local(f, c)
-            mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
-                local_f(args...)
+    else
+        ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn = true) do ch
+            for args in zip(Arrs...)
+                put!(ch, args)
+            end
+        end
+        tasks = map(1:ntasks) do c
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawn begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
+                    local_f(args...)
+                end
             end
         end
     end
@@ -567,7 +592,7 @@ end
             function mapping_function(i)
                 args = map(A -> @inbounds(A[i]), Arrs)
                 res = f(args...)
-                out[i] = res
+                @inbounds out[i] = res
             end
         end
         @noinline tforeach(mapping_f, eachindex(out); scheduler = _scheduler)

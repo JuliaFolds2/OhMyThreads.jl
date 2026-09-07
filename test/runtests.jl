@@ -673,6 +673,36 @@ end;
     @test_throws ArgumentError tmapreduce(sin, +, 1:10000; scheduler = :whatever)
     @test_throws ArgumentError tmapreduce(
         sin, +, 1:10000; threadpool = :whatever, chunking = false)
+
+    # scheduler isa Val
+    for (s, S) in ((:dynamic, DynamicScheduler), (:static, StaticScheduler),
+        (:serial, SerialScheduler), (:greedy, GreedyScheduler))
+        @test tmapreduce(sin, +, 1:10000; scheduler = Val(s), init = 0.0) ≈ res_tmr
+        @test OhMyThreads.Implementation._scheduler_from_userinput(Val(s)) isa S
+    end
+    @test tmapreduce(sin, +, 1:10000; ntasks = 2, scheduler = Val(:static)) ≈ res_tmr
+    @test_throws ArgumentError tmapreduce(sin, +, 1:10000; scheduler = Val(:whatever))
+end;
+
+@testset "SizeUnknown iterators (greedy)" begin
+    itr = Iterators.filter(isodd, 1:10)
+    @test tmapreduce(identity, +, itr; scheduler = :greedy, init = 0) == 25
+    @test tmapreduce(x -> x^2, +, itr; scheduler = :greedy, init = 0) ==
+          mapreduce(x -> x^2, +, itr)
+    @test tforeach(identity, itr; scheduler = :greedy) |> isnothing
+    # chunking requires a known size
+    @test_throws ArgumentError tmapreduce(
+        identity, +, itr; scheduler = GreedyScheduler(; chunking = true), init = 0)
+end;
+
+@testset "number of chunks for chunksize" begin
+    # 1:11 with chunksize=6 is split into 2 chunks ([1:6, 7:11]) and should parallelize
+    @test OhMyThreads.Implementation.has_multiple_chunks(
+        DynamicScheduler(; chunksize = 6), 1:11)
+    @test !OhMyThreads.Implementation.has_multiple_chunks(
+        DynamicScheduler(; chunksize = 6), 1:6)
+    @test treduce(+, 1:11; chunksize = 6) == sum(1:11)
+    @test treduce(+, 1:6; chunksize = 6) == sum(1:6)
 end;
 
 @testset "empty collections" begin
