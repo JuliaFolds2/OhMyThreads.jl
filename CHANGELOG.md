@@ -3,6 +3,8 @@ OhMyThreads.jl Changelog
 
 Version 0.8.7
 ------------
+- ![Feature][badge-feature] The index of a task (in `1:ntasks`) within a parallel operation can now be requested. This can, e.g., be used to give each task access to its own preallocated buffer. In the macro API the index is available as `@taskindex` when initializing task-local values, e.g. `@local buffer = buffers[@taskindex]`. In the functional API the function can be wrapped in `OhMyThreads.WithTaskIndex` to have the index passed as the first argument, e.g. `tmap(WithTaskIndex((taskindex, x) -> ...), xs)` ([#157][gh-issue-157], [#173][gh-pr-173]).
+- ![Enhancement][badge-enhancement] Task-local values (`@local`) are now only looked up once, instead of once per element, when no tasks are spawned (e.g. with `SerialScheduler`) ([#173][gh-pr-173]).
 - ![Bugfix][badge-bugfix] `tmap` with `StaticScheduler(chunking = false)` indexed the input arrays with their elements instead of their indices, which resulted in errors or wrong results [#174][gh-pr-174].
 - ![Bugfix][badge-bugfix] `tmap` no longer errors when scheduler keyword arguments (e.g. `ntasks`) are passed together with an empty input collection or `scheduler = :serial` [#174][gh-pr-174].
 
@@ -168,6 +170,7 @@ Version 0.2.0
 [gh-issue-27]: https://github.com/JuliaFolds2/OhMyThreads.jl/issues/27
 [gh-issue-24]: https://github.com/JuliaFolds2/OhMyThreads.jl/issues/24
 [gh-issue-25]: https://github.com/JuliaFolds2/OhMyThreads.jl/issues/25
+[gh-issue-157]: https://github.com/JuliaFolds2/OhMyThreads.jl/issues/157
 
 [gh-pr-5]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/5
 [gh-pr-121]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/121
@@ -178,4 +181,5 @@ Version 0.2.0
 [gh-pr-148]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/148
 [gh-pr-162]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/162
 [gh-pr-164]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/164
+[gh-pr-173]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/173
 [gh-pr-174]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/174

@@ -24,6 +24,27 @@ function _is_special_macro_expr(arg;
     return false
 end
 
+# Replace all occurences of `@taskindex` (or `OhMyThreads.@taskindex`) in `ex` with `sym`.
+# Returns the new expression and whether anything was replaced.
+function _replace_taskindex(ex, sym)
+    ex isa Expr || return ex, false
+    if _is_special_macro_expr(ex; lookfor = ("@taskindex",))
+        if any(x -> !(x isa LineNumberNode), ex.args[2:end])
+            throw(ErrorException("Wrong usage of @taskindex. It doesn't take any arguments."))
+        end
+        return sym, true
+    elseif ex.head === :quote
+        return ex, false
+    end
+    found = false
+    args = map(ex.args) do arg
+        newarg, f = _replace_taskindex(arg, sym)
+        found |= f
+        newarg
+    end
+    return Expr(ex.head, args...), found
+end
+
 function tasks_macro(forex; __module__)
     if forex.head != :for
         throw(ErrorException("Expected a for loop after `@tasks`."))
@@ -50,8 +71,11 @@ function tasks_macro(forex; __module__)
         forbody.args[i] = esc(forbody.args[i])
     end
 
-    locals_before, locals_names = _maybe_handle_atlocal_block!(forbody.args)
-    tls_names = isnothing(locals_before) ? [] : map(x -> x.args[1], locals_before)
+    # The (escaped) name of the variable that holds the task index, if requested.
+    taskindex = esc(gensym(:taskindex))
+    locals_before, locals_names, locals_taskindex = _maybe_handle_atlocal_block!(
+        forbody.args, taskindex)
+    tls_names = map(x -> x.args[1], locals_before)
     _maybe_handle_atset_block!(settings, forbody.args)
     setup_onlyone_blocks = _maybe_handle_atonlyone_blocks!(forbody.args)
     setup_onebyone_blocks = _maybe_handle_atonebyone_blocks!(forbody.args)
@@ -67,17 +91,36 @@ function tasks_macro(forex; __module__)
     itrng = esc(itrng)
     itvar = esc(itvar)
 
-    make_mapping_function = if isempty(tls_names)
+    make_mapping_function = if isempty(tls_names) && isempty(locals_taskindex)
         :(local function mapping_function($itvar,)
             $(forbody)
         end)
-
     else
-        :(local mapping_function = WithTaskLocals(($(tls_names...),)) do ($(locals_names...),)
-            function mapping_function_local($itvar,)
-                $(forbody)
-            end
+        inner = :(function mapping_function_local($itvar,)
+            $(forbody)
         end)
+        if !isempty(tls_names)
+            inner = :(WithTaskLocals(($(tls_names...),)) do ($(locals_names...),)
+                $inner
+            end)
+        end
+        if !isempty(locals_taskindex)
+            # Evaluate all initializers before introducing any user-visible local names,
+            # including those provided by `WithTaskLocals`.
+            temps = [gensym(:tasklocal) for _ in locals_taskindex]
+            initializers = [:($temp = $(esc(ex.args[2])))
+                            for (temp, ex) in zip(temps, locals_taskindex)]
+            bindings = [:(local $(esc(ex.args[1])) = $temp)
+                        for (temp, ex) in zip(temps, locals_taskindex)]
+            inner = :(TaskIndexFactory(function ($taskindex,)
+                $(initializers...)
+                let
+                    $(bindings...)
+                    $inner
+                end
+            end))
+        end
+        :(local mapping_function = $inner)
     end
     q = if isgiven(settings.reducer)
         quote
@@ -126,10 +169,8 @@ function tasks_macro(forex; __module__)
     result = :(let
     end)
     push!(result.args[2].args, q)
-    if !isnothing(locals_before)
-        for x in locals_before
-            push!(result.args[1].args, x)
-        end
+    for x in locals_before
+        push!(result.args[1].args, x)
     end
 
     result
@@ -148,37 +189,41 @@ Base.@kwdef mutable struct Settings
     kwargs::Dict{Symbol, Any} = Dict{Symbol, Any}()
 end
 
-function _maybe_handle_atlocal_block!(args)
-    locals_before = nothing
-    local_inner = nothing
+function _maybe_handle_atlocal_block!(args, taskindex)
+    locals_before = Expr[]
+    locals_names = Expr[]
+    locals_taskindex = Expr[]
     tlsidx = findfirst(args) do arg
         _is_special_macro_expr(arg; lookfor = (Symbol("@local"),))
     end
     if !isnothing(tlsidx)
-        locals_before, local_inner = _unfold_atlocal_block(args[tlsidx].args[3])
+        _unfold_atlocal_block!(locals_before, locals_names, locals_taskindex,
+            args[tlsidx].args[3], taskindex)
         deleteat!(args, tlsidx)
     end
-    return locals_before, local_inner
+    return locals_before, locals_names, locals_taskindex
 end
 
-function _unfold_atlocal_block(ex)
-    locals_before = Expr[]
-    locals_names = Expr[]
+function _unfold_atlocal_block!(locals_before, locals_names, locals_taskindex, ex, taskindex)
     if ex.head == :(=)
-        localb, localn = _atlocal_assign_to_exprs(ex)
-        push!(locals_before, localb)
-        push!(locals_names, localn)
+        exprs = [ex]
     elseif ex.head == :block
-        tlsexprs = filter(x -> x isa Expr, ex.args) # skip LineNumberNode
-        for x in tlsexprs
+        exprs = filter(x -> x isa Expr, ex.args) # skip LineNumberNode
+    else
+        throw(ErrorException("Wrong usage of @local. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
+    end
+    for x in exprs
+        # We insert the escaped `taskindex` below, so the symbol itself is what we need here
+        x_replaced, uses_taskindex = _replace_taskindex(x, only(taskindex.args))
+        if uses_taskindex
+            push!(locals_taskindex, x_replaced)
+        else
             localb, localn = _atlocal_assign_to_exprs(x)
             push!(locals_before, localb)
             push!(locals_names, localn)
         end
-    else
-        throw(ErrorException("Wrong usage of @local. You must either provide a typed assignment or multiple typed assignments in a `begin ... end` block."))
     end
-    return locals_before, locals_names
+    return
 end
 
 #=

@@ -73,6 +73,91 @@ function (f::WithTaskLocals{F})(args...; kwargs...) where {F}
 end
 
 """
+    WithTaskIndex(f) <: Function
+
+Wrap the function `f` to signal to the parallel functions of OhMyThreads (e.g.
+[`tforeach`](@ref), [`tmap`](@ref), and [`tmapreduce`](@ref)) that `f` should be called with
+the index of the task that it is running on as an additional, leading argument. That is,
+instead of `f(args...)` the call will be `f(taskindex, args...)`.
+
+The task index is an integer in `1:n`, where `n` is the number of tasks used by the parallel
+operation. Note that `n` can be smaller than the requested `ntasks`, e.g. for short input
+collections. If no tasks are spawned (e.g. [`SerialScheduler`](@ref), or an input that only
+results in a single chunk) the index is `1`.
+
+The meaning of the index depends on the scheduler:
+
+- With chunking ([`DynamicScheduler`](@ref) and [`StaticScheduler`](@ref) by default) there
+  is one task per chunk of the input, and the index enumerates these tasks.
+- With `chunking=false` there is one task per element, and the index is the position of
+  that element in the input collection.
+- If `chunks` or `index_chunks` are passed as input it is the position of the chunk.
+- For the [`GreedyScheduler`](@ref) it is the index of the task among the `ntasks` tasks
+  that greedily process the input.
+
+This is useful for giving each task access to its own, preallocated resource, for example
+to reuse buffers across several parallel operations:
+
+```julia
+using OhMyThreads: OhMyThreads, tforeach
+
+ntasks = 4
+buffers = [zeros(100) for _ in 1:ntasks]
+for i in 1:10
+    tforeach(OhMyThreads.WithTaskIndex((taskindex, j) -> begin
+            buffer = buffers[taskindex]
+            # ... use buffer ...
+        end), 1:1000; ntasks)
+end
+```
+
+Only the mapping function `f` can be wrapped, not the reducing function `op` of, e.g.,
+[`tmapreduce`](@ref).
+
+For the macro API, see [`@taskindex`](@ref).
+"""
+struct WithTaskIndex{F} <: Function
+    f::F
+end
+
+@noinline function (::WithTaskIndex)(args...; kwargs...)
+    throw(ArgumentError("A `WithTaskIndex` function can't be called directly, since it " *
+                        "requires the task index. It must be passed directly to one of the " *
+                        "parallel functions of OhMyThreads (e.g. `tmap`, `tforeach`, or " *
+                        "`tmapreduce`)."))
+end
+
+# Internal counterpart of `WithTaskIndex`: a function which takes the task index and returns
+# the function to be called by the task with that index. Used by `@tasks`.
+struct TaskIndexFactory{F} <: Function
+    factory::F
+end
+
+"""
+    promise_task_local(f, taskindex::Int)
+
+Like `promise_task_local(f)` but, in addition, pass the index of the current task on to `f`
+in case it has been requested (see [`WithTaskIndex`](@ref) and [`@taskindex`](@ref)). The
+result is a regular function that doesn't take the task index as an argument. The same
+caveats as for `promise_task_local(f)` apply: the result must only be called from the
+current task.
+"""
+promise_task_local(f::Any, ::Int) = f
+function promise_task_local(f::WithTaskLocals{F}, taskindex::Int) where {F}
+    promise_task_local(promise_task_local(f), taskindex)
+end
+function promise_task_local(f::WithTaskIndex{F}, taskindex::Int) where {F}
+    # The wrapped function may itself be, e.g., a `WithTaskLocals`
+    let f = promise_task_local(f.f)
+        (args...) -> f(taskindex, args...)
+    end
+end
+function promise_task_local(f::TaskIndexFactory{F}, taskindex::Int) where {F}
+    # The factory may return, e.g., a `WithTaskLocals`
+    promise_task_local(f.factory(taskindex), taskindex)
+end
+
+"""
     ChannelLike(itr)
 
 This struct wraps an indexable object such that it can be iterated by concurrent tasks in a

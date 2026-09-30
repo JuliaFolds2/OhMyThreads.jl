@@ -11,7 +11,7 @@ Supports reductions (`@set reducer=<reducer function>`) and collecting the resul
 Under the hood, the `for` loop is translated into corresponding parallel
 [`tforeach`](@ref), [`tmapreduce`](@ref), or [`tmap`](@ref) calls.
 
-See also: [`@set`](@ref), [`@local`](@ref)
+See also: [`@set`](@ref), [`@local`](@ref), [`@taskindex`](@ref)
 
 ## Examples
 
@@ -114,6 +114,9 @@ end
     multiple TLVs, use `@local begin ... end`. Compared to regular assignments, there are some
     limitations though, e.g. TLVs can't reference each other.
 
+    The index of the task can be used to initialize a task-local value, see
+    [`@taskindex`](@ref).
+
     ## Examples
 
     ```julia
@@ -160,6 +163,44 @@ end
     macro $(Symbol("local"))(args...)
         error("The @local macro may only be used inside of a @tasks block.")
     end
+end
+
+"""
+    @taskindex
+
+Can be used on the right hand side of a [`@local`](@ref) assignment inside of a
+`@tasks for ... end` block to get the index of the task. The index is an integer in `1:n`,
+where `n` is the number of tasks used by the loop. Note that `n` can be smaller than the
+requested `ntasks`, e.g. for short input collections. See [`OhMyThreads.WithTaskIndex`](@ref)
+for the functional API equivalent, and for details about the index for different schedulers.
+
+This is useful for giving each task access to its own, preallocated resource, for example
+to reuse buffers across several `@tasks` loops:
+
+```julia
+using OhMyThreads: @tasks
+
+ntasks = 4
+buffers = [zeros(100) for _ in 1:ntasks]
+for i in 1:10
+    @tasks for j in 1:1000
+        @set ntasks = ntasks
+        @local buffer = buffers[@taskindex]
+        # ... use buffer ...
+    end
+end
+```
+
+A `@local` assignment that uses `@taskindex` is evaluated once per task (just like other
+`@local` assignments). To get hold of the index itself, use `@local idx = @taskindex`.
+As for other `@local` assignments, the right hand side is evaluated in the scope
+*surrounding* the loop body, i.e. it can't reference other task-local values from the same
+`@local` block.
+
+`@taskindex` can *not* be used directly in the loop body, or in the settings (`@set`).
+"""
+macro taskindex(args...)
+    error("The @taskindex macro may only be used inside of a @local block (inside of a @tasks block).")
 end
 
 """
