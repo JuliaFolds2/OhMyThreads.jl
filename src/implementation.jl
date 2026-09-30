@@ -450,7 +450,7 @@ function tmap(f,
     Arrs = (A, _Arrs...)
     if _scheduler isa SerialScheduler || isempty(A)
         # empty input collection → align with Base.map behavior
-        map(f, Arrs...; kwargs...)
+        map(f, Arrs...)
     else
         check_all_have_same_indices(Arrs)
         @noinline _tmap(_scheduler, f, A, _Arrs...)
@@ -510,7 +510,7 @@ function _tmap(scheduler::StaticScheduler{NoChunking},
     Arrs = (A, _Arrs...)
     nt = nthreads()
     throw_if_boxed_captures(f)
-    tasks = map(enumerate(A)) do (c, i)
+    tasks = map(enumerate(eachindex(A))) do (c, i)
         tid = @inbounds nthtid(mod1(c, nt))
         @spawnat tid begin
             args = map(A -> A[i], Arrs)

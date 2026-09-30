@@ -81,7 +81,7 @@ Multiple settings are supported, either as separate `@set` statements or via
 * `reducer` (e.g. `reducer=+`): Indicates that a reduction should be performed with the provided binary function. See [`tmapreduce`](@ref) for more information.
 * `collect` (e.g. `collect=true`): Indicates that results should be collected (similar to `map`).
 
-All other settings will be passed on to the underlying parallel functions (e.g. [tmapreduce](@ref))
+All other settings will be passed on to the underlying parallel functions (e.g. [`tmapreduce`](@ref))
 as keyword arguments. Hence, you may provide whatever these functions accept as
 keyword arguments. Among others, this includes
 

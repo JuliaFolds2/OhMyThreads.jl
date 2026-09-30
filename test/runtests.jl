@@ -443,11 +443,29 @@ end;
                 end
                 # map
                 @test tmap(f, empty_coll) == map(f, empty_coll)
+                @test tmap(f, empty_coll; ntasks = 4) == map(f, empty_coll)
+                @test tmap(f, empty_coll; scheduler = :static, chunksize = 2) ==
+                      map(f, empty_coll)
                 # collect
                 @test tcollect(empty_coll) == collect(empty_coll)
             end
         end
     end
+end;
+
+@testset "tmap without chunking" begin
+    for sched in (DynamicScheduler, StaticScheduler)
+        scheduler = sched(; chunking = false)
+        # elements that are not valid indices
+        @test tmap(x -> 2x, [10, 20, 30]; scheduler) == [20, 40, 60]
+        @test tmap(+, [10, 20, 30], [1.5, 2.5, 3.5]; scheduler) == [11.5, 22.5, 33.5]
+        A = rand(3, 4)
+        @test tmap(sin, A; scheduler) == map(sin, A)
+    end
+end;
+
+@testset "tmap with SerialScheduler and kwargs" begin
+    @test tmap(sin, 1:10; scheduler = :serial, ntasks = 2) == map(sin, 1:10)
 end;
 
 # for testing @one_by_one region
