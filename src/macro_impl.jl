@@ -105,13 +105,19 @@ function tasks_macro(forex; __module__)
             end)
         end
         if !isempty(locals_taskindex)
-            # Locals that depend on the task index are regular local variables which are
-            # initialized once per task, when the task index is known. Note that the
-            # factory wraps the `WithTaskLocals` (and not the other way around) such that
-            # the names of the task local values aren't in scope in these initializers.
+            # Evaluate all initializers before introducing any user-visible local names,
+            # including those provided by `WithTaskLocals`.
+            temps = [gensym(:tasklocal) for _ in locals_taskindex]
+            initializers = [:($temp = $(esc(ex.args[2])))
+                            for (temp, ex) in zip(temps, locals_taskindex)]
+            bindings = [:(local $(esc(ex.args[1])) = $temp)
+                        for (temp, ex) in zip(temps, locals_taskindex)]
             inner = :(TaskIndexFactory(function ($taskindex,)
-                $(locals_taskindex...)
-                $inner
+                $(initializers...)
+                let
+                    $(bindings...)
+                    $inner
+                end
             end))
         end
         :(local mapping_function = $inner)
@@ -210,7 +216,7 @@ function _unfold_atlocal_block!(locals_before, locals_names, locals_taskindex, e
         # We insert the escaped `taskindex` below, so the symbol itself is what we need here
         x_replaced, uses_taskindex = _replace_taskindex(x, only(taskindex.args))
         if uses_taskindex
-            push!(locals_taskindex, esc(Expr(:local, x_replaced)))
+            push!(locals_taskindex, x_replaced)
         else
             localb, localn = _atlocal_assign_to_exprs(x)
             push!(locals_before, localb)

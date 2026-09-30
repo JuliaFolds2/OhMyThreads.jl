@@ -357,6 +357,42 @@ end;
             @test res == [(c, 10c) for c in 1:nt]
         end
 
+        # Task-index locals also read their own and each other's names from outer scope.
+        let x = collect(1:nt), y = collect(10:10:(10 * nt))
+            res = @tasks for i in 1:nt
+                @set ntasks = nt
+                @set collect = true
+                @local begin
+                    x::Float64 = x[@taskindex]
+                    y = x[@taskindex] + y[@taskindex]
+                end
+                (x, y)
+            end
+            @test res == [(Float64(c), 11c) for c in 1:nt]
+            @test eltype(res) == Tuple{Float64, Int}
+        end
+
+        # Greedy workers retain mutable task locals across elements and chunks.
+        for scheduler in (GreedyScheduler(; ntasks = nt),
+            GreedyScheduler(; ntasks = nt, nchunks = 3 * nt))
+            let counter = Threads.Atomic{Int}(0), values = zeros(Int, N),
+                idxs = zeros(Int, N)
+                @tasks for i in 1:N
+                    @set scheduler = scheduler
+                    @local state = (Threads.atomic_add!(counter, 1); (@taskindex, Ref(0)))
+                    idx, count = state
+                    count[] += 1
+                    idxs[i] = idx
+                    values[i] = count[]
+                end
+                @test counter[] == nt
+                for idx in unique(idxs)
+                    counts = values[idxs .== idx]
+                    @test sort(counts) == 1:length(counts)
+                end
+            end
+        end
+
         # reducer
         @test @tasks(for i in 1:N
             @set ntasks = nt

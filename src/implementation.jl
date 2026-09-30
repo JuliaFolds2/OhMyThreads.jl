@@ -258,8 +258,11 @@ function _tmapreduce(f,
     tasks = map(1:ntasks) do c
         # Note, calling `promise_task_local` here is only safe because we're assuming that
         # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
-            promise_task_local(f, c)(args...)
+        @spawn begin
+            local_f = promise_task_local(f, c)
+            mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
+                local_f(args...)
+            end
         end
     end
     # Doing this because of https://github.com/JuliaFolds2/OhMyThreads.jl/issues/82
@@ -305,9 +308,12 @@ function _tmapreduce(f,
     tasks = map(1:ntasks) do c
         # Note, calling `promise_task_local` here is only safe because we're assuming that
         # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
-            args = map(A -> view(A, inds), Arrs)
-            mapreduce(promise_task_local(f, c), promise_task_local(op), args...)
+        @spawn begin
+            local_f = promise_task_local(f, c)
+            mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
+                args = map(A -> view(A, inds), Arrs)
+                mapreduce(local_f, promise_task_local(op), args...)
+            end
         end
     end
     # Doing this because of https://github.com/JuliaFolds2/OhMyThreads.jl/issues/82
