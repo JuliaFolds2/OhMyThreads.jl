@@ -11,7 +11,7 @@ Supports reductions (`@set reducer=<reducer function>`) and collecting the resul
 Under the hood, the `for` loop is translated into corresponding parallel
 [`tforeach`](@ref), [`tmapreduce`](@ref), or [`tmap`](@ref) calls.
 
-See also: [`@set`](@ref), [`@local`](@ref), [`@taskindex`](@ref)
+See also: [`@set`](@ref), [`@local`](@ref), [`@task_index`](@ref)
 
 ## Examples
 
@@ -115,7 +115,7 @@ end
     limitations though, e.g. TLVs can't reference each other.
 
     The index of the task can be used to initialize a task-local value, see
-    [`@taskindex`](@ref).
+    [`@task_index`](@ref).
 
     ## Examples
 
@@ -166,7 +166,7 @@ end
 end
 
 """
-    @taskindex
+    @task_index
 
 Can be used on the right hand side of a [`@local`](@ref) assignment inside of a
 `@tasks for ... end` block to get the index of the task. The index is an integer in `1:n`,
@@ -185,22 +185,22 @@ buffers = [zeros(100) for _ in 1:ntasks]
 for i in 1:10
     @tasks for j in 1:1000
         @set ntasks = ntasks
-        @local buffer = buffers[@taskindex]
+        @local buffer = buffers[@task_index]
         # ... use buffer ...
     end
 end
 ```
 
-A `@local` assignment that uses `@taskindex` is evaluated once per task (just like other
-`@local` assignments). To get hold of the index itself, use `@local idx = @taskindex`.
+A `@local` assignment that uses `@task_index` is evaluated once per task (just like other
+`@local` assignments). To get hold of the index itself, use `@local idx = @task_index`.
 As for other `@local` assignments, the right hand side is evaluated in the scope
 *surrounding* the loop body, i.e. it can't reference other task-local values from the same
 `@local` block.
 
-`@taskindex` can *not* be used directly in the loop body, or in the settings (`@set`).
+`@task_index` can *not* be used directly in the loop body, or in the settings (`@set`).
 """
-macro taskindex(args...)
-    error("The @taskindex macro may only be used inside of a @local block (inside of a @tasks block).")
+macro task_index(args...)
+    error("The @task_index macro may only be used inside of a @local block (inside of a @tasks block).")
 end
 
 """

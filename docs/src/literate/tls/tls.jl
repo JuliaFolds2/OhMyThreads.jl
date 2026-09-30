@@ -213,21 +213,21 @@ sleep(2) #hide
 # par with the manual implementation.
 #
 #
-# ### [Reusing buffers across parallel regions: `@taskindex`](@id taskindex_buffers)
+# ### [Reusing buffers across parallel regions: `@task_index`](@id task_index_buffers)
 #
 # Task-local values only live as long as the tasks of a single parallel region. If the
 # parallel region is itself executed many times, e.g. inside of an outer sequential loop,
 # a new set of buffers is allocated every time. To avoid this, we can allocate one buffer
 # per task up front and let every task select "its" buffer based on the index of the task
 # (in `1:ntasks`) within the parallel region. In the macro API, this index is available as
-# [`@taskindex`](@ref) when initializing a `@local` variable.
-using OhMyThreads: @taskindex
+# [`@task_index`](@ref) when initializing a `@local` variable.
+using OhMyThreads: @task_index
 
 function matmulsums_taskindex!(Cs, As, Bs)
     @tasks for i in eachindex(As, Bs)
         @set collect = true
         @set ntasks = length(Cs)
-        @local C = Cs[@taskindex]
+        @local C = Cs[@task_index]
         mul!(C, As[i], Bs[i])
         sum(C)
     end
