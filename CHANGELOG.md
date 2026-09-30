@@ -1,6 +1,11 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.8.7
+------------
+- ![Bugfix][badge-bugfix] `tmap` with `StaticScheduler(chunking = false)` indexed the input arrays with their elements instead of their indices, which resulted in errors or wrong results [#174][gh-pr-174].
+- ![Bugfix][badge-bugfix] `tmap` no longer errors when scheduler keyword arguments (e.g. `ntasks`) are passed together with an empty input collection or `scheduler = :serial` [#174][gh-pr-174].
+
 Version 0.8.6
 ------------
 - ![Enhancement][badge-enhancement] `tmap`, `tmap!`, `tforeach`, `tmapreduce`, `treducemap`, and `treduce` are now compatible with [ProgressMeter.jl](https://github.com/timholy/ProgressMeter.jl), so you can do e.g. `@showprogress tmap(...)`[#164][gh-pr-164].
@@ -173,3 +178,4 @@ Version 0.2.0
 [gh-pr-148]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/148
 [gh-pr-162]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/162
 [gh-pr-164]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/164
+[gh-pr-174]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/174
