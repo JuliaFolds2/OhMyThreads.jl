@@ -193,6 +193,9 @@ end
 
 A `@local` assignment that uses `@taskindex` is evaluated once per task (just like other
 `@local` assignments). To get hold of the index itself, use `@local idx = @taskindex`.
+As for other `@local` assignments, the right hand side is evaluated in the scope
+*surrounding* the loop body, i.e. it can't reference other task-local values from the same
+`@local` block.
 
 `@taskindex` can *not* be used directly in the loop body, or in the settings (`@set`).
 """

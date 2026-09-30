@@ -46,4 +46,18 @@ using Test, OhMyThreads, ProgressMeter
             @test (@showprogress desc="treduce ($scheduler)" treduce(+, data; scheduler)) ≈ reduce_result
         end
     end
+
+    @testset "WithTaskIndex" begin
+        f = OhMyThreads.WithTaskIndex((idx, x) -> (idx, sin(x)))
+        expected = collect(zip(repeat(1:4; inner = 25), map(sin, data[1:100])))
+        @test (@showprogress desc="tmap (WithTaskIndex)" tmap(f, data[1:100]; ntasks = 4)) == expected
+        out = similar(expected)
+        @showprogress desc="tmap! (WithTaskIndex)" tmap!(f, out, data[1:100]; ntasks = 4)
+        @test out == expected
+        @test (@showprogress desc="tmapreduce (WithTaskIndex)" tmapreduce(f, vcat, data[1:100]; ntasks = 4)) == expected
+        idxs = zeros(Int, 100)
+        g = OhMyThreads.WithTaskIndex((idx, i) -> idxs[i] = idx)
+        @showprogress desc="tforeach (WithTaskIndex)" tforeach(g, 1:100; ntasks = 4)
+        @test idxs == repeat(1:4; inner = 25)
+    end
 end

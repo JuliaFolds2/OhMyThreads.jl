@@ -342,6 +342,21 @@ end;
         end
         @test res == [(c, 10.0 * c, k) for c in 1:nt for k in 1:2]
 
+        # the names of other task local values are not in scope in @taskindex initializers
+        let x = collect(1:nt), y = collect(10:10:(10 * nt))
+            res = @tasks for i in 1:nt
+                @set ntasks = nt
+                @set collect = true
+                @local begin
+                    x = zeros(1)
+                    a = x[@taskindex]
+                    b = y[@taskindex]
+                end
+                (a, b)
+            end
+            @test res == [(c, 10c) for c in 1:nt]
+        end
+
         # reducer
         @test @tasks(for i in 1:N
             @set ntasks = nt
@@ -469,10 +484,16 @@ end;
             @test tmap(g, 1:8; ntasks = nt) == [(c, k) for c in 1:nt for k in 1:2]
             @test tmapreduce(g, vcat, 1:8; ntasks = nt) ==
                   [(c, k) for c in 1:nt for k in 1:2]
+            # the other way around: task local values are looked up once per task
+            h = WithTaskIndex(WithTaskLocals((tlv,)) do (x,)
+                (idx, _) -> (x[] += 1; (idx, x[]))
+            end)
+            @test tmap(h, 1:8; ntasks = nt) == [(c, k) for c in 1:nt for k in 1:2]
+            @test tmap(h, 1:4; scheduler = SerialScheduler()) == [(1, k) for k in 1:4]
         end
 
         # the task index is only passed by the parallel functions
-        @test_throws MethodError f(1)
+        @test_throws "can't be called directly" f(1)
         @test promise_task_local(f, 3)(1) == 3
         @test promise_task_local(sin, 3) === sin
 

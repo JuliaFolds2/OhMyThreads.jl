@@ -407,6 +407,7 @@ This should always be equivalent to just calling `g(f)`.
 """
 function maybe_rewrap(g::G, f::WithTaskLocals{F}) where {G, F}
     (; inner_func, tasklocals) = f
+    # `inner_func(vals)` may itself be a wrapper (e.g. a `WithTaskIndex`), so recurse
     WithTaskLocals(vals -> maybe_rewrap(g, inner_func(vals)), tasklocals)
 end
 function maybe_rewrap(g::G, f::Union{WithTaskIndex{F}, TaskIndexFactory{F}}) where {G, F}

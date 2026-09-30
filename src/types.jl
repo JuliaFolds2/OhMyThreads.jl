@@ -120,6 +120,13 @@ struct WithTaskIndex{F} <: Function
     f::F
 end
 
+@noinline function (::WithTaskIndex)(args...; kwargs...)
+    throw(ArgumentError("A `WithTaskIndex` function can't be called directly, since it " *
+                        "requires the task index. It must be passed directly to one of the " *
+                        "parallel functions of OhMyThreads (e.g. `tmap`, `tforeach`, or " *
+                        "`tmapreduce`)."))
+end
+
 # Internal counterpart of `WithTaskIndex`: a function which takes the task index and returns
 # the function to be called by the task with that index. Used by `@tasks`.
 struct TaskIndexFactory{F} <: Function
@@ -140,11 +147,15 @@ function promise_task_local(f::WithTaskLocals{F}, taskindex::Int) where {F}
     promise_task_local(promise_task_local(f), taskindex)
 end
 function promise_task_local(f::WithTaskIndex{F}, taskindex::Int) where {F}
-    let f = f.f
+    # The wrapped function may itself be, e.g., a `WithTaskLocals`
+    let f = promise_task_local(f.f)
         (args...) -> f(taskindex, args...)
     end
 end
-promise_task_local(f::TaskIndexFactory{F}, taskindex::Int) where {F} = f.factory(taskindex)
+function promise_task_local(f::TaskIndexFactory{F}, taskindex::Int) where {F}
+    # The factory may return, e.g., a `WithTaskLocals`
+    promise_task_local(f.factory(taskindex), taskindex)
+end
 
 """
     ChannelLike(itr)

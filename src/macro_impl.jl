@@ -99,21 +99,22 @@ function tasks_macro(forex; __module__)
         inner = :(function mapping_function_local($itvar,)
             $(forbody)
         end)
+        if !isempty(tls_names)
+            inner = :(WithTaskLocals(($(tls_names...),)) do ($(locals_names...),)
+                $inner
+            end)
+        end
         if !isempty(locals_taskindex)
             # Locals that depend on the task index are regular local variables which are
-            # initialized once per task, when the task index is known.
+            # initialized once per task, when the task index is known. Note that the
+            # factory wraps the `WithTaskLocals` (and not the other way around) such that
+            # the names of the task local values aren't in scope in these initializers.
             inner = :(TaskIndexFactory(function ($taskindex,)
                 $(locals_taskindex...)
                 $inner
             end))
         end
-        if isempty(tls_names)
-            :(local mapping_function = $inner)
-        else
-            :(local mapping_function = WithTaskLocals(($(tls_names...),)) do ($(locals_names...),)
-                $inner
-            end)
-        end
+        :(local mapping_function = $inner)
     end
     q = if isgiven(settings.reducer)
         quote
