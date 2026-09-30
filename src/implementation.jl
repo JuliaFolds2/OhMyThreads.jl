@@ -1,6 +1,7 @@
 module Implementation
 
-import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
+import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect,
+                    taskindex
 using OhMyThreads: @spawn, @spawnat, WithTaskLocals, promise_task_local, ChannelLike,
                    allowing_boxed_captures
 using OhMyThreads.Tools: nthtid
@@ -22,6 +23,33 @@ using ChunkSplitters.Internals: AbstractChunks, IndexChunks
 const MaybeScheduler = Union{NotGiven, Scheduler, Symbol, Val}
 
 include("macro_impl.jl")
+
+const TASK_INDEX_KEY = :__OhMyThreads_task_index__
+
+# Set the task index of the current task. To be called at the start of every spawned task,
+# before `promise_task_local`, so that the index is available to task local values.
+@inline function set_task_index!(i::Int)
+    task_local_storage(TASK_INDEX_KEY, i)
+    return nothing
+end
+
+# Run `f` with the task index of the current task set to `i` and restore the previous state
+# afterwards. Used when the work is executed on the calling task.
+@inline function with_task_index(f::F, i::Int) where {F}
+    task_local_storage(f, TASK_INDEX_KEY, i)
+end
+
+function taskindex()
+    i = get(task_local_storage(), TASK_INDEX_KEY, nothing)
+    i === nothing && throw_no_task_index()
+    return i::Int
+end
+
+@noinline function throw_no_task_index()
+    error("`OhMyThreads.taskindex()` can only be called from a task spawned by " *
+          "OhMyThreads, e.g. inside of a `@tasks` loop or a function passed to " *
+          "`tforeach`, `tmap`, or `tmapreduce`.")
+end
 
 @inline function _index_chunks(sched, arg)
     C = chunking_mode(sched)
@@ -95,7 +123,9 @@ end
     end
     if _scheduler isa SerialScheduler || !has_multiple_chunks(_scheduler, first(Arrs))
         # empty input collection → align with Base.mapreduce behavior
-        mapreduce(f, op, Arrs...; mapreduce_kwargs...)
+        with_task_index(1) do
+            mapreduce(f, op, Arrs...; mapreduce_kwargs...)
+        end
     else
         @noinline _tmapreduce(f, op, Arrs, outputtype, _scheduler, mapreduce_kwargs)
     end
@@ -120,19 +150,24 @@ function _tmapreduce(f,
     check_all_have_same_indices(Arrs)
     throw_if_boxed_captures(f, op)
     if chunking_enabled(scheduler)
-        tasks = map(_index_chunks(scheduler, first(Arrs))) do inds
-
+        tasks = map(enumerate(_index_chunks(scheduler, first(Arrs)))) do (c, inds)
             args = map(A -> view(A, inds), Arrs)
             # Note, calling `promise_task_local` here is only safe because we're assuming that
             # Base.mapreduce isn't going to magically try to do multithreading on us...
-            @spawn threadpool mapreduce(promise_task_local(f), promise_task_local(op),
-                                        args...; $mapreduce_kwargs...)
+            @spawn threadpool begin
+                set_task_index!(c)
+                mapreduce(promise_task_local(f), promise_task_local(op),
+                          args...; $mapreduce_kwargs...)
+            end
         end
         mapreduce(fetch, promise_task_local(op), tasks)
     else
-        tasks = map(eachindex(first(Arrs))) do i
+        tasks = map(enumerate(eachindex(first(Arrs)))) do (c, i)
             args = map(A -> @inbounds(A[i]), Arrs)
-            @spawn threadpool promise_task_local(f)(args...)
+            @spawn threadpool begin
+                set_task_index!(c)
+                promise_task_local(f)(args...)
+            end
         end
         mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
     end
@@ -147,8 +182,11 @@ function _tmapreduce(f,
         mapreduce_kwargs)::OutputType where {OutputType, T}
     threadpool = get_threadpool(scheduler)
     throw_if_boxed_captures(f, op)
-    tasks = map(only(Arrs)) do idcs
-        @spawn threadpool promise_task_local(f)(idcs)
+    tasks = map(enumerate(only(Arrs))) do (c, idcs)
+        @spawn threadpool begin
+            set_task_index!(c)
+            promise_task_local(f)(idcs)
+        end
     end
     mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
 end
@@ -169,8 +207,11 @@ function _tmapreduce(f,
             args = map(A -> view(A, inds), Arrs)
             # Note, calling `promise_task_local` here is only safe because we're assuming that
             # Base.mapreduce isn't going to magically try to do multithreading on us...
-            @spawnat tid mapreduce(promise_task_local(f), promise_task_local(op), args...;
-                mapreduce_kwargs...)
+            @spawnat tid begin
+                set_task_index!(c)
+                mapreduce(promise_task_local(f), promise_task_local(op), args...;
+                    mapreduce_kwargs...)
+            end
         end
         # Note, calling `promise_task_local` here is only safe because we're assuming that
         # Base.mapreduce isn't going to magically try to do multithreading on us...
@@ -179,7 +220,10 @@ function _tmapreduce(f,
         tasks = map(enumerate(eachindex(first(Arrs)))) do (c, i)
             tid = @inbounds nthtid(mod1(c, nt))
             args = map(A -> @inbounds(A[i]), Arrs)
-            @spawnat tid promise_task_local(f)(args...)
+            @spawnat tid begin
+                set_task_index!(c)
+                promise_task_local(f)(args...)
+            end
         end
         # Note, calling `promise_task_local` here is only safe because we're assuming that
         # Base.mapreduce isn't going to magically try to do multithreading on us...
@@ -202,7 +246,10 @@ function _tmapreduce(f,
         tid = @inbounds nthtid(mod1(c, nt))
         # Note, calling `promise_task_local` here is only safe because we're assuming that
         # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawnat tid promise_task_local(f)(idcs)
+        @spawnat tid begin
+            set_task_index!(c)
+            promise_task_local(f)(idcs)
+        end
     end
     # Note, calling `promise_task_local` here is only safe because we're assuming that
     # Base.mapreduce isn't going to magically try to do multithreading on us...
@@ -255,11 +302,14 @@ function _tmapreduce(f,
             put!(ch, args)
         end
     end
-    tasks = map(1:ntasks) do _
+    tasks = map(1:ntasks) do c
         # Note, calling `promise_task_local` here is only safe because we're assuming that
         # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
-            promise_task_local(f)(args...)
+        @spawn begin
+            set_task_index!(c)
+            mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
+                promise_task_local(f)(args...)
+            end
         end
     end
     # Doing this because of https://github.com/JuliaFolds2/OhMyThreads.jl/issues/82
@@ -302,12 +352,15 @@ function _tmapreduce(f,
     # ChunkSplitters.IndexChunks support everything needed for ChannelLike
     ch = ChannelLike(chnks)
 
-    tasks = map(1:ntasks) do _
+    tasks = map(1:ntasks) do c
         # Note, calling `promise_task_local` here is only safe because we're assuming that
         # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
-            args = map(A -> view(A, inds), Arrs)
-            mapreduce(promise_task_local(f), promise_task_local(op), args...)
+        @spawn begin
+            set_task_index!(c)
+            mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
+                args = map(A -> view(A, inds), Arrs)
+                mapreduce(promise_task_local(f), promise_task_local(op), args...)
+            end
         end
     end
     # Doing this because of https://github.com/JuliaFolds2/OhMyThreads.jl/issues/82
@@ -450,7 +503,9 @@ function tmap(f,
     Arrs = (A, _Arrs...)
     if _scheduler isa SerialScheduler || isempty(A)
         # empty input collection → align with Base.map behavior
-        map(f, Arrs...)
+        with_task_index(1) do
+            map(f, Arrs...)
+        end
     else
         check_all_have_same_indices(Arrs)
         @noinline _tmap(_scheduler, f, A, _Arrs...)
@@ -465,8 +520,9 @@ function _tmap(scheduler::DynamicScheduler{NoChunking},
     threadpool = get_threadpool(scheduler)
     Arrs = (A, _Arrs...)
     throw_if_boxed_captures(f)
-    tasks = map(eachindex(A)) do i
+    tasks = map(enumerate(eachindex(A))) do (c, i)
         @spawn threadpool begin
+            set_task_index!(c)
             args = map(A -> A[i], Arrs)
             promise_task_local(f)(args...)
         end
@@ -482,8 +538,11 @@ function _tmap(scheduler::DynamicScheduler{NoChunking},
         _Arrs::AbstractArray...)
     threadpool = get_threadpool(scheduler)
     throw_if_boxed_captures(f)
-    tasks = map(A) do idcs
-        @spawn threadpool promise_task_local(f)(idcs)
+    tasks = map(enumerate(A)) do (c, idcs)
+        @spawn threadpool begin
+            set_task_index!(c)
+            promise_task_local(f)(idcs)
+        end
     end
     map(fetch, tasks)
 end
@@ -497,7 +556,10 @@ function _tmap(scheduler::StaticScheduler{NoChunking},
     throw_if_boxed_captures(f)
     tasks = map(enumerate(A)) do (c, idcs)
         tid = @inbounds nthtid(mod1(c, nt))
-        @spawnat tid promise_task_local(f)(idcs)
+        @spawnat tid begin
+            set_task_index!(c)
+            promise_task_local(f)(idcs)
+        end
     end
     map(fetch, tasks)
 end
@@ -513,6 +575,7 @@ function _tmap(scheduler::StaticScheduler{NoChunking},
     tasks = map(enumerate(eachindex(A))) do (c, i)
         tid = @inbounds nthtid(mod1(c, nt))
         @spawnat tid begin
+            set_task_index!(c)
             args = map(A -> A[i], Arrs)
             promise_task_local(f)(args...)
         end
@@ -549,7 +612,9 @@ end
 
     Arrs = (A, _Arrs...)
     if _scheduler isa SerialScheduler
-        map!(f, out, Arrs...)
+        with_task_index(1) do
+            map!(f, out, Arrs...)
+        end
     else
         @boundscheck check_all_have_same_indices((out, Arrs...))
         throw_if_boxed_captures(f)

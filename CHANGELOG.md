@@ -3,6 +3,7 @@ OhMyThreads.jl Changelog
 
 Version 0.8.7
 ------------
+- ![Feature][badge-feature] Added `OhMyThreads.taskindex()` which returns the index (in `1:ntasks`) of the current task within an OhMyThreads parallel operation. This works with both the macro API and the functional API and can, e.g., be used to give each task access to its own preallocated buffer: `@local buffer = buffers[OhMyThreads.taskindex()]` ([#157][gh-issue-157]).
 - ![Bugfix][badge-bugfix] `tmap` with `StaticScheduler(chunking = false)` indexed the input arrays with their elements instead of their indices, which resulted in errors or wrong results [#174][gh-pr-174].
 - ![Bugfix][badge-bugfix] `tmap` no longer errors when scheduler keyword arguments (e.g. `ntasks`) are passed together with an empty input collection or `scheduler = :serial` [#174][gh-pr-174].
 
@@ -168,6 +169,7 @@ Version 0.2.0
 [gh-issue-27]: https://github.com/JuliaFolds2/OhMyThreads.jl/issues/27
 [gh-issue-24]: https://github.com/JuliaFolds2/OhMyThreads.jl/issues/24
 [gh-issue-25]: https://github.com/JuliaFolds2/OhMyThreads.jl/issues/25
+[gh-issue-157]: https://github.com/JuliaFolds2/OhMyThreads.jl/issues/157
 
 [gh-pr-5]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/5
 [gh-pr-121]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/121

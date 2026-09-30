@@ -255,3 +255,59 @@ However, to avoid ambiguity, this is currently **only supported for `scheduler::
 (but not for `scheduler::Scheduler`).
 """
 function tcollect end
+
+"""
+    OhMyThreads.taskindex() :: Int
+
+Return the index of the task that the calling code is running on, within the current
+OhMyThreads parallel operation (e.g. a [`@tasks`](@ref) loop, [`tforeach`](@ref),
+[`tmap`](@ref), or [`tmapreduce`](@ref)). The index is an integer in `1:n`, where `n` is the
+number of tasks used by that operation. Note that `n` can be smaller than the requested
+`ntasks`, e.g. for short input collections.
+
+This is useful for giving each task access to its own, preallocated resource, for example
+to reuse task-local buffers across several parallel operations:
+
+```
+using OhMyThreads
+
+ntasks = 4
+buffers = [zeros(100) for _ in 1:ntasks]
+for i in 1:10
+    @tasks for j in 1:1000
+        @set ntasks = ntasks
+        @local buffer = buffers[OhMyThreads.taskindex()]
+        # ... use buffer ...
+    end
+end
+```
+
+Combined with [`@local`](@ref), as above, the index is only looked up once per task. The
+function can also be used with the functional API:
+
+```
+tforeach(1:1000; ntasks) do j
+    buffer = buffers[OhMyThreads.taskindex()]
+    # ... use buffer ...
+end
+```
+
+The meaning of the index depends on the scheduler:
+
+- With chunking ([`DynamicScheduler`](@ref) and [`StaticScheduler`](@ref) by default) it is
+  the index of the chunk that the task is processing.
+- With `chunking=false` there is one task per element, and the index is the position of
+  that element in the input collection.
+- If `chunks` or `index_chunks` are passed as input it is the position of the chunk.
+- For the [`GreedyScheduler`](@ref) it is the index of the task among the `ntasks` tasks
+  that greedily process the input.
+- If no tasks are spawned (e.g. [`SerialScheduler`](@ref), or an input that only results in
+  a single chunk) it is `1`.
+
+For nested parallel operations the index refers to the innermost one.
+
+The index is task-local and *not* inherited by other tasks: calling `taskindex()` from a
+task that you spawned yourself (e.g. with `Threads.@spawn`), or outside of an OhMyThreads
+parallel operation, throws an error.
+"""
+function taskindex end

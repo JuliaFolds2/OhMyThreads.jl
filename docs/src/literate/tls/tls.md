@@ -276,6 +276,45 @@ but also efficient: It allocates much less memory than `matmulsums_naive` and is
 par with the manual implementation.
 
 
+### [Reusing buffers across parallel regions: `taskindex`](@id taskindex_buffers)
+
+Task-local values only live as long as the tasks of a single parallel region. If the
+parallel region is itself executed many times, e.g. inside of an outer sequential loop,
+a new set of buffers is allocated every time. To avoid this, we can allocate one buffer
+per task up front and let every task select "its" buffer based on
+[`OhMyThreads.taskindex()`](@ref), which returns the index (in `1:ntasks`) of the task
+within the current parallel region.
+
+````julia
+using OhMyThreads: taskindex
+
+function matmulsums_taskindex!(Cs, As, Bs)
+    @tasks for i in eachindex(As, Bs)
+        @set collect = true
+        @set ntasks = length(Cs)
+        @local C = Cs[taskindex()]
+        mul!(C, As[i], Bs[i])
+        sum(C)
+    end
+end
+
+Cs = [Matrix{Float64}(undef, 256, 256) for _ in 1:nthreads()]
+res_taskindex = matmulsums_taskindex!(Cs, As, Bs)
+res ≈ res_taskindex
+````
+
+````
+true
+````
+
+Note that we explicitly set `ntasks` to the number of buffers, so that `taskindex()` is
+guaranteed to be a valid index into `Cs`. Because we use `@local`, the index is only
+looked up once per task. In contrast to `threadid()` (see below), the task index is safe
+to use for this purpose: it is unique among the tasks of the parallel region and doesn't
+change when a task migrates between threads. It is also not inherited by tasks that you
+spawn yourself, in which `taskindex()` throws an error.
+
+
 ## Per-thread allocation
 
 The task-local solution above has one potential caveat: If we spawn many parallel tasks

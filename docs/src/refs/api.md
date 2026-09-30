@@ -62,6 +62,7 @@ SerialScheduler
 
 
 ```@docs
+OhMyThreads.taskindex
 OhMyThreads.WithTaskLocals
 OhMyThreads.promise_task_local
 OhMyThreads.ChannelLike
