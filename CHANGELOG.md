@@ -7,12 +7,13 @@ Version 0.8.7
 - ![Enhancement][badge-enhancement] Task-local values (`@local`) are now only looked up once, instead of once per element, when no tasks are spawned (e.g. with `SerialScheduler`) ([#173][gh-pr-173]).
 - ![Bugfix][badge-bugfix] `tmap` with `StaticScheduler(chunking = false)` indexed the input arrays with their elements instead of their indices, which resulted in errors or wrong results [#174][gh-pr-174].
 - ![Bugfix][badge-bugfix] `tmap` no longer errors when scheduler keyword arguments (e.g. `ntasks`) are passed together with an empty input collection or `scheduler = :serial` [#174][gh-pr-174].
-- ![Enhancement][badge-enhancement] The `GreedyScheduler` with `chunking=false` now iterates indexable inputs through `OhMyThreads.ChannelLike` instead of copying every element into a `Channel`. This significantly reduces overhead (up to ~7x for cheap per-element work).
-- ![Enhancement][badge-enhancement] Inputs where `chunksize` doesn't evenly divide the length are now parallelized whenever more than one chunk is produced. Previously, e.g., `treduce(+, 1:11; chunksize=6)` ran serially even though two chunks (`1:6`, `7:11`) exist.
-- ![Enhancement][badge-enhancement] `tmap!` no longer bound-checks every write to the output array.
-- ![Enhancement][badge-enhancement] `ChannelLike` now uses a cheaper (monotonic) atomic ordering for claiming elements, which reduces per-element synchronization cost on ARM CPUs (e.g. Apple silicon).
-- ![Bugfix][badge-bugfix] Passing the scheduler as a `Val` (e.g. `scheduler=Val(:static)`), which is accepted by the API, was silently ignored and fell back to the `DynamicScheduler`. It now selects the requested scheduler.
-- ![Bugfix][badge-bugfix] The `GreedyScheduler` (without chunking) works again for iterators of unknown size, e.g. `Iterators.filter` (this was a regression in version 0.8.2).
+- ![Enhancement][badge-enhancement] The `GreedyScheduler` with `chunking=false` now iterates indexable inputs through `OhMyThreads.ChannelLike` instead of copying every element into a `Channel`. This significantly reduces overhead (up to ~7x for cheap per-element work) [#172][gh-pr-172].
+- ![Enhancement][badge-enhancement] Inputs where `chunksize` doesn't evenly divide the length are now parallelized whenever more than one chunk is produced. Previously, e.g., `treduce(+, 1:11; chunksize=6)` ran serially even though two chunks (`1:6`, `7:11`) exist [#172][gh-pr-172].
+- ![Bugfix][badge-bugfix] `tmap` (and `tcollect` and `@tasks` with `@set collect = true`) chunked the input twice, which could reduce the number of parallel tasks, or even result in serial execution, e.g. for `tmap(f, 1:100; chunksize=10)`. Now one task is spawned per chunk [#172][gh-pr-172].
+- ![Enhancement][badge-enhancement] `tmap!` no longer bound-checks every write to the output array [#172][gh-pr-172].
+- ![Enhancement][badge-enhancement] `ChannelLike` now uses a cheaper (monotonic) atomic ordering for claiming elements, which reduces per-element synchronization cost on ARM CPUs (e.g. Apple silicon) [#172][gh-pr-172].
+- ![Bugfix][badge-bugfix] Passing the scheduler as a `Val` (e.g. `scheduler=Val(:static)`), which is accepted by the API, was silently ignored and fell back to the `DynamicScheduler`. It now selects the requested scheduler [#172][gh-pr-172].
+- ![Bugfix][badge-bugfix] The `GreedyScheduler` (without chunking) works again for iterators of unknown size, e.g. `Iterators.filter` (this was a regression in version 0.8.2). Other schedulers, and combining such iterators with other inputs, now throw an informative `ArgumentError` [#172][gh-pr-172].
 
 Version 0.8.6
 ------------
@@ -187,5 +188,6 @@ Version 0.2.0
 [gh-pr-148]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/148
 [gh-pr-162]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/162
 [gh-pr-164]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/164
+[gh-pr-172]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/172
 [gh-pr-173]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/173
 [gh-pr-174]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/174

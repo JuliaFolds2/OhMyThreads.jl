@@ -98,6 +98,7 @@ end
     if A isa AbstractChunks || A isa ChunkSplitters.Internals.Enumerate
         _check_chunks_incompatible_kwargs(; kwargs...)
     end
+    _check_sizeunknown_inputs(_scheduler, Arrs)
     if _scheduler isa SerialScheduler || !has_multiple_chunks(_scheduler, first(Arrs))
         # empty input collection → align with Base.mapreduce behavior
         # no task is spawned: the calling task is the one and only task
@@ -105,6 +106,28 @@ end
     else
         @noinline _tmapreduce(f, op, Arrs, outputtype, _scheduler, mapreduce_kwargs)
     end
+end
+
+# Inputs of unknown size (e.g. `Iterators.filter`) are only supported by the
+# `GreedyScheduler` without chunking, and only as the single input.
+@inline function _check_sizeunknown_inputs(scheduler, Arrs)
+    if !(scheduler isa SerialScheduler) &&
+       any(A -> Base.IteratorSize(A) isa Base.SizeUnknown, Arrs)
+        sizeunknown_err(scheduler, length(Arrs))
+    end
+    return nothing
+end
+
+@noinline function sizeunknown_err(scheduler, ninputs)
+    if ninputs > 1
+        throw(ArgumentError("Inputs of unknown size (e.g. `Iterators.filter`) can't be " *
+                            "combined with other inputs."))
+    elseif !(scheduler isa GreedyScheduler && chunking_mode(scheduler) == NoChunking)
+        throw(ArgumentError("Inputs of unknown size (e.g. `Iterators.filter`) are only " *
+                            "supported by the `GreedyScheduler` with `chunking=false` " *
+                            "(and the `SerialScheduler`). (Scheduler: $scheduler)"))
+    end
+    return nothing
 end
 
 @noinline function scheduler_and_kwargs_err(; kwargs...)
@@ -240,6 +263,51 @@ else
     end
 end
 
+# GreedyScheduler w/o chunking: spawn `ntasks` tasks that greedily process the input.
+# Returns the channel-like object that is consumed by the tasks, and the tasks.
+# Indexable inputs: iterate shared indices via ChannelLike, which avoids copying the data
+# into a Channel (one lock round-trip per element) and doesn't need a producer task.
+function _greedy_spawn(f, op, Arrs::Tuple{Vararg{AbstractArray}}, ntasks, _,
+        mapreduce_kwargs)
+    ch = ChannelLike(eachindex(first(Arrs)))
+    tasks = map(1:ntasks) do c
+        # Note, calling `promise_task_local` here is only safe because we're assuming that
+        # Base.mapreduce isn't going to magically try to do multithreading on us...
+        @spawn begin
+            local_f = promise_task_local(f, c)
+            mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do i
+                args = map(A -> @inbounds(A[i]), Arrs)
+                local_f(args...)
+            end
+        end
+    end
+    return ch, tasks
+end
+# Other iterables: a producer task puts the elements into a Channel
+function _greedy_spawn(f, op, Arrs, ntasks, ch_len, mapreduce_kwargs)
+    ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn = true) do ch
+        for args in zip(Arrs...)
+            put!(ch, args)
+        end
+    end
+    tasks = map(1:ntasks) do c
+        # Note, calling `promise_task_local` here is only safe because we're assuming that
+        # Base.mapreduce isn't going to magically try to do multithreading on us...
+        @spawn begin
+            local_f = promise_task_local(f, c)
+            mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
+                local_f(args...)
+            end
+        end
+    end
+    return ch, tasks
+end
+
+# Close the channel after all consuming tasks are done, such that the producer task doesn't
+# block forever if the consumers failed before the channel was exhausted.
+_greedy_close(ch::Channel) = close(ch)
+_greedy_close(::ChannelLike) = nothing
+
 # GreedyScheduler w/o chunking
 function _tmapreduce(f,
         op,
@@ -257,39 +325,7 @@ function _tmapreduce(f,
         ch_len = length(first(Arrs))
     end
     throw_if_boxed_captures(f, op)
-    if Arrs isa Tuple{Vararg{AbstractArray}}
-        # Indexable inputs: iterate shared indices via ChannelLike, which avoids
-        # copying the data into a Channel (one lock round-trip per element) and
-        # doesn't need a producer task.
-        ch = ChannelLike(eachindex(first(Arrs)))
-        tasks = map(1:ntasks) do c
-            # Note, calling `promise_task_local` here is only safe because we're assuming that
-            # Base.mapreduce isn't going to magically try to do multithreading on us...
-            @spawn begin
-                local_f = promise_task_local(f, c)
-                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do i
-                    args = map(A -> @inbounds(A[i]), Arrs)
-                    local_f(args...)
-                end
-            end
-        end
-    else
-        ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn = true) do ch
-            for args in zip(Arrs...)
-                put!(ch, args)
-            end
-        end
-        tasks = map(1:ntasks) do c
-            # Note, calling `promise_task_local` here is only safe because we're assuming that
-            # Base.mapreduce isn't going to magically try to do multithreading on us...
-            @spawn begin
-                local_f = promise_task_local(f, c)
-                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
-                    local_f(args...)
-                end
-            end
-        end
-    end
+    ch, tasks = _greedy_spawn(f, op, Arrs, ntasks, ch_len, mapreduce_kwargs)
     # Doing this because of https://github.com/JuliaFolds2/OhMyThreads.jl/issues/82
     # The idea is that if the channel gets fully consumed before a task gets started up,
     # then if the user does not supply an `init` kwarg, we'll get an error.
@@ -306,6 +342,7 @@ function _tmapreduce(f,
             true
         end
     end
+    _greedy_close(ch)
     # Note, calling `promise_task_local` here is only safe because we're assuming that
     # Base.mapreduce isn't going to magically try to do multithreading on us...
     mapreduce(fetch, promise_task_local(op), filtered_tasks; mapreduce_kwargs...)
@@ -556,6 +593,10 @@ function _tmap(scheduler::StaticScheduler{NoChunking},
     reshape(v, size(A)...)
 end
 
+_without_chunking(s::DynamicScheduler) =
+    DynamicScheduler(; threadpool = get_threadpool(s), chunking = false)
+_without_chunking(::StaticScheduler) = StaticScheduler(; chunking = false)
+
 # w/ chunking
 function _tmap(scheduler::Scheduler,
         f,
@@ -570,7 +611,8 @@ function _tmap(scheduler::Scheduler,
             map(f, args...)
         end
     end
-    v = tmapreduce(mapping_f, reduction_f, idcs; scheduler)
+    # One task per chunk. Using `scheduler` here would chunk the chunks again.
+    v = tmapreduce(mapping_f, reduction_f, idcs; scheduler = _without_chunking(scheduler))
     reshape(v, size(A)...)
 end
 
