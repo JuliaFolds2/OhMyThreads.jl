@@ -212,7 +212,9 @@ Base.length(ch::ChannelLike) = length(ch.itr)
 Base.eltype(ch::ChannelLike) = eltype(ch.itr)
 
 function Base.iterate(ch::ChannelLike, ::Nothing = nothing)
-    this = @atomic ch.idx += 1
+    # :monotonic suffices: the increment only claims an index and `itr` is
+    # immutable and published to the consuming tasks when they are spawned.
+    this = @atomic :monotonic ch.idx += 1
     if this <= lastindex(ch.itr)
         return (@inbounds(ch.itr[this]), nothing)
     else
