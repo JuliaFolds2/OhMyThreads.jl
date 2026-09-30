@@ -732,6 +732,33 @@ end
     @test istaskdone(it.task)
 end;
 
+# Models an array with a mutable read cache or a shared seek/read handle.
+struct SerialReadVector <: AbstractVector{Int}
+    reading::Threads.Atomic{Bool}
+end
+Base.size(::SerialReadVector) = (20,)
+Base.IndexStyle(::Type{SerialReadVector}) = IndexLinear()
+function Base.getindex(A::SerialReadVector, i::Int)
+    Threads.atomic_cas!(A.reading, false, true) && error("concurrent getindex")
+    try
+        # Allow another worker to attempt a read, including with only one thread.
+        sleep(0.001)
+        return i
+    finally
+        Threads.atomic_xchg!(A.reading, false)
+    end
+end
+
+@testset "GreedyScheduler: custom arrays are read by a single producer" begin
+    A = SerialReadVector(Threads.Atomic{Bool}(false))
+    scheduler = GreedyScheduler(; ntasks = 4)
+    @test @inferred(treduce(+, A; scheduler)) == sum(1:20)
+    @test treduce(+, view(A, :); scheduler) == sum(1:20)
+    # Every input must support concurrent reads to use the fast path.
+    @test tmapreduce(+, +, A, 1:20; scheduler) == 2sum(1:20)
+    @test tmapreduce(+, +, 1:20, A; scheduler) == 2sum(1:20)
+end;
+
 @testset "GreedyScheduler: type stability" begin
     for scheduler in (GreedyScheduler(), GreedyScheduler(; chunking = true))
         @test @inferred(tmapreduce(sin, +, 1:100; scheduler)) ≈ mapreduce(sin, +, 1:100)

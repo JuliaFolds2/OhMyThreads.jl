@@ -265,9 +265,16 @@ end
 
 # GreedyScheduler w/o chunking: spawn `ntasks` tasks that greedily process the input.
 # Returns the channel-like object that is consumed by the tasks, and the tasks.
-# Indexable inputs: iterate shared indices via ChannelLike, which avoids copying the data
-# into a Channel (one lock round-trip per element) and doesn't need a producer task.
-function _greedy_spawn(f, op, Arrs::Tuple{Vararg{AbstractArray}}, ntasks, _,
+# Only known array types with independent reads use shared indices via ChannelLike.
+# Arbitrary AbstractArrays (including wrappers) may have stateful getindex methods;
+# keep their reads on the single producer task below. AbstractRange is extensible too,
+# so list the built-in range types explicitly.
+const GreedyConcurrentReadArray = Union{
+    Array, BitArray, Base.OneTo, UnitRange, StepRange, StepRangeLen, LinRange}
+
+# This avoids copying the data into a Channel (one lock round-trip per element)
+# and doesn't need a producer task.
+function _greedy_spawn(f, op, Arrs::Tuple{Vararg{GreedyConcurrentReadArray}}, ntasks, _,
         mapreduce_kwargs)
     ch = ChannelLike(eachindex(first(Arrs)))
     tasks = map(1:ntasks) do c
@@ -283,7 +290,7 @@ function _greedy_spawn(f, op, Arrs::Tuple{Vararg{AbstractArray}}, ntasks, _,
     end
     return ch, tasks
 end
-# Other iterables: a producer task puts the elements into a Channel
+# Other arrays and iterables: a producer task puts the elements into a Channel
 function _greedy_spawn(f, op, Arrs, ntasks, ch_len, mapreduce_kwargs)
     ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn = true) do ch
         for args in zip(Arrs...)
