@@ -213,6 +213,51 @@ sleep(2) #hide
 # par with the manual implementation.
 #
 #
+# ### [Reusing buffers across parallel regions: `@taskindex`](@id taskindex_buffers)
+#
+# Task-local values only live as long as the tasks of a single parallel region. If the
+# parallel region is itself executed many times, e.g. inside of an outer sequential loop,
+# a new set of buffers is allocated every time. To avoid this, we can allocate one buffer
+# per task up front and let every task select "its" buffer based on the index of the task
+# (in `1:ntasks`) within the parallel region. In the macro API, this index is available as
+# [`@taskindex`](@ref) when initializing a `@local` variable.
+using OhMyThreads: @taskindex
+
+function matmulsums_taskindex!(Cs, As, Bs)
+    @tasks for i in eachindex(As, Bs)
+        @set collect = true
+        @set ntasks = length(Cs)
+        @local C = Cs[@taskindex]
+        mul!(C, As[i], Bs[i])
+        sum(C)
+    end
+end
+
+Cs = [Matrix{Float64}(undef, 256, 256) for _ in 1:nthreads()]
+res_taskindex = matmulsums_taskindex!(Cs, As, Bs)
+res ≈ res_taskindex
+
+# Note that we explicitly set `ntasks` to the number of buffers, so that the task index is
+# guaranteed to be a valid index into `Cs`. In contrast to `threadid()` (see below), the task
+# index is safe to use for this purpose: it is unique among the tasks of the parallel region
+# and doesn't change when a task migrates between threads.
+#
+# With the functional API, the function can be wrapped in [`OhMyThreads.WithTaskIndex`](@ref)
+# to have the task index passed as the first argument:
+using OhMyThreads: WithTaskIndex
+
+function matmulsums_taskindex_functional!(Cs, As, Bs)
+    tmap(WithTaskIndex((taskindex, A, B) -> begin
+            C = Cs[taskindex]
+            mul!(C, A, B)
+            sum(C)
+        end), As, Bs; ntasks = length(Cs))
+end
+
+res_taskindex_functional = matmulsums_taskindex_functional!(Cs, As, Bs)
+res ≈ res_taskindex_functional
+
+#
 # ## Per-thread allocation
 #
 # The task-local solution above has one potential caveat: If we spawn many parallel tasks
