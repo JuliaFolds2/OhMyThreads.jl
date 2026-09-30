@@ -276,23 +276,23 @@ but also efficient: It allocates much less memory than `matmulsums_naive` and is
 par with the manual implementation.
 
 
-### [Reusing buffers across parallel regions: `taskindex`](@id taskindex_buffers)
+### [Reusing buffers across parallel regions: `@taskindex`](@id taskindex_buffers)
 
 Task-local values only live as long as the tasks of a single parallel region. If the
 parallel region is itself executed many times, e.g. inside of an outer sequential loop,
 a new set of buffers is allocated every time. To avoid this, we can allocate one buffer
-per task up front and let every task select "its" buffer based on
-[`OhMyThreads.taskindex()`](@ref), which returns the index (in `1:ntasks`) of the task
-within the current parallel region.
+per task up front and let every task select "its" buffer based on the index of the task
+(in `1:ntasks`) within the parallel region. In the macro API, this index is available as
+[`@taskindex`](@ref) when initializing a `@local` variable.
 
 ````julia
-using OhMyThreads: taskindex
+using OhMyThreads: @taskindex
 
 function matmulsums_taskindex!(Cs, As, Bs)
     @tasks for i in eachindex(As, Bs)
         @set collect = true
         @set ntasks = length(Cs)
-        @local C = Cs[taskindex()]
+        @local C = Cs[@taskindex]
         mul!(C, As[i], Bs[i])
         sum(C)
     end
@@ -307,12 +307,32 @@ res ≈ res_taskindex
 true
 ````
 
-Note that we explicitly set `ntasks` to the number of buffers, so that `taskindex()` is
-guaranteed to be a valid index into `Cs`. Because we use `@local`, the index is only
-looked up once per task. In contrast to `threadid()` (see below), the task index is safe
-to use for this purpose: it is unique among the tasks of the parallel region and doesn't
-change when a task migrates between threads. It is also not inherited by tasks that you
-spawn yourself, in which `taskindex()` throws an error.
+Note that we explicitly set `ntasks` to the number of buffers, so that the task index is
+guaranteed to be a valid index into `Cs`. In contrast to `threadid()` (see below), the task
+index is safe to use for this purpose: it is unique among the tasks of the parallel region
+and doesn't change when a task migrates between threads.
+
+With the functional API, the function can be wrapped in [`OhMyThreads.WithTaskIndex`](@ref)
+to have the task index passed as the first argument:
+
+````julia
+using OhMyThreads: WithTaskIndex
+
+function matmulsums_taskindex_functional!(Cs, As, Bs)
+    tmap(WithTaskIndex((taskindex, A, B) -> begin
+            C = Cs[taskindex]
+            mul!(C, A, B)
+            sum(C)
+        end), As, Bs; ntasks = length(Cs))
+end
+
+res_taskindex_functional = matmulsums_taskindex_functional!(Cs, As, Bs)
+res ≈ res_taskindex_functional
+````
+
+````
+true
+````
 
 
 ## Per-thread allocation

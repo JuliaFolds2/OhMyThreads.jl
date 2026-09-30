@@ -11,6 +11,7 @@ CollapsedDocStrings = true
 @tasks
 @set
 @local
+@taskindex
 @only_one
 @one_by_one
 @allow_boxed_captures
@@ -62,7 +63,7 @@ SerialScheduler
 
 
 ```@docs
-OhMyThreads.taskindex
+OhMyThreads.WithTaskIndex
 OhMyThreads.WithTaskLocals
 OhMyThreads.promise_task_local
 OhMyThreads.ChannelLike
