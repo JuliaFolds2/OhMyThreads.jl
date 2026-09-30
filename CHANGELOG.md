@@ -3,7 +3,7 @@ OhMyThreads.jl Changelog
 
 Version 0.8.7
 ------------
-- ![Feature][badge-feature] The index of a task (in `1:ntasks`) within a parallel operation can now be requested. This can, e.g., be used to give each task access to its own preallocated buffer. In the macro API the index is available as `@taskindex` when initializing task-local values, e.g. `@local buffer = buffers[@taskindex]`. In the functional API the function can be wrapped in `OhMyThreads.WithTaskIndex` to have the index passed as the first argument, e.g. `tmap(WithTaskIndex((taskindex, x) -> ...), xs)` ([#157][gh-issue-157], [#173][gh-pr-173]).
+- ![Feature][badge-feature] The index of a task (in `1:ntasks`) within a parallel operation can now be requested. This can, e.g., be used to give each task access to its own preallocated buffer. In the macro API the index is available as `@task_index` when initializing task-local values, e.g. `@local buffer = buffers[@task_index]`. In the functional API the function can be wrapped in `OhMyThreads.WithTaskIndex` to have the index passed as the first argument, e.g. `tmap(WithTaskIndex((taskindex, x) -> ...), xs)` ([#157][gh-issue-157], [#173][gh-pr-173]).
 - ![Enhancement][badge-enhancement] Task-local values (`@local`) are now only looked up once, instead of once per element, when no tasks are spawned (e.g. with `SerialScheduler`) ([#173][gh-pr-173]).
 - ![Bugfix][badge-bugfix] `tmap` with `StaticScheduler(chunking = false)` indexed the input arrays with their elements instead of their indices, which resulted in errors or wrong results [#174][gh-pr-174].
 - ![Bugfix][badge-bugfix] `tmap` no longer errors when scheduler keyword arguments (e.g. `ntasks`) are passed together with an empty input collection or `scheduler = :serial` [#174][gh-pr-174].

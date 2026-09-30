@@ -11,7 +11,7 @@ CollapsedDocStrings = true
 @tasks
 @set
 @local
-@taskindex
+@task_index
 @only_one
 @one_by_one
 @allow_boxed_captures

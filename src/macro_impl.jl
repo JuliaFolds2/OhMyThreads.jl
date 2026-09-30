@@ -24,13 +24,13 @@ function _is_special_macro_expr(arg;
     return false
 end
 
-# Replace all occurences of `@taskindex` (or `OhMyThreads.@taskindex`) in `ex` with `sym`.
+# Replace all occurences of `@task_index` (or `OhMyThreads.@task_index`) in `ex` with `sym`.
 # Returns the new expression and whether anything was replaced.
-function _replace_taskindex(ex, sym)
+function _replace_task_index(ex, sym)
     ex isa Expr || return ex, false
-    if _is_special_macro_expr(ex; lookfor = ("@taskindex",))
+    if _is_special_macro_expr(ex; lookfor = ("@task_index",))
         if any(x -> !(x isa LineNumberNode), ex.args[2:end])
-            throw(ErrorException("Wrong usage of @taskindex. It doesn't take any arguments."))
+            throw(ErrorException("Wrong usage of @task_index. It doesn't take any arguments."))
         end
         return sym, true
     elseif ex.head === :quote
@@ -38,7 +38,7 @@ function _replace_taskindex(ex, sym)
     end
     found = false
     args = map(ex.args) do arg
-        newarg, f = _replace_taskindex(arg, sym)
+        newarg, f = _replace_task_index(arg, sym)
         found |= f
         newarg
     end
@@ -214,7 +214,7 @@ function _unfold_atlocal_block!(locals_before, locals_names, locals_taskindex, e
     end
     for x in exprs
         # We insert the escaped `taskindex` below, so the symbol itself is what we need here
-        x_replaced, uses_taskindex = _replace_taskindex(x, only(taskindex.args))
+        x_replaced, uses_taskindex = _replace_task_index(x, only(taskindex.args))
         if uses_taskindex
             push!(locals_taskindex, x_replaced)
         else

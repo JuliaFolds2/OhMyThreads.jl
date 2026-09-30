@@ -304,7 +304,7 @@ end;
         tids = zeros(UInt, N)
         @tasks for i in 1:N
             @set scheduler = scheduler
-            @local idx = @taskindex
+            @local idx = @task_index
             idxs[i] = idx
             tids[i] = OhMyThreads.Tools.taskid()
         end
@@ -327,30 +327,30 @@ end;
             1:N, 1:N; scheduler)
     end
 
-    @testset "@taskindex" begin
+    @testset "@task_index" begin
         # in combination with other task local values and types
         res = @tasks for i in 1:8
             @set ntasks = nt
             @set collect = true
             @local begin
                 x = Ref(0)
-                idx::Int = @taskindex
-                y::Float64 = 10 * OhMyThreads.@taskindex()
+                idx::Int = @task_index
+                y::Float64 = 10 * OhMyThreads.@task_index()
             end
             x[] += 1
             (idx, y, x[])
         end
         @test res == [(c, 10.0 * c, k) for c in 1:nt for k in 1:2]
 
-        # the names of other task local values are not in scope in @taskindex initializers
+        # the names of other task local values are not in scope in @task_index initializers
         let x = collect(1:nt), y = collect(10:10:(10 * nt))
             res = @tasks for i in 1:nt
                 @set ntasks = nt
                 @set collect = true
                 @local begin
                     x = zeros(1)
-                    a = x[@taskindex]
-                    b = y[@taskindex]
+                    a = x[@task_index]
+                    b = y[@task_index]
                 end
                 (a, b)
             end
@@ -363,8 +363,8 @@ end;
                 @set ntasks = nt
                 @set collect = true
                 @local begin
-                    x::Float64 = x[@taskindex]
-                    y = x[@taskindex] + y[@taskindex]
+                    x::Float64 = x[@task_index]
+                    y = x[@task_index] + y[@task_index]
                 end
                 (x, y)
             end
@@ -379,7 +379,7 @@ end;
                 idxs = zeros(Int, N)
                 @tasks for i in 1:N
                     @set scheduler = scheduler
-                    @local state = (Threads.atomic_add!(counter, 1); (@taskindex, Ref(0)))
+                    @local state = (Threads.atomic_add!(counter, 1); (@task_index, Ref(0)))
                     idx, count = state
                     count[] += 1
                     idxs[i] = idx
@@ -397,7 +397,7 @@ end;
         @test @tasks(for i in 1:N
             @set ntasks = nt
             @set reducer = max
-            @local idx = @taskindex
+            @local idx = @task_index
             idx
         end) == nt
 
@@ -408,7 +408,7 @@ end;
             for _ in 1:3
                 @tasks for i in 1:N
                     @set ntasks = nt
-                    @local buffer = buffers[@taskindex]
+                    @local buffer = buffers[@task_index]
                     buffer[] += 1
                     ids[i] = objectid(buffer)
                     tids[i] = OhMyThreads.Tools.taskid()
@@ -425,13 +425,13 @@ end;
             count!(idx) = (Threads.atomic_add!(counter, 1); idx)
             @tasks for i in 1:N
                 @set ntasks = nt
-                @local idx = count!(@taskindex)
+                @local idx = count!(@task_index)
             end
             @test counter[] == nt
             counter[] = 0
             @tasks for i in 1:N
                 @set scheduler = SerialScheduler()
-                @local idx = count!(@taskindex)
+                @local idx = count!(@task_index)
             end
             @test counter[] == 1
         end
@@ -440,11 +440,11 @@ end;
         @test @tasks(for i in 1:N
             @set ntasks = nt
             @set reducer = (&)
-            @local outer = @taskindex
+            @local outer = @task_index
             inner = @tasks for j in 1:4
                 @set ntasks = 2
                 @set collect = true
-                @local idx = @taskindex
+                @local idx = @task_index
                 (outer, idx)
             end
             inner == [(outer, 1), (outer, 1), (outer, 2), (outer, 2)]
@@ -454,21 +454,21 @@ end;
         @test @inferred (() -> @tasks for i in 1:N
             @set ntasks = nt
             @set reducer = (+)
-            @local idx = @taskindex
+            @local idx = @task_index
             idx
         end)() == sum(chunkindex(N, nt))
 
         # wrong usage
-        @test_throws "may only be used inside of a @local block" @macroexpand(@taskindex)
+        @test_throws "may only be used inside of a @local block" @macroexpand(@task_index)
         @test_throws "may only be used inside of a @local block" @macroexpand(@tasks(for i in 1:N
-            x = @taskindex
+            x = @task_index
         end))
         @test_throws "may only be used inside of a @local block" @macroexpand(@tasks(for i in 1:N
-            @set reducer = (a, b) -> a + @taskindex
+            @set reducer = (a, b) -> a + @task_index
             i
         end))
         @test_throws "doesn't take any arguments" @macroexpand(@tasks(for i in 1:N
-            @local x = @taskindex 1
+            @local x = @task_index 1
         end))
     end
 

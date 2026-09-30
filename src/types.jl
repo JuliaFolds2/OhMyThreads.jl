@@ -114,7 +114,7 @@ end
 Only the mapping function `f` can be wrapped, not the reducing function `op` of, e.g.,
 [`tmapreduce`](@ref).
 
-For the macro API, see [`@taskindex`](@ref).
+For the macro API, see [`@task_index`](@ref).
 """
 struct WithTaskIndex{F} <: Function
     f::F
@@ -137,7 +137,7 @@ end
     promise_task_local(f, taskindex::Int)
 
 Like `promise_task_local(f)` but, in addition, pass the index of the current task on to `f`
-in case it has been requested (see [`WithTaskIndex`](@ref) and [`@taskindex`](@ref)). The
+in case it has been requested (see [`WithTaskIndex`](@ref) and [`@task_index`](@ref)). The
 result is a regular function that doesn't take the task index as an argument. The same
 caveats as for `promise_task_local(f)` apply: the result must only be called from the
 current task.
