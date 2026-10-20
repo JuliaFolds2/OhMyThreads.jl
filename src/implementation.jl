@@ -86,11 +86,11 @@ end
 # we can inline this function because we use @noinline on the main function
 # it can save some time in cases where we do not hit the main function (e.g. when
 # fallback to mapreduce without any threading)
-@inline function tmapreduce(f, op, Arrs...;
+@inline function tmapreduce(f::F, op::OP, Arrs...;
         scheduler::MaybeScheduler = NotGiven(),
         outputtype::Type = Any,
         init = NotGiven(),
-        kwargs...)
+        kwargs...) where {F, OP}
     mapreduce_kwargs = isgiven(init) ? (; init) : (;)
     _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
@@ -135,16 +135,16 @@ end
     throw(ArgumentError("Providing an explicit scheduler as well as direct keyword arguments (e.g. $(kwargstr)) is currently not supported."))
 end
 
-treducemap(op, f, A...; kwargs...) = tmapreduce(f, op, A...; kwargs...)
+treducemap(op::OP, f::F, A...; kwargs...) where {OP, F} = tmapreduce(f, op, A...; kwargs...)
 
 
 # DynamicScheduler: AbstractArray/Generic
-function _tmapreduce(f,
-        op,
+function _tmapreduce(f::F,
+        op::OP,
         Arrs,
         ::Type{OutputType},
         scheduler::DynamicScheduler,
-        mapreduce_kwargs)::OutputType where {OutputType}
+        mapreduce_kwargs)::OutputType where {F, OP, OutputType}
     threadpool = get_threadpool(scheduler)
     check_all_have_same_indices(Arrs)
     throw_if_boxed_captures(f, op)
@@ -167,12 +167,12 @@ function _tmapreduce(f,
 end
 
 # DynamicScheduler: AbstractChunks
-function _tmapreduce(f,
-        op,
+function _tmapreduce(f::F,
+        op::OP,
         Arrs::Union{Tuple{AbstractChunks{T}}, Tuple{ChunkSplitters.Internals.Enumerate{T}}},
         ::Type{OutputType},
         scheduler::DynamicScheduler,
-        mapreduce_kwargs)::OutputType where {OutputType, T}
+        mapreduce_kwargs)::OutputType where {F, OP, OutputType, T}
     threadpool = get_threadpool(scheduler)
     throw_if_boxed_captures(f, op)
     tasks = map(enumerate(only(Arrs))) do (c, idcs)
@@ -182,12 +182,12 @@ function _tmapreduce(f,
 end
 
 # StaticScheduler: AbstractArray/Generic
-function _tmapreduce(f,
-        op,
+function _tmapreduce(f::F,
+        op::OP,
         Arrs,
         ::Type{OutputType},
         scheduler::StaticScheduler,
-        mapreduce_kwargs)::OutputType where {OutputType}
+        mapreduce_kwargs)::OutputType where {F, OP, OutputType}
     nt = nthreads()
     check_all_have_same_indices(Arrs)
     throw_if_boxed_captures(f, op)
@@ -216,12 +216,12 @@ function _tmapreduce(f,
 end
 
 # StaticScheduler: AbstractChunks
-function _tmapreduce(f,
-        op,
+function _tmapreduce(f::F,
+        op::OP,
         Arrs::Tuple{AbstractChunks{T}}, # we don't support multiple chunks for now
         ::Type{OutputType},
         scheduler::StaticScheduler,
-        mapreduce_kwargs)::OutputType where {OutputType, T}
+        mapreduce_kwargs)::OutputType where {F, OP, OutputType, T}
     check_all_have_same_indices(Arrs)
     throw_if_boxed_captures(f, op)
     chnks = only(Arrs)
@@ -274,8 +274,8 @@ const GreedyConcurrentReadArray = Union{
 
 # This avoids copying the data into a Channel (one lock round-trip per element)
 # and doesn't need a producer task.
-function _greedy_spawn(f, op, Arrs::Tuple{Vararg{GreedyConcurrentReadArray}}, ntasks, _,
-        mapreduce_kwargs)
+function _greedy_spawn(f::F, op::OP, Arrs::Tuple{Vararg{GreedyConcurrentReadArray}}, ntasks, _,
+        mapreduce_kwargs) where {F, OP}
     ch = ChannelLike(eachindex(first(Arrs)))
     tasks = map(1:ntasks) do c
         # Note, calling `promise_task_local` here is only safe because we're assuming that
@@ -291,7 +291,7 @@ function _greedy_spawn(f, op, Arrs::Tuple{Vararg{GreedyConcurrentReadArray}}, nt
     return ch, tasks
 end
 # Other arrays and iterables: a producer task puts the elements into a Channel
-function _greedy_spawn(f, op, Arrs, ntasks, ch_len, mapreduce_kwargs)
+function _greedy_spawn(f::F, op::OP, Arrs, ntasks, ch_len, mapreduce_kwargs) where {F, OP}
     ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn = true) do ch
         for args in zip(Arrs...)
             put!(ch, args)
@@ -316,12 +316,12 @@ _greedy_close(ch::Channel) = close(ch)
 _greedy_close(::ChannelLike) = nothing
 
 # GreedyScheduler w/o chunking
-function _tmapreduce(f,
-        op,
+function _tmapreduce(f::F,
+        op::OP,
         Arrs,
         ::Type{OutputType},
         scheduler::GreedyScheduler{NoChunking},
-        mapreduce_kwargs)::OutputType where {OutputType}
+        mapreduce_kwargs)::OutputType where {F, OP, OutputType}
     ntasks_desired = scheduler.ntasks
     if Base.IteratorSize(first(Arrs)) isa Base.SizeUnknown
         ntasks = ntasks_desired
@@ -356,12 +356,12 @@ function _tmapreduce(f,
 end
 
 # GreedyScheduler w/ chunking
-function _tmapreduce(f,
-        op,
+function _tmapreduce(f::F,
+        op::OP,
         Arrs,
         ::Type{OutputType},
         scheduler::GreedyScheduler,
-        mapreduce_kwargs)::OutputType where {OutputType}
+        mapreduce_kwargs)::OutputType where {F, OP, OutputType}
     if Base.IteratorSize(first(Arrs)) isa Base.SizeUnknown
         throw(ArgumentError("SizeUnkown iterators in combination with a greedy scheduler and chunking are currently not supported."))
     end
@@ -456,13 +456,13 @@ end
 
 #-------------------------------------------------------------
 
-function treduce(op, A...; kwargs...)
+function treduce(op::OP, A...; kwargs...) where {OP}
     tmapreduce(identity, op, A...; kwargs...)
 end
 
 #-------------------------------------------------------------
 
-function tforeach(f, A...; kwargs...)::Nothing
+function tforeach(f::F, A...; kwargs...)::Nothing where {F}
     tmapreduce(f, (l, r) -> l, A...; kwargs..., init = nothing, outputtype = Nothing)
 end
 
@@ -491,16 +491,16 @@ end
 
 #------------------------------------------------------------
 
-function tmap(f, ::Type{T}, A::AbstractArray, _Arrs::AbstractArray...; kwargs...) where {T}
+function tmap(f::F, ::Type{T}, A::AbstractArray, _Arrs::AbstractArray...; kwargs...) where {F, T}
     Arrs = (A, _Arrs...)
     tmap!(f, similar(A, T), Arrs...; kwargs...)
 end
 
-function tmap(f,
+function tmap(f::F,
         A::Union{AbstractArray, AbstractChunks, ChunkSplitters.Internals.Enumerate},
         _Arrs::AbstractArray...;
         scheduler::MaybeScheduler = NotGiven(),
-        kwargs...)
+        kwargs...) where {F}
     _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
     if _scheduler isa GreedyScheduler
@@ -538,9 +538,9 @@ end
 
 # w/o chunking (DynamicScheduler{NoChunking}): AbstractArray
 function _tmap(scheduler::DynamicScheduler{NoChunking},
-        f,
+        f::F,
         A::AbstractArray,
-        _Arrs::AbstractArray...;)
+        _Arrs::AbstractArray...;) where {F}
     threadpool = get_threadpool(scheduler)
     Arrs = (A, _Arrs...)
     throw_if_boxed_captures(f)
@@ -556,9 +556,9 @@ end
 
 # w/o chunking (DynamicScheduler{NoChunking}): AbstractChunks
 function _tmap(scheduler::DynamicScheduler{NoChunking},
-        f,
+        f::F,
         A::Union{AbstractChunks, ChunkSplitters.Internals.Enumerate},
-        _Arrs::AbstractArray...)
+        _Arrs::AbstractArray...) where {F}
     threadpool = get_threadpool(scheduler)
     throw_if_boxed_captures(f)
     tasks = map(enumerate(A)) do (c, idcs)
@@ -569,9 +569,9 @@ end
 
 # w/o chunking (StaticScheduler{NoChunking}): AbstractChunks
 function _tmap(scheduler::StaticScheduler{NoChunking},
-        f,
+        f::F,
         A::AbstractChunks,
-        _Arrs::AbstractArray...)
+        _Arrs::AbstractArray...) where {F}
     nt = nthreads()
     throw_if_boxed_captures(f)
     tasks = map(enumerate(A)) do (c, idcs)
@@ -583,9 +583,9 @@ end
 
 # w/o chunking (StaticScheduler{NoChunking}): AbstractArray
 function _tmap(scheduler::StaticScheduler{NoChunking},
-        f,
+        f::F,
         A::AbstractArray,
-        _Arrs::AbstractArray...;)
+        _Arrs::AbstractArray...;) where {F}
     Arrs = (A, _Arrs...)
     nt = nthreads()
     throw_if_boxed_captures(f)
@@ -606,9 +606,9 @@ _without_chunking(::StaticScheduler) = StaticScheduler(; chunking = false)
 
 # w/ chunking
 function _tmap(scheduler::Scheduler,
-        f,
+        f::F,
         A::AbstractArray,
-        _Arrs::AbstractArray...)
+        _Arrs::AbstractArray...) where {F}
     Arrs = (A, _Arrs...)
     idcs = collect(_index_chunks(scheduler, A))
     reduction_f = append!!
@@ -623,12 +623,12 @@ function _tmap(scheduler::Scheduler,
     reshape(v, size(A)...)
 end
 
-@propagate_inbounds function tmap!(f,
+@propagate_inbounds function tmap!(f::F,
         out,
         A::AbstractArray,
         _Arrs::AbstractArray...;
         scheduler::MaybeScheduler = NotGiven(),
-        kwargs...)
+        kwargs...) where {F}
     _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
     Arrs = (A, _Arrs...)

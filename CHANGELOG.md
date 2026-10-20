@@ -1,6 +1,10 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.8.8
+------------
+- ![Enhancement][badge-enhancement] `tforeach`, `treduce`, `treducemap`, `tmap`, `tmap!`, and `tmapreduce` now always specialize on the function arguments. Before, a call could run through an instance compiled for `f::Function`, and dispatch every call of `f` dynamically, e.g. `tforeach(_ -> work(n), xs)` with a non-inlined `work` and a run-time `n` [#176][gh-pr-176].
+
 Version 0.8.7
 ------------
 - ![Feature][badge-feature] The index of a task (in `1:ntasks`) within a parallel operation can now be requested. This can, e.g., be used to give each task access to its own preallocated buffer. In the macro API the index is available as `@task_index` when initializing task-local values, e.g. `@local buffer = buffers[@task_index]`. In the functional API the function can be wrapped in `OhMyThreads.WithTaskIndex` to have the index passed as the first argument, e.g. `tmap(WithTaskIndex((taskindex, x) -> ...), xs)` ([#157][gh-issue-157], [#173][gh-pr-173]).
@@ -191,3 +195,4 @@ Version 0.2.0
 [gh-pr-172]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/172
 [gh-pr-173]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/173
 [gh-pr-174]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/174
+[gh-pr-176]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/176
