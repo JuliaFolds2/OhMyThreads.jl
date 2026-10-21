@@ -91,6 +91,15 @@ end
         outputtype::Type = Any,
         init = NotGiven(),
         kwargs...) where {F, OP}
+    return tmapreduce_positional(f, op, Arrs, outputtype, scheduler, init, kwargs)
+end
+
+# `tmapreduce` with the output type as a positional argument: passed through keyword
+# arguments, a type is stored as a `DataType`, and the parallel implementation is then
+# compiled for every output type at once (for `tforeach`, also the reduction it never does)
+@inline function tmapreduce_positional(f::F, op::OP, Arrs, ::Type{OutputType},
+        scheduler, init, kwargs) where {F, OP, OutputType}
+    outputtype = OutputType
     mapreduce_kwargs = isgiven(init) ? (; init) : (;)
     _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
@@ -462,8 +471,10 @@ end
 
 #-------------------------------------------------------------
 
-function tforeach(f::F, A...; kwargs...)::Nothing where {F}
-    tmapreduce(f, (l, r) -> l, A...; kwargs..., init = nothing, outputtype = Nothing)
+function tforeach(f::F, A...; scheduler::MaybeScheduler = NotGiven(),
+        init = nothing, outputtype::Type = Nothing, kwargs...)::Nothing where {F}
+    tmapreduce_positional(f, (l, r) -> l, A, Nothing, scheduler, nothing, kwargs)
+    return nothing
 end
 
 #-------------------------------------------------------------
