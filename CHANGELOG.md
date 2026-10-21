@@ -1,6 +1,10 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.8.9
+------------
+- ![Enhancement][badge-enhancement] `tforeach` no longer compiles a scheduler's implementation for every output type: its output type (`Nothing`) is now passed on as a constant, instead of a `DataType` in the keyword arguments. With schedulers that compile a reduction only when there is a result, this saves the compilation of the reduction for every loop body [#177][gh-pr-177].
+
 Version 0.8.8
 ------------
 - ![Enhancement][badge-enhancement] `tforeach`, `treduce`, `treducemap`, `tmap`, `tmap!`, and `tmapreduce` now always specialize on the function arguments. Before, a call could run through an instance compiled for `f::Function`, and dispatch every call of `f` dynamically, e.g. `tforeach(_ -> work(n), xs)` with a non-inlined `work` and a run-time `n` [#176][gh-pr-176].
@@ -196,3 +200,4 @@ Version 0.2.0
 [gh-pr-173]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/173
 [gh-pr-174]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/174
 [gh-pr-176]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/176
+[gh-pr-177]: https://github.com/JuliaFolds2/OhMyThreads.jl/pull/177
