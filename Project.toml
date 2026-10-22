@@ -23,6 +23,7 @@ Aqua = "0.8.14"
 BangBang = "0.3.40, 0.4"
 ChunkSplitters = "3.1"
 Markdown = "1"
+ParallelTestRunner = "2"
 ProgressMeter = "1.10"
 ScopedValues = "1.3"
 StableTasks = "0.1.5"
@@ -32,8 +33,9 @@ julia = "1.10"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+ParallelTestRunner = "d3525ed8-44d0-4b2c-a655-542cee43accc"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "Aqua", "ProgressMeter"]
+test = ["Test", "Aqua", "ParallelTestRunner", "ProgressMeter"]
