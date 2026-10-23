@@ -165,6 +165,8 @@ kind of scheduler.
 function default_nchunks end
 default_nchunks(::Type{<:Scheduler}) = nthreads(:default)
 
+allow_migration(::Scheduler) = false
+
 """
     DynamicScheduler (aka :dynamic)
 
@@ -216,7 +218,7 @@ function DynamicScheduler(;
         chunksize = nothing,
         split::Union{Split, Symbol} = Consecutive(),
         minchunksize = nothing,
-        chunking::Bool = true
+        chunking::Bool = true,
 )
     if !isnothing(ntasks)
         if !isnothing(nchunks)
@@ -231,6 +233,7 @@ end
 from_symbol(::Val{:dynamic}) = DynamicScheduler
 chunking_args(sched::DynamicScheduler) = sched.chunking_args
 threadpool(::DynamicScheduler{C, S, T}) where {C, S, T} = T
+allow_migration(::DynamicScheduler) = true
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::DynamicScheduler)
     print(io, "DynamicScheduler", "\n")
@@ -305,9 +308,9 @@ end
 """
     GreedyScheduler (aka :greedy)
 
-A greedy dynamic scheduler. The elements are put into a shared workqueue and dynamic,
-non-sticky, tasks are spawned to process the elements of the queue with each task taking a new
-element from the queue as soon as the previous one is done.
+A greedy dynamic scheduler. The elements are put into a shared workqueue and tasks (by
+default dynamic, non-sticky) are spawned to process the elements of the queue with each
+task taking a new element from the queue as soon as the previous one is done.
 
 Note that elements are processed in a non-deterministic order, and thus a potential reducing
 function **must** be [commutative](https://en.wikipedia.org/wiki/Commutative_property) in
@@ -335,14 +338,18 @@ some additional overhead.
 - `split::Union{Symbol, OhMyThreads.Split}` (default `OhMyThreads.RoundRobin()`):
     * Determines how the collection is divided into chunks (if chunking=true).
     * See [ChunkSplitters.jl](https://github.com/JuliaFolds2/ChunkSplitters.jl) for more details and available options. We also allow users to pass `:consecutive` in place of `Consecutive()`, and `:roundrobin` in place of `RoundRobin()`
+- `migration::Bool` (default `true`):
+    * Controls whether tasks are allowed to migrate between threads (`true`) or not (`false`).
+    * For `migration=false`, a task will always be executed by the same thread; however, this does not mean that the thread will always be executed on the same CPU. See the `ThreadPinning.jl` package for this.
 """
 struct GreedyScheduler{C <: ChunkingMode, S <: Split} <: Scheduler
     ntasks::Int
     chunking_args::ChunkingArgs{C, S}
+    migration::Bool
 
-    function GreedyScheduler(ntasks::Integer, ca::ChunkingArgs)
+    function GreedyScheduler(ntasks::Integer, ca::ChunkingArgs, migration::Bool)
         ntasks > 0 || throw(ArgumentError("ntasks must be a positive integer"))
-        return new{chunking_mode(ca), typeof(ca.split)}(ntasks, ca)
+        return new{chunking_mode(ca), typeof(ca.split)}(ntasks, ca, migration)
     end
 end
 
@@ -352,24 +359,27 @@ function GreedyScheduler(;
         chunksize = nothing,
         minchunksize = nothing,
         split::Union{Split, Symbol} = RoundRobin(),
-        chunking::Bool = false
+        chunking::Bool = false,
+        migration::Bool = true
 )
     if !(isnothing(nchunks) && isnothing(chunksize))
         chunking = true
     end
     ca = ChunkingArgs(GreedyScheduler;
         n = nchunks, size = chunksize, minsize = minchunksize, split, chunking)
-    return GreedyScheduler(ntasks, ca)
+    return GreedyScheduler(ntasks, ca, migration)
 end
 from_symbol(::Val{:greedy}) = GreedyScheduler
 chunking_args(sched::GreedyScheduler) = sched.chunking_args
 default_nchunks(::Type{GreedyScheduler}) = 10 * nthreads(:default)
+allow_migration(sched::GreedyScheduler) = sched.migration
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, s::GreedyScheduler)
     print(io, "GreedyScheduler", "\n")
     println(io, "├ Num. tasks: ", s.ntasks)
     cstr = _chunkingstr(s)
     println(io, "├ Chunking: ", cstr)
+    println(io, "├ Task migration: ", allow_migration(s))
     print(io, "└ Threadpool: default")
 end
 

@@ -12,7 +12,7 @@ using OhMyThreads.Schedulers: chunksplitter_mode, chunking_enabled,
                               has_minchunksize, chunkingargs_to_kwargs,
                               chunking_mode, ChunkingMode, NoChunking,
                               FixedSize, FixedCount, scheduler_from_symbol, NotGiven,
-                              isgiven, threadpool as get_threadpool
+                              isgiven, threadpool as get_threadpool, allow_migration
 using Base: @propagate_inbounds
 using Base.Threads: nthreads, @threads
 using BangBang: append!!
@@ -274,36 +274,69 @@ const GreedyConcurrentReadArray = Union{
 
 # This avoids copying the data into a Channel (one lock round-trip per element)
 # and doesn't need a producer task.
-function _greedy_spawn(f::F, op::OP, Arrs::Tuple{Vararg{GreedyConcurrentReadArray}}, ntasks, _,
+function _greedy_spawn(f::F, op::OP, Arrs::Tuple{Vararg{GreedyConcurrentReadArray}}, ntasks, migrate::Bool, _,
         mapreduce_kwargs) where {F, OP}
     ch = ChannelLike(eachindex(first(Arrs)))
-    tasks = map(1:ntasks) do c
-        # Note, calling `promise_task_local` here is only safe because we're assuming that
-        # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawn begin
-            local_f = promise_task_local(f, c)
-            mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do i
-                args = map(A -> @inbounds(A[i]), Arrs)
-                local_f(args...)
+
+    if migrate
+        tasks = map(1:ntasks) do c
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawn begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do i
+                    args = map(A -> @inbounds(A[i]), Arrs)
+                    local_f(args...)
+                end
+            end
+        end
+    else
+        nt = nthreads()
+        tasks = map(1:ntasks) do c
+            tid = @inbounds nthtid(mod1(c, nt))
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawnat tid begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do i
+                    args = map(A -> @inbounds(A[i]), Arrs)
+                    local_f(args...)
+                end
             end
         end
     end
     return ch, tasks
 end
 # Other arrays and iterables: a producer task puts the elements into a Channel
-function _greedy_spawn(f::F, op::OP, Arrs, ntasks, ch_len, mapreduce_kwargs) where {F, OP}
+function _greedy_spawn(f::F, op::OP, Arrs, ntasks, migrate::Bool, ch_len, mapreduce_kwargs) where {F, OP}
     ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn = true) do ch
         for args in zip(Arrs...)
             put!(ch, args)
         end
     end
-    tasks = map(1:ntasks) do c
-        # Note, calling `promise_task_local` here is only safe because we're assuming that
-        # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawn begin
-            local_f = promise_task_local(f, c)
-            mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
-                local_f(args...)
+
+    if migrate
+        tasks = map(1:ntasks) do c
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawn begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
+                    local_f(args...)
+                end
+            end
+        end
+    else
+        nt = nthreads()
+        tasks = map(1:ntasks) do c
+            tid = @inbounds nthtid(mod1(c, nt))
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawnat tid begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
+                    local_f(args...)
+                end
             end
         end
     end
@@ -332,7 +365,7 @@ function _tmapreduce(f::F,
         ch_len = length(first(Arrs))
     end
     throw_if_boxed_captures(f, op)
-    ch, tasks = _greedy_spawn(f, op, Arrs, ntasks, ch_len, mapreduce_kwargs)
+    ch, tasks = _greedy_spawn(f, op, Arrs, ntasks, allow_migration(scheduler), ch_len, mapreduce_kwargs)
     # Doing this because of https://github.com/JuliaFolds2/OhMyThreads.jl/issues/82
     # The idea is that if the channel gets fully consumed before a task gets started up,
     # then if the user does not supply an `init` kwarg, we'll get an error.
@@ -374,14 +407,30 @@ function _tmapreduce(f::F,
     # ChunkSplitters.IndexChunks support everything needed for ChannelLike
     ch = ChannelLike(chnks)
 
-    tasks = map(1:ntasks) do c
-        # Note, calling `promise_task_local` here is only safe because we're assuming that
-        # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawn begin
-            local_f = promise_task_local(f, c)
-            mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
-                args = map(A -> view(A, inds), Arrs)
-                mapreduce(local_f, promise_task_local(op), args...)
+    if allow_migration(scheduler)
+        tasks = map(1:ntasks) do c
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawn begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
+                    args = map(A -> view(A, inds), Arrs)
+                    mapreduce(local_f, promise_task_local(op), args...)
+                end
+            end
+        end
+    else
+        nt = nthreads()
+        tasks = map(1:ntasks) do c
+            tid = @inbounds nthtid(mod1(c, nt))
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawnat tid begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
+                    args = map(A -> view(A, inds), Arrs)
+                    mapreduce(local_f, promise_task_local(op), args...)
+                end
             end
         end
     end
