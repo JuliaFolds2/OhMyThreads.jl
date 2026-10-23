@@ -72,12 +72,18 @@ nthreads()
 #
 # Although our parallel summation above is semantically correct, it has a
 # big **performance issue**: *False sharing*. To understand false sharing, we have to think
-# a little bit about how computers work. Specifically, we need to realize that processors
-# cache memory in lines (rather than individual elements) and that caches of different processors
-# are kept coherent.
-# When two (or more) different CPU cores operate on independent data elements that **fall
-# into the same cache line** (i.e. they are part of the same memory address region)
-# the **cache coherency mechanism leads to costly synchronization** between cores.
+# a little bit about how computers work. Specifically, we need to realize that when a CPU core
+# fetches a piece of data from RAM into its local, high-speed cache, it doesn't fetch the data one
+# byte at a time.  Rather, data is fetched in fixed (typically 64-byte) blocks called "cache lines".
+# Suppose that multiple cores have loaded the same cache line, with the intent of each modifying
+# a distinct, independent data element residing in this single cache line.  When any one core modifies
+# even a single byte of memory in its cache, then the cache line is marked as invalid for all other
+# cores, even if the other cores would never attempt to modify this same memory location.  All of
+# these other cores that previously loaded the cache line must discard it and reload it from main
+# memory ("cache synchronization"), which incurs delay and therefore a performance penalty. The
+# hardware mechanism ensuring that all CPU cores access a consistent, updated version of memory
+# is called "cache coherence" and we refer to the resulting performance hit in this type of
+# situation as being due to "false sharing".
 
 # In our case, this happens despite the fact that different parallel tasks
 # (on different CPU cores) *logically* don't care about the rest of the data in the cache line

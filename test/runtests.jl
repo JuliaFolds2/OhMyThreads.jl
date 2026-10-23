@@ -286,6 +286,261 @@ end;
     end
 end;
 
+@testset "task index" begin
+    WithTaskIndex = OhMyThreads.WithTaskIndex
+    N = 100
+    nt = 4
+    # expected task index of each element for chunked Static/DynamicScheduler
+    chunkindex(n, nt) = [c for (c, inds) in enumerate(OhMyThreads.index_chunks(1:n; n = nt))
+                         for _ in inds]
+
+    @testset "$(sched)" for sched in (
+        StaticScheduler, DynamicScheduler, GreedyScheduler, ChunkedGreedy)
+        kwargs = sched === ChunkedGreedy ? (; ntasks = nt, nchunks = 3 * nt) :
+                 (; ntasks = nt)
+        scheduler = sched(; kwargs...)
+        chunked = sched in (StaticScheduler, DynamicScheduler)
+
+        # macro API
+        idxs = zeros(Int, N)
+        tids = zeros(UInt, N)
+        @tasks for i in 1:N
+            @set scheduler = scheduler
+            @local idx = @task_index
+            idxs[i] = idx
+            tids[i] = OhMyThreads.Tools.taskid()
+        end
+        @test issubset(idxs, 1:nt)
+        chunked && @test idxs == chunkindex(N, nt)
+        # one-to-one correspondence between tasks and task indices
+        @test length(unique(zip(tids, idxs))) == length(unique(tids)) ==
+              length(unique(idxs))
+
+        # functional API
+        idxs .= 0
+        tforeach(WithTaskIndex((idx, i) -> idxs[i] = idx), 1:N; scheduler)
+        @test issubset(idxs, 1:nt)
+        chunked && @test idxs == chunkindex(N, nt)
+        idxs_red = tmapreduce(WithTaskIndex((idx, i) -> [idx]), vcat, 1:N; scheduler)
+        @test issubset(idxs_red, 1:nt)
+        chunked && @test idxs_red == chunkindex(N, nt)
+        # multiple input arrays
+        @test tmapreduce(WithTaskIndex((idx, x, y) -> idx in 1:nt && x == y), &,
+            1:N, 1:N; scheduler)
+    end
+
+    @testset "@task_index" begin
+        # in combination with other task local values and types
+        res = @tasks for i in 1:8
+            @set ntasks = nt
+            @set collect = true
+            @local begin
+                x = Ref(0)
+                idx::Int = @task_index
+                y::Float64 = 10 * OhMyThreads.@task_index()
+            end
+            x[] += 1
+            (idx, y, x[])
+        end
+        @test res == [(c, 10.0 * c, k) for c in 1:nt for k in 1:2]
+
+        # the names of other task local values are not in scope in @task_index initializers
+        let x = collect(1:nt), y = collect(10:10:(10 * nt))
+            res = @tasks for i in 1:nt
+                @set ntasks = nt
+                @set collect = true
+                @local begin
+                    x = zeros(1)
+                    a = x[@task_index]
+                    b = y[@task_index]
+                end
+                (a, b)
+            end
+            @test res == [(c, 10c) for c in 1:nt]
+        end
+
+        # Task-index locals also read their own and each other's names from outer scope.
+        let x = collect(1:nt), y = collect(10:10:(10 * nt))
+            res = @tasks for i in 1:nt
+                @set ntasks = nt
+                @set collect = true
+                @local begin
+                    x::Float64 = x[@task_index]
+                    y = x[@task_index] + y[@task_index]
+                end
+                (x, y)
+            end
+            @test res == [(Float64(c), 11c) for c in 1:nt]
+            @test eltype(res) == Tuple{Float64, Int}
+        end
+
+        # Greedy workers retain mutable task locals across elements and chunks.
+        for scheduler in (GreedyScheduler(; ntasks = nt),
+            GreedyScheduler(; ntasks = nt, nchunks = 3 * nt))
+            let counter = Threads.Atomic{Int}(0), values = zeros(Int, N),
+                idxs = zeros(Int, N)
+                @tasks for i in 1:N
+                    @set scheduler = scheduler
+                    @local state = (Threads.atomic_add!(counter, 1); (@task_index, Ref(0)))
+                    idx, count = state
+                    count[] += 1
+                    idxs[i] = idx
+                    values[i] = count[]
+                end
+                @test counter[] == nt
+                for idx in unique(idxs)
+                    counts = values[idxs .== idx]
+                    @test sort(counts) == 1:length(counts)
+                end
+            end
+        end
+
+        # reducer
+        @test @tasks(for i in 1:N
+            @set ntasks = nt
+            @set reducer = max
+            @local idx = @task_index
+            idx
+        end) == nt
+
+        # preallocated task-local buffers (#157)
+        let buffers = [Ref(0) for _ in 1:nt], ids = zeros(UInt, N),
+            tids = zeros(UInt, N)
+
+            for _ in 1:3
+                @tasks for i in 1:N
+                    @set ntasks = nt
+                    @local buffer = buffers[@task_index]
+                    buffer[] += 1
+                    ids[i] = objectid(buffer)
+                    tids[i] = OhMyThreads.Tools.taskid()
+                end
+                # every task has its own buffer
+                @test length(unique(zip(tids, ids))) == length(unique(tids)) ==
+                      length(unique(ids)) == nt
+            end
+            @test sum(b -> b[], buffers) == 3 * N
+        end
+
+        # evaluated once per task, also if no tasks are spawned
+        let counter = Threads.Atomic{Int}(0)
+            count!(idx) = (Threads.atomic_add!(counter, 1); idx)
+            @tasks for i in 1:N
+                @set ntasks = nt
+                @local idx = count!(@task_index)
+            end
+            @test counter[] == nt
+            counter[] = 0
+            @tasks for i in 1:N
+                @set scheduler = SerialScheduler()
+                @local idx = count!(@task_index)
+            end
+            @test counter[] == 1
+        end
+
+        # nested
+        @test @tasks(for i in 1:N
+            @set ntasks = nt
+            @set reducer = (&)
+            @local outer = @task_index
+            inner = @tasks for j in 1:4
+                @set ntasks = 2
+                @set collect = true
+                @local idx = @task_index
+                (outer, idx)
+            end
+            inner == [(outer, 1), (outer, 1), (outer, 2), (outer, 2)]
+        end)
+
+        # type stability
+        @test @inferred (() -> @tasks for i in 1:N
+            @set ntasks = nt
+            @set reducer = (+)
+            @local idx = @task_index
+            idx
+        end)() == sum(chunkindex(N, nt))
+
+        # wrong usage
+        @test_throws "may only be used inside of a @local block" @macroexpand(@task_index)
+        @test_throws "may only be used inside of a @local block" @macroexpand(@tasks(for i in 1:N
+            x = @task_index
+        end))
+        @test_throws "may only be used inside of a @local block" @macroexpand(@tasks(for i in 1:N
+            @set reducer = (a, b) -> a + @task_index
+            i
+        end))
+        @test_throws "doesn't take any arguments" @macroexpand(@tasks(for i in 1:N
+            @local x = @task_index 1
+        end))
+    end
+
+    @testset "WithTaskIndex" begin
+        f = WithTaskIndex((idx, _) -> idx)
+
+        # tmap / tmap! / tcollect / @tasks with collect
+        @test tmap(f, 1:8; ntasks = nt) == chunkindex(8, nt)
+        @test tmap(f, Int, 1:8; ntasks = nt) == chunkindex(8, nt)
+        @test tmap!(f, zeros(Int, 8), 1:8; ntasks = nt) == chunkindex(8, nt)
+        @test tmap(WithTaskIndex((idx, x, y) -> (idx, x + y)), 1:8, 1:8; ntasks = nt) ==
+              collect(zip(chunkindex(8, nt), 2:2:16))
+        A = rand(4, 6)
+        @test tmap(WithTaskIndex((idx, x) -> x), A; ntasks = nt) == A
+
+        # no chunking: one task per element
+        for scheduler in (DynamicScheduler(; chunking = false),
+            StaticScheduler(; chunking = false))
+            @test tmap(f, 11:17; scheduler) == 1:7
+            @test tmapreduce(f, vcat, 11:17; scheduler) == 1:7
+        end
+
+        # chunks as input
+        for scheduler in (DynamicScheduler(; chunking = false),
+            StaticScheduler(; chunking = false))
+            chnks = OhMyThreads.index_chunks(1:N; n = nt)
+            @test tmap(f, chnks; scheduler) == 1:nt
+            @test tmapreduce(f, vcat, chnks; scheduler) == 1:nt
+        end
+        @test tmap(WithTaskIndex((idx, (c, _)) -> c == idx),
+            enumerate(OhMyThreads.index_chunks(1:N; n = nt))) == trues(nt)
+        @test tmapreduce(WithTaskIndex((idx, (c, _)) -> c == idx), &,
+            enumerate(OhMyThreads.index_chunks(1:N; n = nt)))
+
+        # no tasks spawned: SerialScheduler, single chunk, empty input
+        @test tmap(f, 1:5; scheduler = SerialScheduler()) == ones(Int, 5)
+        @test tmapreduce(f, +, 1:5; scheduler = SerialScheduler()) == 5
+        @test tmap!(f, zeros(Int, 5), 1:5; scheduler = SerialScheduler()) == ones(Int, 5)
+        @test tforeach(f, 1:5; scheduler = SerialScheduler()) === nothing
+        @test tmapreduce(f, +, 1:5; minchunksize = 100) == 5
+        @test tmapreduce(f, +, 1:5; ntasks = 1) == 5
+        @test tmap(f, Int[]; ntasks = nt) == Int[]
+
+        # in combination with task local values
+        let tlv = TaskLocalValue{Base.RefValue{Int}}(() -> Ref(0))
+            g = WithTaskLocals((tlv,)) do (x,)
+                WithTaskIndex((idx, _) -> (x[] += 1; (idx, x[])))
+            end
+            @test tmap(g, 1:8; ntasks = nt) == [(c, k) for c in 1:nt for k in 1:2]
+            @test tmapreduce(g, vcat, 1:8; ntasks = nt) ==
+                  [(c, k) for c in 1:nt for k in 1:2]
+            # the other way around: task local values are looked up once per task
+            h = WithTaskIndex(WithTaskLocals((tlv,)) do (x,)
+                (idx, _) -> (x[] += 1; (idx, x[]))
+            end)
+            @test tmap(h, 1:8; ntasks = nt) == [(c, k) for c in 1:nt for k in 1:2]
+            @test tmap(h, 1:4; scheduler = SerialScheduler()) == [(1, k) for k in 1:4]
+        end
+
+        # the task index is only passed by the parallel functions
+        @test_throws "can't be called directly" f(1)
+        @test promise_task_local(f, 3)(1) == 3
+        @test promise_task_local(sin, 3) === sin
+
+        # type stability
+        @test @inferred(tmapreduce(f, +, 1:N; ntasks = nt)) == sum(chunkindex(N, nt))
+        @test @inferred(tmap(f, Int, 1:N; ntasks = nt)) == chunkindex(N, nt)
+    end
+end;
+
 @testset "WithTaskLocals" begin
     let x = TaskLocalValue{Base.RefValue{Int}}(() -> Ref{Int}(0)),
         y = TaskLocalValue{Base.RefValue{Int}}(() -> Ref{Int}(0))
@@ -420,6 +675,151 @@ end;
     @test_throws ArgumentError tmapreduce(sin, +, 1:10000; scheduler = :whatever)
     @test_throws ArgumentError tmapreduce(
         sin, +, 1:10000; threadpool = :whatever, chunking = false)
+
+    # scheduler isa Val
+    for (s, S) in ((:dynamic, DynamicScheduler), (:static, StaticScheduler),
+        (:serial, SerialScheduler), (:greedy, GreedyScheduler))
+        @test tmapreduce(sin, +, 1:10000; scheduler = Val(s), init = 0.0) ≈ res_tmr
+        @test OhMyThreads.Implementation._scheduler_from_userinput(Val(s)) isa S
+    end
+    @test tmapreduce(sin, +, 1:10000; ntasks = 2, scheduler = Val(:static)) ≈ res_tmr
+    @test_throws ArgumentError tmapreduce(sin, +, 1:10000; scheduler = Val(:whatever))
+end;
+
+@testset "SizeUnknown iterators (greedy)" begin
+    itr = Iterators.filter(isodd, 1:10)
+    @test tmapreduce(identity, +, itr; scheduler = :greedy, init = 0) == 25
+    @test tmapreduce(x -> x^2, +, itr; scheduler = :greedy, init = 0) ==
+          mapreduce(x -> x^2, +, itr)
+    @test tforeach(identity, itr; scheduler = :greedy) |> isnothing
+    # chunking requires a known size
+    @test_throws ArgumentError tmapreduce(
+        identity, +, itr; scheduler = GreedyScheduler(; chunking = true), init = 0)
+    # other schedulers
+    for scheduler in (:dynamic, :static, DynamicScheduler(; chunking = false),
+        StaticScheduler(; chunking = false))
+        @test_throws "only supported by the `GreedyScheduler`" tmapreduce(
+            identity, +, itr; scheduler)
+        @test_throws "only supported by the `GreedyScheduler`" tforeach(
+            identity, itr; scheduler)
+    end
+    @test tmapreduce(identity, +, itr; scheduler = :serial) == 25
+    # multiple inputs
+    for args in ((itr, [1, 2, 3]), ([1, 2, 3], itr))
+        @test_throws "can't be combined with other inputs" tmapreduce(
+            +, +, args...; scheduler = :greedy)
+    end
+    # type stability
+    @test @inferred(tmapreduce(identity, +, itr; scheduler = GreedyScheduler(), init = 0)) == 25
+end;
+
+# An iterator of unknown size that records the task iterating it
+mutable struct TaskRecordingIterator
+    task::Union{Nothing, Task}
+end
+Base.IteratorSize(::Type{TaskRecordingIterator}) = Base.SizeUnknown()
+Base.eltype(::Type{TaskRecordingIterator}) = Int
+function Base.iterate(it::TaskRecordingIterator, i = 1)
+    it.task = current_task()
+    return i <= 1000 ? (i, i + 1) : nothing
+end
+
+@testset "GreedyScheduler: producer terminates if all consumers fail" begin
+    it = TaskRecordingIterator(nothing)
+    @test_throws TaskFailedException tforeach(x -> error("boom"), it; scheduler = :greedy)
+    t0 = time()
+    while !istaskdone(it.task) && time() - t0 < 10
+        sleep(0.01)
+    end
+    @test istaskdone(it.task)
+end;
+
+# Models an array with a mutable read cache or a shared seek/read handle.
+struct SerialReadVector <: AbstractVector{Int}
+    reading::Threads.Atomic{Bool}
+end
+Base.size(::SerialReadVector) = (20,)
+Base.IndexStyle(::Type{SerialReadVector}) = IndexLinear()
+function Base.getindex(A::SerialReadVector, i::Int)
+    Threads.atomic_cas!(A.reading, false, true) && error("concurrent getindex")
+    try
+        # Allow another worker to attempt a read, including with only one thread.
+        sleep(0.001)
+        return i
+    finally
+        Threads.atomic_xchg!(A.reading, false)
+    end
+end
+
+@testset "GreedyScheduler: custom arrays are read by a single producer" begin
+    A = SerialReadVector(Threads.Atomic{Bool}(false))
+    scheduler = GreedyScheduler(; ntasks = 4)
+    @test @inferred(treduce(+, A; scheduler)) == sum(1:20)
+    @test treduce(+, view(A, :); scheduler) == sum(1:20)
+    # Every input must support concurrent reads to use the fast path.
+    @test tmapreduce(+, +, A, 1:20; scheduler) == 2sum(1:20)
+    @test tmapreduce(+, +, 1:20, A; scheduler) == 2sum(1:20)
+end;
+
+@testset "GreedyScheduler: type stability" begin
+    for scheduler in (GreedyScheduler(), GreedyScheduler(; chunking = true))
+        @test @inferred(tmapreduce(sin, +, 1:100; scheduler)) ≈ mapreduce(sin, +, 1:100)
+        @test @inferred(treduce(+, 1:100; scheduler)) == sum(1:100)
+    end
+end;
+
+# The functions only pass `f` and `op` on, and Julia does not specialize a method on a
+# function argument that it only passes on: without type parameters, a call can end up in an
+# instance compiled for `::Function`, behind which every call of `f` dispatches dynamically.
+# Whether a call site escapes that depends on inlining, so test the shape that did not: a
+# closure that captures a run-time value and calls a non-inlined function.
+@noinline spec_work(n) = n > typemax(Int) ? println(n) : nothing
+function calls_unspecialized(g, args...)
+    ci = first(only(Base.code_typed(g, typeof.(args); optimize = true)))
+    return any(ci.code) do st
+        st isa Expr && st.head === :invoke || return false
+        x = st.args[1]
+        mi = x isa Core.MethodInstance ? x : isdefined(x, :def) ? x.def : nothing
+        mi isa Core.MethodInstance || return false
+        return any(T -> T === Function, mi.specTypes.parameters)
+    end
+end
+@testset "specialization on the function arguments" begin
+    @testset "$(nameof(typeof(sched)))" for sched in (SerialScheduler(), DynamicScheduler(),
+                                                      StaticScheduler(), GreedyScheduler())
+        calls = Any[
+            n -> tforeach(_ -> spec_work(n), 1:8; scheduler = sched),
+            n -> treduce((a, b) -> (spec_work(n); a + b), 1:8; scheduler = sched),
+            n -> tmapreduce(i -> (spec_work(n); i), +, 1:8; scheduler = sched),
+            n -> tmap!(i -> (spec_work(n); i), zeros(Int, 8), 1:8; scheduler = sched),
+        ]
+        sched isa GreedyScheduler ||
+            push!(calls, n -> tmap(i -> (spec_work(n); i), 1:8; scheduler = sched))
+        for g in calls
+            g(3)
+            @test !calls_unspecialized(g, 3)
+        end
+    end
+end
+
+@testset "number of chunks for chunksize" begin
+    # 1:11 with chunksize=6 is split into 2 chunks ([1:6, 7:11]) and should parallelize
+    @test OhMyThreads.Implementation.has_multiple_chunks(
+        DynamicScheduler(; chunksize = 6), 1:11)
+    @test !OhMyThreads.Implementation.has_multiple_chunks(
+        DynamicScheduler(; chunksize = 6), 1:6)
+    @test treduce(+, 1:11; chunksize = 6) == sum(1:11)
+    @test treduce(+, 1:6; chunksize = 6) == sum(1:6)
+    # tmap: one task per chunk
+    taskid() = OhMyThreads.Tools.taskid()
+    for scheduler in (DynamicScheduler(; chunksize = 6), StaticScheduler(; chunksize = 6))
+        @test length(unique(tmap(_ -> taskid(), 1:11; scheduler))) == 2
+        @test length(unique(tmap(_ -> taskid(), 1:100; scheduler))) == 17
+        @test tmap(OhMyThreads.WithTaskIndex((c, _) -> c), 1:11; scheduler) ==
+              [fill(1, 6); fill(2, 5)]
+    end
+    @test length(unique(tmap(_ -> taskid(), 1:100; ntasks = 4, minchunksize = 10))) == 4
+    @test tmap(sin, 1:100; chunksize = 6) == map(sin, 1:100)
 end;
 
 @testset "empty collections" begin
@@ -445,11 +845,29 @@ end;
                 end
                 # map
                 @test tmap(f, empty_coll) == map(f, empty_coll)
+                @test tmap(f, empty_coll; ntasks = 4) == map(f, empty_coll)
+                @test tmap(f, empty_coll; scheduler = :static, chunksize = 2) ==
+                      map(f, empty_coll)
                 # collect
                 @test tcollect(empty_coll) == collect(empty_coll)
             end
         end
     end
+end;
+
+@testset "tmap without chunking" begin
+    for sched in (DynamicScheduler, StaticScheduler)
+        scheduler = sched(; chunking = false)
+        # elements that are not valid indices
+        @test tmap(x -> 2x, [10, 20, 30]; scheduler) == [20, 40, 60]
+        @test tmap(+, [10, 20, 30], [1.5, 2.5, 3.5]; scheduler) == [11.5, 22.5, 33.5]
+        A = rand(3, 4)
+        @test tmap(sin, A; scheduler) == map(sin, A)
+    end
+end;
+
+@testset "tmap with SerialScheduler and kwargs" begin
+    @test tmap(sin, 1:10; scheduler = :serial, ntasks = 2) == map(sin, 1:10)
 end;
 
 # for testing @one_by_one region
@@ -851,3 +1269,5 @@ if Threads.nthreads() > 1
 end
 
 # Todo way more testing, and easier tests to deal with
+
+include("ProgressMeterExt.jl")

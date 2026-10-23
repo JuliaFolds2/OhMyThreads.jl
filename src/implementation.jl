@@ -1,8 +1,8 @@
 module Implementation
 
 import OhMyThreads: treduce, tmapreduce, treducemap, tforeach, tmap, tmap!, tcollect
-using OhMyThreads: @spawn, @spawnat, WithTaskLocals, promise_task_local, ChannelLike,
-                   allowing_boxed_captures
+using OhMyThreads: @spawn, @spawnat, WithTaskLocals, WithTaskIndex, TaskIndexFactory,
+                   promise_task_local, ChannelLike, allowing_boxed_captures
 using OhMyThreads.Tools: nthtid
 using OhMyThreads: Scheduler,
                    DynamicScheduler, StaticScheduler, GreedyScheduler,
@@ -34,7 +34,7 @@ function _scheduler_from_userinput(scheduler::MaybeScheduler; kwargs...)
     if scheduler isa Scheduler
         isempty(kwargs) || scheduler_and_kwargs_err(; kwargs...)
         _scheduler = scheduler
-    elseif scheduler isa Symbol
+    elseif scheduler isa Union{Symbol, Val}
         _scheduler = scheduler_from_symbol(scheduler; kwargs...)
     else # default fallback
         _scheduler = DynamicScheduler(; kwargs...)
@@ -61,6 +61,10 @@ function _check_chunks_incompatible_kwargs(; kwargs...)
 end
 
 function has_multiple_chunks(scheduler, coll)
+    if Base.IteratorSize(coll) isa Base.SizeUnknown
+        # can't know the number of elements up front; assume parallelization is worthwhile
+        return true
+    end
     C = chunking_mode(scheduler)
     if C == NoChunking || coll isa Union{AbstractChunks, ChunkSplitters.Internals.Enumerate}
         length(coll) > 1
@@ -72,7 +76,8 @@ function has_multiple_chunks(scheduler, coll)
         end
         min(length(coll) ÷ mcs, nchunks(scheduler)) > 1
     elseif C == FixedSize
-        length(coll) ÷ chunksize(scheduler) > 1
+        # matches the number of chunks that ChunkSplitters produces for `size`
+        cld(length(coll), chunksize(scheduler)) > 1
     else
         throw(ArgumentError("Unknown chunking mode: $C."))
     end
@@ -81,11 +86,11 @@ end
 # we can inline this function because we use @noinline on the main function
 # it can save some time in cases where we do not hit the main function (e.g. when
 # fallback to mapreduce without any threading)
-@inline function tmapreduce(f, op, Arrs...;
+@inline function tmapreduce(f::F, op::OP, Arrs...;
         scheduler::MaybeScheduler = NotGiven(),
         outputtype::Type = Any,
         init = NotGiven(),
-        kwargs...)
+        kwargs...) where {F, OP}
     mapreduce_kwargs = isgiven(init) ? (; init) : (;)
     _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
@@ -93,12 +98,36 @@ end
     if A isa AbstractChunks || A isa ChunkSplitters.Internals.Enumerate
         _check_chunks_incompatible_kwargs(; kwargs...)
     end
+    _check_sizeunknown_inputs(_scheduler, Arrs)
     if _scheduler isa SerialScheduler || !has_multiple_chunks(_scheduler, first(Arrs))
         # empty input collection → align with Base.mapreduce behavior
-        mapreduce(f, op, Arrs...; mapreduce_kwargs...)
+        # no task is spawned: the calling task is the one and only task
+        mapreduce(promise_task_local(f, 1), op, Arrs...; mapreduce_kwargs...)
     else
         @noinline _tmapreduce(f, op, Arrs, outputtype, _scheduler, mapreduce_kwargs)
     end
+end
+
+# Inputs of unknown size (e.g. `Iterators.filter`) are only supported by the
+# `GreedyScheduler` without chunking, and only as the single input.
+@inline function _check_sizeunknown_inputs(scheduler, Arrs)
+    if !(scheduler isa SerialScheduler) &&
+       any(A -> Base.IteratorSize(A) isa Base.SizeUnknown, Arrs)
+        sizeunknown_err(scheduler, length(Arrs))
+    end
+    return nothing
+end
+
+@noinline function sizeunknown_err(scheduler, ninputs)
+    if ninputs > 1
+        throw(ArgumentError("Inputs of unknown size (e.g. `Iterators.filter`) can't be " *
+                            "combined with other inputs."))
+    elseif !(scheduler isa GreedyScheduler && chunking_mode(scheduler) == NoChunking)
+        throw(ArgumentError("Inputs of unknown size (e.g. `Iterators.filter`) are only " *
+                            "supported by the `GreedyScheduler` with `chunking=false` " *
+                            "(and the `SerialScheduler`). (Scheduler: $scheduler)"))
+    end
+    return nothing
 end
 
 @noinline function scheduler_and_kwargs_err(; kwargs...)
@@ -106,60 +135,59 @@ end
     throw(ArgumentError("Providing an explicit scheduler as well as direct keyword arguments (e.g. $(kwargstr)) is currently not supported."))
 end
 
-treducemap(op, f, A...; kwargs...) = tmapreduce(f, op, A...; kwargs...)
+treducemap(op::OP, f::F, A...; kwargs...) where {OP, F} = tmapreduce(f, op, A...; kwargs...)
 
 
 # DynamicScheduler: AbstractArray/Generic
-function _tmapreduce(f,
-        op,
+function _tmapreduce(f::F,
+        op::OP,
         Arrs,
         ::Type{OutputType},
         scheduler::DynamicScheduler,
-        mapreduce_kwargs)::OutputType where {OutputType}
+        mapreduce_kwargs)::OutputType where {F, OP, OutputType}
     threadpool = get_threadpool(scheduler)
     check_all_have_same_indices(Arrs)
     throw_if_boxed_captures(f, op)
     if chunking_enabled(scheduler)
-        tasks = map(_index_chunks(scheduler, first(Arrs))) do inds
-
+        tasks = map(enumerate(_index_chunks(scheduler, first(Arrs)))) do (c, inds)
             args = map(A -> view(A, inds), Arrs)
             # Note, calling `promise_task_local` here is only safe because we're assuming that
             # Base.mapreduce isn't going to magically try to do multithreading on us...
-            @spawn threadpool mapreduce(promise_task_local(f), promise_task_local(op),
+            @spawn threadpool mapreduce(promise_task_local(f, c), promise_task_local(op),
                                         args...; $mapreduce_kwargs...)
         end
         mapreduce(fetch, promise_task_local(op), tasks)
     else
-        tasks = map(eachindex(first(Arrs))) do i
+        tasks = map(enumerate(eachindex(first(Arrs)))) do (c, i)
             args = map(A -> @inbounds(A[i]), Arrs)
-            @spawn threadpool promise_task_local(f)(args...)
+            @spawn threadpool promise_task_local(f, c)(args...)
         end
         mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
     end
 end
 
 # DynamicScheduler: AbstractChunks
-function _tmapreduce(f,
-        op,
+function _tmapreduce(f::F,
+        op::OP,
         Arrs::Union{Tuple{AbstractChunks{T}}, Tuple{ChunkSplitters.Internals.Enumerate{T}}},
         ::Type{OutputType},
         scheduler::DynamicScheduler,
-        mapreduce_kwargs)::OutputType where {OutputType, T}
+        mapreduce_kwargs)::OutputType where {F, OP, OutputType, T}
     threadpool = get_threadpool(scheduler)
     throw_if_boxed_captures(f, op)
-    tasks = map(only(Arrs)) do idcs
-        @spawn threadpool promise_task_local(f)(idcs)
+    tasks = map(enumerate(only(Arrs))) do (c, idcs)
+        @spawn threadpool promise_task_local(f, c)(idcs)
     end
     mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
 end
 
 # StaticScheduler: AbstractArray/Generic
-function _tmapreduce(f,
-        op,
+function _tmapreduce(f::F,
+        op::OP,
         Arrs,
         ::Type{OutputType},
         scheduler::StaticScheduler,
-        mapreduce_kwargs)::OutputType where {OutputType}
+        mapreduce_kwargs)::OutputType where {F, OP, OutputType}
     nt = nthreads()
     check_all_have_same_indices(Arrs)
     throw_if_boxed_captures(f, op)
@@ -169,7 +197,7 @@ function _tmapreduce(f,
             args = map(A -> view(A, inds), Arrs)
             # Note, calling `promise_task_local` here is only safe because we're assuming that
             # Base.mapreduce isn't going to magically try to do multithreading on us...
-            @spawnat tid mapreduce(promise_task_local(f), promise_task_local(op), args...;
+            @spawnat tid mapreduce(promise_task_local(f, c), promise_task_local(op), args...;
                 mapreduce_kwargs...)
         end
         # Note, calling `promise_task_local` here is only safe because we're assuming that
@@ -179,7 +207,7 @@ function _tmapreduce(f,
         tasks = map(enumerate(eachindex(first(Arrs)))) do (c, i)
             tid = @inbounds nthtid(mod1(c, nt))
             args = map(A -> @inbounds(A[i]), Arrs)
-            @spawnat tid promise_task_local(f)(args...)
+            @spawnat tid promise_task_local(f, c)(args...)
         end
         # Note, calling `promise_task_local` here is only safe because we're assuming that
         # Base.mapreduce isn't going to magically try to do multithreading on us...
@@ -188,12 +216,12 @@ function _tmapreduce(f,
 end
 
 # StaticScheduler: AbstractChunks
-function _tmapreduce(f,
-        op,
+function _tmapreduce(f::F,
+        op::OP,
         Arrs::Tuple{AbstractChunks{T}}, # we don't support multiple chunks for now
         ::Type{OutputType},
         scheduler::StaticScheduler,
-        mapreduce_kwargs)::OutputType where {OutputType, T}
+        mapreduce_kwargs)::OutputType where {F, OP, OutputType, T}
     check_all_have_same_indices(Arrs)
     throw_if_boxed_captures(f, op)
     chnks = only(Arrs)
@@ -202,15 +230,18 @@ function _tmapreduce(f,
         tid = @inbounds nthtid(mod1(c, nt))
         # Note, calling `promise_task_local` here is only safe because we're assuming that
         # Base.mapreduce isn't going to magically try to do multithreading on us...
-        @spawnat tid promise_task_local(f)(idcs)
+        @spawnat tid promise_task_local(f, c)(idcs)
     end
     # Note, calling `promise_task_local` here is only safe because we're assuming that
     # Base.mapreduce isn't going to magically try to do multithreading on us...
     mapreduce(fetch, promise_task_local(op), tasks; mapreduce_kwargs...)
 end
 
-# NOTE: once v1.12 releases we should switch this to wait(t; throw=false)
-wait_nothrow(t) = Base._wait(t)
+@static if VERSION >= v"1.12.0-"
+    wait_nothrow(t) = wait(t; throw = false)
+else
+    wait_nothrow(t) = Base._wait(t)
+end
 
 
 """
@@ -232,13 +263,98 @@ else
     end
 end
 
+# GreedyScheduler w/o chunking: spawn `ntasks` tasks that greedily process the input.
+# Returns the channel-like object that is consumed by the tasks, and the tasks.
+# Only known array types with independent reads use shared indices via ChannelLike.
+# Arbitrary AbstractArrays (including wrappers) may have stateful getindex methods;
+# keep their reads on the single producer task below. AbstractRange is extensible too,
+# so list the built-in range types explicitly.
+const GreedyConcurrentReadArray = Union{
+    Array, BitArray, Base.OneTo, UnitRange, StepRange, StepRangeLen, LinRange}
+
+# This avoids copying the data into a Channel (one lock round-trip per element)
+# and doesn't need a producer task.
+function _greedy_spawn(f::F, op::OP, Arrs::Tuple{Vararg{GreedyConcurrentReadArray}}, ntasks, migrate::Bool, _,
+        mapreduce_kwargs) where {F, OP}
+    ch = ChannelLike(eachindex(first(Arrs)))
+
+    if migrate
+        tasks = map(1:ntasks) do c
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawn begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do i
+                    args = map(A -> @inbounds(A[i]), Arrs)
+                    local_f(args...)
+                end
+            end
+        end
+    else
+        nt = nthreads()
+        tasks = map(1:ntasks) do c
+            tid = @inbounds nthtid(mod1(c, nt))
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawnat tid begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do i
+                    args = map(A -> @inbounds(A[i]), Arrs)
+                    local_f(args...)
+                end
+            end
+        end
+    end
+    return ch, tasks
+end
+# Other arrays and iterables: a producer task puts the elements into a Channel
+function _greedy_spawn(f::F, op::OP, Arrs, ntasks, migrate::Bool, ch_len, mapreduce_kwargs) where {F, OP}
+    ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn = true) do ch
+        for args in zip(Arrs...)
+            put!(ch, args)
+        end
+    end
+
+    if migrate
+        tasks = map(1:ntasks) do c
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawn begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
+                    local_f(args...)
+                end
+            end
+        end
+    else
+        nt = nthreads()
+        tasks = map(1:ntasks) do c
+            tid = @inbounds nthtid(mod1(c, nt))
+            # Note, calling `promise_task_local` here is only safe because we're assuming that
+            # Base.mapreduce isn't going to magically try to do multithreading on us...
+            @spawnat tid begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
+                    local_f(args...)
+                end
+            end
+        end
+    end
+    return ch, tasks
+end
+
+# Close the channel after all consuming tasks are done, such that the producer task doesn't
+# block forever if the consumers failed before the channel was exhausted.
+_greedy_close(ch::Channel) = close(ch)
+_greedy_close(::ChannelLike) = nothing
+
 # GreedyScheduler w/o chunking
-function _tmapreduce(f,
-        op,
+function _tmapreduce(f::F,
+        op::OP,
         Arrs,
         ::Type{OutputType},
         scheduler::GreedyScheduler{NoChunking},
-        mapreduce_kwargs)::OutputType where {OutputType}
+        mapreduce_kwargs)::OutputType where {F, OP, OutputType}
     ntasks_desired = scheduler.ntasks
     if Base.IteratorSize(first(Arrs)) isa Base.SizeUnknown
         ntasks = ntasks_desired
@@ -249,31 +365,7 @@ function _tmapreduce(f,
         ch_len = length(first(Arrs))
     end
     throw_if_boxed_captures(f, op)
-    # TODO: Use ChannelLike for iterators that support it. Dispatch on IndexLinear?
-    ch = Channel{Tuple{eltype.(Arrs)...}}(ch_len; spawn = true) do ch
-        for args in zip(Arrs...)
-            put!(ch, args)
-        end
-    end
-    if allow_migration(scheduler)
-        tasks = map(1:ntasks) do _
-            # Note, calling `promise_task_local` here is only safe because we're assuming that
-            # Base.mapreduce isn't going to magically try to do multithreading on us...
-            @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
-                promise_task_local(f)(args...)
-            end
-        end
-    else
-        nt = nthreads()
-        tasks = map(1:ntasks) do c
-            tid = @inbounds nthtid(mod1(c, nt))
-            # Note, calling `promise_task_local` here is only safe because we're assuming that
-            # Base.mapreduce isn't going to magically try to do multithreading on us...
-            @spawnat tid mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do args
-                promise_task_local(f)(args...)
-            end
-        end
-    end
+    ch, tasks = _greedy_spawn(f, op, Arrs, ntasks, allow_migration(scheduler), ch_len, mapreduce_kwargs)
     # Doing this because of https://github.com/JuliaFolds2/OhMyThreads.jl/issues/82
     # The idea is that if the channel gets fully consumed before a task gets started up,
     # then if the user does not supply an `init` kwarg, we'll get an error.
@@ -290,18 +382,19 @@ function _tmapreduce(f,
             true
         end
     end
+    _greedy_close(ch)
     # Note, calling `promise_task_local` here is only safe because we're assuming that
     # Base.mapreduce isn't going to magically try to do multithreading on us...
     mapreduce(fetch, promise_task_local(op), filtered_tasks; mapreduce_kwargs...)
 end
 
 # GreedyScheduler w/ chunking
-function _tmapreduce(f,
-        op,
+function _tmapreduce(f::F,
+        op::OP,
         Arrs,
         ::Type{OutputType},
         scheduler::GreedyScheduler,
-        mapreduce_kwargs)::OutputType where {OutputType}
+        mapreduce_kwargs)::OutputType where {F, OP, OutputType}
     if Base.IteratorSize(first(Arrs)) isa Base.SizeUnknown
         throw(ArgumentError("SizeUnkown iterators in combination with a greedy scheduler and chunking are currently not supported."))
     end
@@ -315,12 +408,15 @@ function _tmapreduce(f,
     ch = ChannelLike(chnks)
 
     if allow_migration(scheduler)
-        tasks = map(1:ntasks) do _
+        tasks = map(1:ntasks) do c
             # Note, calling `promise_task_local` here is only safe because we're assuming that
             # Base.mapreduce isn't going to magically try to do multithreading on us...
-            @spawn mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
-                args = map(A -> view(A, inds), Arrs)
-                mapreduce(promise_task_local(f), promise_task_local(op), args...)
+            @spawn begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
+                    args = map(A -> view(A, inds), Arrs)
+                    mapreduce(local_f, promise_task_local(op), args...)
+                end
             end
         end
     else
@@ -329,9 +425,12 @@ function _tmapreduce(f,
             tid = @inbounds nthtid(mod1(c, nt))
             # Note, calling `promise_task_local` here is only safe because we're assuming that
             # Base.mapreduce isn't going to magically try to do multithreading on us...
-            @spawnat tid mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
-                args = map(A -> view(A, inds), Arrs)
-                mapreduce(promise_task_local(f), promise_task_local(op), args...)
+            @spawnat tid begin
+                local_f = promise_task_local(f, c)
+                mapreduce(promise_task_local(op), ch; mapreduce_kwargs...) do inds
+                    args = map(A -> view(A, inds), Arrs)
+                    mapreduce(local_f, promise_task_local(op), args...)
+                end
             end
         end
     end
@@ -406,13 +505,13 @@ end
 
 #-------------------------------------------------------------
 
-function treduce(op, A...; kwargs...)
+function treduce(op::OP, A...; kwargs...) where {OP}
     tmapreduce(identity, op, A...; kwargs...)
 end
 
 #-------------------------------------------------------------
 
-function tforeach(f, A...; kwargs...)::Nothing
+function tforeach(f::F, A...; kwargs...)::Nothing where {F}
     tmapreduce(f, (l, r) -> l, A...; kwargs..., init = nothing, outputtype = Nothing)
 end
 
@@ -432,21 +531,25 @@ This should always be equivalent to just calling `g(f)`.
 """
 function maybe_rewrap(g::G, f::WithTaskLocals{F}) where {G, F}
     (; inner_func, tasklocals) = f
-    WithTaskLocals(vals -> g(inner_func(vals)), tasklocals)
+    # `inner_func(vals)` may itself be a wrapper (e.g. a `WithTaskIndex`), so recurse
+    WithTaskLocals(vals -> maybe_rewrap(g, inner_func(vals)), tasklocals)
+end
+function maybe_rewrap(g::G, f::Union{WithTaskIndex{F}, TaskIndexFactory{F}}) where {G, F}
+    TaskIndexFactory(taskindex -> g(promise_task_local(f, taskindex)))
 end
 
 #------------------------------------------------------------
 
-function tmap(f, ::Type{T}, A::AbstractArray, _Arrs::AbstractArray...; kwargs...) where {T}
+function tmap(f::F, ::Type{T}, A::AbstractArray, _Arrs::AbstractArray...; kwargs...) where {F, T}
     Arrs = (A, _Arrs...)
     tmap!(f, similar(A, T), Arrs...; kwargs...)
 end
 
-function tmap(f,
+function tmap(f::F,
         A::Union{AbstractArray, AbstractChunks, ChunkSplitters.Internals.Enumerate},
         _Arrs::AbstractArray...;
         scheduler::MaybeScheduler = NotGiven(),
-        kwargs...)
+        kwargs...) where {F}
     _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
     if _scheduler isa GreedyScheduler
@@ -475,7 +578,7 @@ function tmap(f,
     Arrs = (A, _Arrs...)
     if _scheduler isa SerialScheduler || isempty(A)
         # empty input collection → align with Base.map behavior
-        map(f, Arrs...; kwargs...)
+        map(promise_task_local(f, 1), Arrs...)
     else
         check_all_have_same_indices(Arrs)
         @noinline _tmap(_scheduler, f, A, _Arrs...)
@@ -484,16 +587,16 @@ end
 
 # w/o chunking (DynamicScheduler{NoChunking}): AbstractArray
 function _tmap(scheduler::DynamicScheduler{NoChunking},
-        f,
+        f::F,
         A::AbstractArray,
-        _Arrs::AbstractArray...;)
+        _Arrs::AbstractArray...;) where {F}
     threadpool = get_threadpool(scheduler)
     Arrs = (A, _Arrs...)
     throw_if_boxed_captures(f)
-    tasks = map(eachindex(A)) do i
+    tasks = map(enumerate(eachindex(A))) do (c, i)
         @spawn threadpool begin
             args = map(A -> A[i], Arrs)
-            promise_task_local(f)(args...)
+            promise_task_local(f, c)(args...)
         end
     end
     v = map(fetch, tasks)
@@ -502,55 +605,59 @@ end
 
 # w/o chunking (DynamicScheduler{NoChunking}): AbstractChunks
 function _tmap(scheduler::DynamicScheduler{NoChunking},
-        f,
+        f::F,
         A::Union{AbstractChunks, ChunkSplitters.Internals.Enumerate},
-        _Arrs::AbstractArray...)
+        _Arrs::AbstractArray...) where {F}
     threadpool = get_threadpool(scheduler)
     throw_if_boxed_captures(f)
-    tasks = map(A) do idcs
-        @spawn threadpool promise_task_local(f)(idcs)
+    tasks = map(enumerate(A)) do (c, idcs)
+        @spawn threadpool promise_task_local(f, c)(idcs)
     end
     map(fetch, tasks)
 end
 
 # w/o chunking (StaticScheduler{NoChunking}): AbstractChunks
 function _tmap(scheduler::StaticScheduler{NoChunking},
-        f,
+        f::F,
         A::AbstractChunks,
-        _Arrs::AbstractArray...)
+        _Arrs::AbstractArray...) where {F}
     nt = nthreads()
     throw_if_boxed_captures(f)
     tasks = map(enumerate(A)) do (c, idcs)
         tid = @inbounds nthtid(mod1(c, nt))
-        @spawnat tid promise_task_local(f)(idcs)
+        @spawnat tid promise_task_local(f, c)(idcs)
     end
     map(fetch, tasks)
 end
 
 # w/o chunking (StaticScheduler{NoChunking}): AbstractArray
 function _tmap(scheduler::StaticScheduler{NoChunking},
-        f,
+        f::F,
         A::AbstractArray,
-        _Arrs::AbstractArray...;)
+        _Arrs::AbstractArray...;) where {F}
     Arrs = (A, _Arrs...)
     nt = nthreads()
     throw_if_boxed_captures(f)
-    tasks = map(enumerate(A)) do (c, i)
+    tasks = map(enumerate(eachindex(A))) do (c, i)
         tid = @inbounds nthtid(mod1(c, nt))
         @spawnat tid begin
             args = map(A -> A[i], Arrs)
-            promise_task_local(f)(args...)
+            promise_task_local(f, c)(args...)
         end
     end
     v = map(fetch, tasks)
     reshape(v, size(A)...)
 end
 
+_without_chunking(s::DynamicScheduler) =
+    DynamicScheduler(; threadpool = get_threadpool(s), chunking = false)
+_without_chunking(::StaticScheduler) = StaticScheduler(; chunking = false)
+
 # w/ chunking
 function _tmap(scheduler::Scheduler,
-        f,
+        f::F,
         A::AbstractArray,
-        _Arrs::AbstractArray...)
+        _Arrs::AbstractArray...) where {F}
     Arrs = (A, _Arrs...)
     idcs = collect(_index_chunks(scheduler, A))
     reduction_f = append!!
@@ -560,21 +667,22 @@ function _tmap(scheduler::Scheduler,
             map(f, args...)
         end
     end
-    v = tmapreduce(mapping_f, reduction_f, idcs; scheduler)
+    # One task per chunk. Using `scheduler` here would chunk the chunks again.
+    v = tmapreduce(mapping_f, reduction_f, idcs; scheduler = _without_chunking(scheduler))
     reshape(v, size(A)...)
 end
 
-@propagate_inbounds function tmap!(f,
+@propagate_inbounds function tmap!(f::F,
         out,
         A::AbstractArray,
         _Arrs::AbstractArray...;
         scheduler::MaybeScheduler = NotGiven(),
-        kwargs...)
+        kwargs...) where {F}
     _scheduler = _scheduler_from_userinput(scheduler; kwargs...)
 
     Arrs = (A, _Arrs...)
     if _scheduler isa SerialScheduler
-        map!(f, out, Arrs...)
+        map!(promise_task_local(f, 1), out, Arrs...)
     else
         @boundscheck check_all_have_same_indices((out, Arrs...))
         throw_if_boxed_captures(f)
@@ -582,7 +690,7 @@ end
             function mapping_function(i)
                 args = map(A -> @inbounds(A[i]), Arrs)
                 res = f(args...)
-                out[i] = res
+                @inbounds out[i] = res
             end
         end
         @noinline tforeach(mapping_f, eachindex(out); scheduler = _scheduler)

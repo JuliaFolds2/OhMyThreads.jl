@@ -11,7 +11,7 @@ Supports reductions (`@set reducer=<reducer function>`) and collecting the resul
 Under the hood, the `for` loop is translated into corresponding parallel
 [`tforeach`](@ref), [`tmapreduce`](@ref), or [`tmap`](@ref) calls.
 
-See also: [`@set`](@ref), [`@local`](@ref)
+See also: [`@set`](@ref), [`@local`](@ref), [`@task_index`](@ref)
 
 ## Examples
 
@@ -81,7 +81,7 @@ Multiple settings are supported, either as separate `@set` statements or via
 * `reducer` (e.g. `reducer=+`): Indicates that a reduction should be performed with the provided binary function. See [`tmapreduce`](@ref) for more information.
 * `collect` (e.g. `collect=true`): Indicates that results should be collected (similar to `map`).
 
-All other settings will be passed on to the underlying parallel functions (e.g. [tmapreduce](@ref))
+All other settings will be passed on to the underlying parallel functions (e.g. [`tmapreduce`](@ref))
 as keyword arguments. Hence, you may provide whatever these functions accept as
 keyword arguments. Among others, this includes
 
@@ -113,6 +113,9 @@ end
     There can only be a single `@local` block in a `@tasks for ... end` block. To specify
     multiple TLVs, use `@local begin ... end`. Compared to regular assignments, there are some
     limitations though, e.g. TLVs can't reference each other.
+
+    The index of the task can be used to initialize a task-local value, see
+    [`@task_index`](@ref).
 
     ## Examples
 
@@ -160,6 +163,44 @@ end
     macro $(Symbol("local"))(args...)
         error("The @local macro may only be used inside of a @tasks block.")
     end
+end
+
+"""
+    @task_index
+
+Can be used on the right hand side of a [`@local`](@ref) assignment inside of a
+`@tasks for ... end` block to get the index of the task. The index is an integer in `1:n`,
+where `n` is the number of tasks used by the loop. Note that `n` can be smaller than the
+requested `ntasks`, e.g. for short input collections. See [`OhMyThreads.WithTaskIndex`](@ref)
+for the functional API equivalent, and for details about the index for different schedulers.
+
+This is useful for giving each task access to its own, preallocated resource, for example
+to reuse buffers across several `@tasks` loops:
+
+```julia
+using OhMyThreads: @tasks
+
+ntasks = 4
+buffers = [zeros(100) for _ in 1:ntasks]
+for i in 1:10
+    @tasks for j in 1:1000
+        @set ntasks = ntasks
+        @local buffer = buffers[@task_index]
+        # ... use buffer ...
+    end
+end
+```
+
+A `@local` assignment that uses `@task_index` is evaluated once per task (just like other
+`@local` assignments). To get hold of the index itself, use `@local idx = @task_index`.
+As for other `@local` assignments, the right hand side is evaluated in the scope
+*surrounding* the loop body, i.e. it can't reference other task-local values from the same
+`@local` block.
+
+`@task_index` can *not* be used directly in the loop body, or in the settings (`@set`).
+"""
+macro task_index(args...)
+    error("The @task_index macro may only be used inside of a @local block (inside of a @tasks block).")
 end
 
 """
