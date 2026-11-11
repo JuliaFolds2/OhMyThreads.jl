@@ -39,6 +39,8 @@ DynamicScheduler
 StaticScheduler
 GreedyScheduler
 SerialScheduler
+TeamScheduler
+GreedyTeamScheduler
 ```
 
 ## Re-exported

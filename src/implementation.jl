@@ -671,4 +671,6 @@ tcollect(gen::Base.Generator{<:AbstractArray}; kwargs...) = tmap(gen.f, gen.iter
 tcollect(::Type{T}, A; kwargs...) where {T} = tmap(identity, T, A; kwargs...)
 tcollect(A; kwargs...) = tmap(identity, A; kwargs...)
 
+include("team.jl")
+
 end # module Implementation
