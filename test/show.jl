@@ -31,4 +31,16 @@
          ├ Num. tasks: $nt
          ├ Chunking: fixed count ($(10 * nt)), split :roundrobin
          └ Threadpool: default"""
+
+    @test repr("text/plain", TeamScheduler()) ==
+          """
+          TeamScheduler
+          ├ Chunking: one chunk per thread
+          └ When busy: tasks"""
+
+    @test repr("text/plain", GreedyTeamScheduler(; chunksize = 7, busy = :serial)) ==
+          """
+          GreedyTeamScheduler
+          ├ Chunking: fixed size (7)
+          └ When busy: serial"""
 end

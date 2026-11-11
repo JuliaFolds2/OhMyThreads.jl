@@ -1,6 +1,10 @@
 OhMyThreads.jl Changelog
 =========================
 
+Version 0.8.10
+------------
+- ![Feature][badge-feature] New schedulers `TeamScheduler` (`scheduler = :team`) and `GreedyTeamScheduler` (`scheduler = :greedyteam`), which run parallel operations on the pool of persistent worker tasks of [ThreadTeams.jl](https://github.com/vchuravy/ThreadTeams.jl) instead of spawning tasks. They have much lower per-operation overhead than the other schedulers, which pays off for many short parallel operations. The schedulers used to live in ThreadTeams.jl (version 1), which re-exported the OhMyThreads.jl API; ThreadTeams.jl 2 only provides the pool, and is now a dependency of OhMyThreads.jl.
+
 Version 0.8.9
 ------------
 - ![Enhancement][badge-enhancement] `tforeach` no longer compiles a scheduler's implementation for every output type: its output type (`Nothing`) is now passed on as a constant, instead of a `DataType` in the keyword arguments. With schedulers that compile a reduction only when there is a result, this saves the compilation of the reduction for every loop body [#177][gh-pr-177].

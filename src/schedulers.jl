@@ -2,6 +2,7 @@ module Schedulers
 
 using Base.Threads: nthreads
 using ChunkSplitters: Split, Consecutive, RoundRobin, ChunkSplitters
+using ThreadTeams: ThreadTeams
 
 # Used to indicate that a keyword argument has not been set by the user.
 # We don't use Nothing because nothing maybe sometimes be a valid user input (e.g. for init)
@@ -28,6 +29,8 @@ Supertype for all available schedulers:
 * [`StaticScheduler`](@ref): low-overhead static scheduler
 * [`GreedyScheduler`](@ref): greedy load-balancing scheduler
 * [`SerialScheduler`](@ref): serial (non-parallel) execution
+* [`TeamScheduler`](@ref): lowest-overhead scheduler on a pool of persistent tasks
+* [`GreedyTeamScheduler`](@ref): load-balancing scheduler on the same pool
 """
 abstract type Scheduler end
 #! A subtype of Scheduler (let's call it `S`) **must** implement:
@@ -389,5 +392,116 @@ struct SerialScheduler <: Scheduler
     SerialScheduler(; _...) = new()
 end
 from_symbol(::Val{:serial}) = SerialScheduler
+
+"""
+    TeamScheduler (aka :team)
+
+A scheduler that runs a parallel operation on the pool of persistent worker tasks of
+[ThreadTeams.jl](https://github.com/vchuravy/ThreadTeams.jl) instead of spawning tasks:
+one contiguous chunk per thread of the `:default` threadpool, chunk 1 on the calling task
+and chunk `c` on worker `c`. Idle workers spin for a short while before they sleep
+(`ThreadTeams.set_spin_time!`), so back-to-back operations pay for no task creation,
+scheduling or wake-up. The calling task also runs every chunk whose worker has not picked
+it up in time, so an operation never waits for an idle worker. Lowest overhead; best for
+many short operations with balanced iterations.
+
+Only one parallel operation runs on the pool at a time. One started inside a chunk
+(nested) runs serially. One started while another task uses the pool runs on spawned tasks
+or serially, see `busy`. Chunks run in the caller's dynamic scope (`ScopedValue`s, logger)
+and world age. If chunks throw, the exception of the first failing chunk is rethrown
+(unwrapped, not as a `CompositeException`) once all started chunks have finished.
+
+The task index (`OhMyThreads.WithTaskIndex`, `@task_index`) is the chunk index; for
+`chunks`/`index_chunks` inputs the position of the chunk, as with the other schedulers.
+Task-local values (`@local`) live in the persistent worker tasks: initialized once per
+worker, reused across operations.
+
+Supports arrays and `chunks`/`index_chunks` inputs. `ntasks` is not supported: chunks are
+not guaranteed to run at the same time, so `@barrier` can not be used.
+
+## Keyword arguments:
+
+- `busy::Symbol` (default `:tasks`):
+    * What to do when another task uses the pool: `:tasks` runs the operation on `Threads.@spawn`ed tasks, `:serial` runs it serially on the calling task. `:serial` also runs the operation serially while a `Threads.@threads` loop runs (in any task: the check is process-wide).
+    * Use `:serial` in code that is itself run in parallel by tasks or `@threads`: spreading its loops over threads that are busy already only oversubscribes them.
+"""
+struct TeamScheduler <: Scheduler
+    schedule::ThreadTeams.StaticSchedule
+    function TeamScheduler(; busy::Symbol = :tasks, kwargs...)
+        isempty(kwargs) || unsupported_team_kwargs("TeamScheduler", kwargs)
+        return new(ThreadTeams.StaticSchedule(; busy))
+    end
+end
+from_symbol(::Val{:team}) = TeamScheduler
+
+"""
+    GreedyTeamScheduler (aka :greedyteam)
+
+Like the [`TeamScheduler`](@ref), with load balancing: the input is split into more
+contiguous chunks than there are threads. The calling task and the workers start with one
+chunk each, placed as with the `TeamScheduler`, then take the others from a shared counter
+until none are left. For operations whose iterations take very different times.
+
+In contrast to the [`GreedyScheduler`](@ref), chunks are contiguous and reductions combine
+the chunk results in chunk order, so the reducing function only has to be associative and
+the result is deterministic for a given number of chunks. The task index is the chunk
+index.
+
+## Keyword arguments:
+
+- `nchunks::Integer` (default `4 * nthreads()`):
+    * Determines the number of chunks.
+- `chunksize::Integer` (default not set)
+    * Specifies the desired chunk size (instead of the number of chunks).
+    * The options `chunksize` and `nchunks` are **mutually exclusive** (only one may be a positive integer).
+- `busy::Symbol` (default `:tasks`): see [`TeamScheduler`](@ref).
+"""
+struct GreedyTeamScheduler <: Scheduler
+    nchunks::Int
+    chunksize::Int
+    schedule::ThreadTeams.GreedySchedule
+    function GreedyTeamScheduler(;
+            nchunks::Integer = 0, chunksize::Integer = 0, busy::Symbol = :tasks,
+            kwargs...
+    )
+        isempty(kwargs) || unsupported_team_kwargs("GreedyTeamScheduler", kwargs)
+        (nchunks >= 0 && chunksize >= 0) ||
+            throw(ArgumentError("nchunks and chunksize must be non-negative"))
+        (nchunks > 0 && chunksize > 0) &&
+            throw(ArgumentError("nchunks and chunksize are mutually exclusive"))
+        return new(nchunks, chunksize, ThreadTeams.GreedySchedule(; busy))
+    end
+end
+from_symbol(::Val{:greedyteam}) = GreedyTeamScheduler
+
+const TeamSchedulers = Union{TeamScheduler, GreedyTeamScheduler}
+
+@noinline function unsupported_team_kwargs(name, kwargs)
+    ks = join(("`$k`" for k in keys(kwargs)), ", ")
+    if :ntasks in keys(kwargs)
+        throw(
+            ArgumentError(
+            "$name does not take `ntasks`: chunks run on a fixed pool " *
+            "of workers and the calling task runs chunks that no worker " *
+            "has picked up, so the number of tasks running at the same " *
+            "time is not fixed (`@barrier` is not supported)"
+        )
+        )
+    end
+    throw(ArgumentError("$name does not take the keyword argument$(length(kwargs) > 1 ? "s" : "") $ks"))
+end
+
+_busystr(s::TeamScheduler) = s.schedule === ThreadTeams.StaticSchedule(; busy = :serial) ? "serial" : "tasks"
+_busystr(s::GreedyTeamScheduler) = s.schedule === ThreadTeams.GreedySchedule(; busy = :serial) ? "serial" : "tasks"
+
+function Base.show(io::IO, ::MIME"text/plain", s::TeamScheduler)
+    print(io, "TeamScheduler\n├ Chunking: one chunk per thread\n└ When busy: ", _busystr(s))
+end
+function Base.show(io::IO, ::MIME"text/plain", g::GreedyTeamScheduler)
+    print(io, "GreedyTeamScheduler\n├ Chunking: ",
+        g.chunksize > 0 ? "fixed size ($(g.chunksize))" :
+        g.nchunks > 0 ? "fixed count ($(g.nchunks))" : "fixed count (4 per thread)",
+        "\n└ When busy: ", _busystr(g))
+end
 
 end # module
